@@ -1154,12 +1154,13 @@ class ArbitrageBot:
 
         to_trade_quote_currency = arb_order.get_pending_quote_amount_high_liquidity
         to_trade_base_currency = arb_order.get_pending_base_amount_high_liquidity  # Pending amount, in base currency
+        min_notional_factor: float = 1.15  # Increasing factor to avoid "code":-1013 (MIN NOTIONAL) error due rounding
 
         if arb_order.order_type in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
             side = "SELL"
         elif arb_order.order_type in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
             side = "BUY"
-        if to_trade_quote_currency <= self.minimum_notional_high_liquidity:
+        if to_trade_quote_currency <= self.minimum_notional_high_liquidity * min_notional_factor:
             logger.info("No pending amount to trade in the high-liquidity side.")
             return {"msg": "No pending amount to trade."}
 
