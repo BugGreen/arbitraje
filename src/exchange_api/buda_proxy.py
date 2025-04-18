@@ -115,6 +115,8 @@ class BudaProxy(BaseExchange):
             state = order_details.get("state", "error")
             error_msg = order_details.get("message")
             amount = order_details.get("amount")
+            traded_amount = order_details.get("traded_amount")
+            total_exchanged = order_details.get("total_exchanged")
 
             # Map Buda's 'state' field to a unified 'status'
             if state in ("received", "pending", "traded", "canceled"):
@@ -130,7 +132,9 @@ class BudaProxy(BaseExchange):
                 "id": order_id,
                 "status": status,
                 "error_message": error_msg,
-                "amount": amount
+                "amount": amount,
+                "traded_amount": traded_amount,
+                "total_exchanged": total_exchanged
             })
 
         return standardized_orders

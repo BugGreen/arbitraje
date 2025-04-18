@@ -4,6 +4,7 @@ from src.arbitrage_bot.order import Order
 from src.exchange_api.binance_proxy import BinanceProxy
 from src.exchange_api.buda_proxy import BudaProxy
 from src.arbitrage_bot.constants import MIN_AMOUNT_REQUIREMENTS
+from src.order_types.arbitrage_order import ArbitrageOrder
 import logging
 import time
 
@@ -71,43 +72,19 @@ class ArbitrageBot:
         price_diff = abs(price_a - price_b) / min(price_a, price_b) * 100
         return price_diff
 
-    def place_sub_orders(self, sub_orders: List[Dict[str, Any]]) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+    def place_sub_orders(self, sub_orders: List[Dict[str, Any]], arb_order: ArbitrageOrder) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """
         Place a batch of sub-orders on the low-liquidity exchange and handle partial or complete success,
         as well as common errors. Also wait for sub-orders that are in 'received' state to transition
         to another state (e.g. 'pending', 'canceled', etc.) before returning.
 
-        :param sub_orders: A list of sub-orders in standardized format, e.g.:
-                           [
-                               {
-                                 "mode": "place",
-                                 "order": {
-                                     "amount": 0.0012,
-                                     "limit": 15000000,
-                                     "market_name": "eth-cop",
-                                     "price_type": "limit",
-                                     "type": "Bid"
-                                 }
-                               },
-                               ...
-                           ]
+        :param sub_orders: A list of sub-orders in standardized format.
+        :param arb_order: The ArbitrageOrder object to update with traded amounts or partial fills.
         :return:
-            - On success (partial or complete), a list of sub-order responses in standardized format, e.g.:
-              [
-                {
-                  "id": "1306565374",
-                  "status": "received",
-                  "error_message": None or "null",
-                  "amount": ["0.001000001", "ETH"]
-                },
-                ...
-              ]
-            - On failure, a dictionary with "error_code" and "message" (and possibly "details"), e.g.:
-              {
-                "error_code": "EXCHANGE_HTTP_ERROR",
-                "message": "Connection timed out"
-              }
+            - On success (partial or complete), a list of sub-order responses in standardized format
+            - On failure, a dictionary with "error_code" and "message" (and possibly "details").
         """
+
         logger.info("Placing sub-orders on low-liquidity exchange: %s", sub_orders)
         try:
             # Place the sub-orders on the exchange
@@ -120,7 +97,7 @@ class ArbitrageBot:
             # or references an "amount_less_than_minimum" error
             error_result = self._handle_unprepared_or_minimum_amount_errors(standardized_response)
             if error_result is not None:
-                # ToDo: Aca hay que mirar si se pueden resolver los errores en la anterior funcion
+                # ToDo: Here it is necessary to see if the errors in the previous function can be solved.
                 # if we decide to stop the entire process upon seeing these errors
                 return error_result
 
@@ -128,7 +105,7 @@ class ArbitrageBot:
             # I.e., we wait until the orders are indeed processed by the exchange_low_liquidity sever
             received_orders = [o for o in standardized_response if o.get("status") == "received"]
             if received_orders:
-                self._wait_for_orders_to_leave_received(received_orders)
+                self._wait_for_orders_to_leave_received(received_orders, arb_order)
 
             return standardized_response
 
@@ -205,22 +182,22 @@ class ArbitrageBot:
         logger.warning("Unknown structure for sub_order_responses: %s", sub_order_responses)
         return None
 
-    def _wait_for_orders_to_leave_received(self, received_orders: List[Dict[str, Any]], max_wait_seconds: int = 10) \
-            -> None:
+    def _wait_for_orders_to_leave_received(self, received_orders: List[Dict[str, Any]],
+                                           arb_order: ArbitrageOrder, max_wait_seconds: int = 10) -> None:
         """
-        Wait for sub-orders in 'received' state to transition to another state ('pending', 'canceled', etc.).
-        Polls the exchange's get_order_states endpoint until the orders are no longer 'received' or until
-        max_wait_seconds is reached.
+        Wait for sub-orders in 'received' state to transition to another state.
+        If the sub-order transitions to a traded-related state, update `arb_order` dynamic amounts.
 
         :param received_orders: The sub-order responses that are in 'received' state.
+        :param arb_order: The ArbitrageOrder to update with partial/traded amounts.
         :param max_wait_seconds: How long to keep polling before giving up.
-        :return: None (updates the list in-place).
+        :return: None (updates the sub-orders in-place, updates `arb_order` amounts).
         """
         logger.info("Waiting for %d sub-orders to transition out of 'received'...", len(received_orders))
         start_time = time.time()
 
-        # We'll store the IDs of the sub-orders that are 'received'
-        received_ids = [o["id"] for o in received_orders if o["id"] is not None]
+        # We store the IDs of sub-orders that are 'received'
+        received_ids = [o["id"] for o in received_orders if o.get("id") is not None]
         if not received_ids:
             return
 
@@ -233,30 +210,76 @@ class ArbitrageBot:
                 )
                 break
 
-            # Sleep briefly to avoid spamming
+            # Sleep briefly
             time.sleep(0.2)
 
             # 1. Retrieve updated states from the exchange
-            states_response = self.exchange_low_liquidity.get_order_states(
-                self.base_currency, self.quote_currency
-            )
+            states_response = self.exchange_low_liquidity.get_order_states(self.base_currency, self.quote_currency)
             all_states = states_response.get("orders", [])
 
-            # 2. Update the sub-orders that are 'received'
+            # 2. Update sub-orders that are 'received'
             for st in all_states:
                 st_id = st.get("id")
                 st_state = st.get("state")
+
                 if st_id in received_ids and st_state != "received":
-                    # Update the order's state in received_orders
+                    # The sub-order has transitioned out of 'received'
+                    # Find the matching sub-order
                     for ro in received_orders:
                         if ro["id"] == st_id:
                             ro["status"] = st_state
-                    # Remove from the 'received_ids' list
+                            # Potentially the exchange server might return a 'traded_amount' field or similar
+                            # to indicate how much was actually traded in this sub-order fill.
+                            # We'll fetch that and update `arb_order`.
+                            traded_amount = float(st.get("traded_amount", 0.0)[0])
+
+                            self._update_arbitrage_order_on_fill(
+                                sub_order_dict=ro,
+                                new_state=st_state,
+                                traded_amount=traded_amount,
+                                arb_order=arb_order
+                            )
+
+                    # Remove from 'received_ids'
                     received_ids.remove(st_id)
 
-            if not received_ids:  # all updated
+            if not received_ids:
                 logger.info("All 'received' sub-orders transitioned to another state.")
                 break
+
+    @staticmethod
+    def _update_arbitrage_order_on_fill(sub_order_dict: Dict[str, Any], new_state: str,
+                                        traded_amount: float, arb_order: 'ArbitrageOrder') -> None:
+        """
+        Update the ArbitrageOrder's dynamic attributes (e.g. traded_amount_low_liquidity,
+        pending_amount_low_liquidity) whenever a sub-order transitions to a 'traded' state.
+
+        :param sub_order_dict: The sub-order that changed states.
+        :param new_state: The new state (e.g., 'traded', 'canceled_and_traded', 'partially_traded').
+        :param traded_amount: The float indicating how much was actually traded on the low-liquidity side.
+        :param arb_order: The ArbitrageOrder object to update.
+        """
+        # For demonstration, we check if the new_state is in a set of "traded" states
+        # and then update the traded_amount.
+        if new_state in ("traded", "canceled_and_traded", "partially_traded"):
+            logger.info(
+                "Sub-order %s changed state to %s with traded_amount=%.4f. Updating ArbitrageOrder.",
+                sub_order_dict.get("id"), new_state, traded_amount
+            )
+            # Increase the traded_amount_low_liquidity
+            arb_order.traded_amount_low_liquidity += traded_amount
+
+            # Recompute pending_amount_low_liquidity = original_amount - traded_amount_low_liquidity
+            arb_order.pending_amount_low_liquidity = arb_order.original_amount - arb_order.traded_amount_low_liquidity
+
+            # If partial, we keep trying. If fully filled, we might see if pending_amount is close to zero.
+
+        else:
+            logger.info(
+                "Sub-order %s changed state to %s with no fill update. (traded_amount=%.4f)",
+                sub_order_dict.get("id"), new_state, traded_amount
+            )
+        # Possibly add more logic if new_state = 'canceled' or 'pending', etc.
 
     def check_sub_orders_status(self, sub_order_ids: List[str]) -> Dict[dict, Any]:
         """
@@ -289,12 +312,13 @@ class ArbitrageBot:
         logger.info(f"Executing opposite order on target exchange: {side} {amount} at {price}")
         return {"status": "executed", "executed_amount": amount, "price": price}
 
-    def split_order_into_suborders(self, order_amount: float, reference_price: float, side: str,
+    def split_order_into_suborders(self, order: ArbitrageOrder, reference_price: float, side: str,
                                    delta: Optional[float] = None) -> Any:
         """
-        Split the given amount into multiple sub-orders taking as a reference `reference_price`.
+        Split the given `ArbitrageOrder`'s original_amount into multiple sub-orders,
+        taking `reference_price` as a base for setting limit prices.
 
-        :param order_amount: The total amount to split.
+        :param order: An `ArbitrageOrder` instance whose `original_amount` will be splitted.
         :param reference_price: The price to use as a base for calculation.
         :param side: 'bid' or 'ask' - the side of the market.
         :param delta: Optional delta to adjust the price.
@@ -306,8 +330,10 @@ class ArbitrageBot:
                  ]
         """
 
-        logger.info("Splitting order into sub-orders: amount=%s, reference_price=%s, side=%s, delta=%s",
-                    order_amount, reference_price, side, delta)
+        logger.info("Splitting order into sub-orders: order=%s, reference_price=%s, side=%s, delta=%s",
+                    order, reference_price, side, delta)
+
+        order_amount = order.pending_amount_low_liquidity
 
         side = side.lower()
         sub_orders_info = [{}, {}, {}]
@@ -374,7 +400,8 @@ class ArbitrageBot:
         for sub_order in sub_orders_info:
             sub_orders.append(place_sub_order(sub_order.get("amount"), sub_order.get("price"), market_name, side))
 
-        # Enforce minimum amounts
+        # Enforce minimum amounts. This ensures that there is not an attempt to create a sub/order with less than
+        # the minimum amount allowed.
         result = self._enforce_minimum_amounts(sub_orders, side)
 
         # If result is a dict with 'code', we treat it as an error

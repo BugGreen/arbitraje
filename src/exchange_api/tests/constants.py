@@ -29,6 +29,14 @@ expected_successful_batch_order_response = [
                 "amount": [
                     "0.001000001",
                     "ETH"
+                ],
+                "traded_amount": [
+                    "0.0",
+                    "ETH"
+                ],
+                "total_exchanged": [
+                    "0.0",
+                    "COP"
                 ]
             },
             {
@@ -38,6 +46,14 @@ expected_successful_batch_order_response = [
                 "amount": [
                     "0.0012",
                     "ETH"
+                ],
+                "traded_amount": [
+                    "0.0",
+                    "ETH"
+                ],
+                "total_exchanged": [
+                    "0.0",
+                    "COP"
                 ]
             }
         ]
@@ -255,6 +271,14 @@ expected_partial_successful_batch_order_response = [
                 "amount": [
                     "1.001000001",
                     "ETH"
+                ],
+                "traded_amount": [
+                    "0.0",
+                    "ETH"
+                ],
+                "total_exchanged": [
+                    "0.0",
+                    "COP"
                 ]
             },
             {

@@ -55,21 +55,25 @@ def main() -> None:
 
         orders = [
             {"mode": "place",
-             "order": {"amount": 1.00100000012, "limit": 10000000, "market_name": "eth-cop", "price_type": "limit",
+             "order": {"amount": 0.00100000012, "limit": 10000000, "market_name": "eth-cop", "price_type": "limit",
                        "type": "Bid"}},
             {"mode": "place",
              "order": {"amount": 0.0012, "limit": 10000000, "market_name": "eth-cop", "price_type": "limit",
                        "type": "Bid"}},
         ]
         order_to_cancel = [
-            {"mode": "cancel", "order_id": 1267969492},
-            {"mode": "cancel", "order_id": 1267969493},
+            {"mode": "cancel", "order_id": 1309924955},
+            {"mode": "cancel", "order_id": 1309924956},
+
         ]
 
         ltc_address = "LeMNHpnvULWbh9wHqNPdPwnip3vnSsXATY"
 
-        batch_response = buda.batch_creation(orders)
-        print(json.dumps(batch_response, indent=2))
+        #batch_response = buda.batch_creation(orders)
+        #print(json.dumps(batch_response, indent=2))
+
+        batch_cancellation_response = buda.batch_cancellation(order_to_cancel)
+        print(json.dumps(batch_cancellation_response, indent=2))
 
         #new_order = buda.new_order(base_currency, quote_currency, side, order_type, order_amount, price=price)
         binance_ln_invoice = 'lnbc20u1pn57w8spp5tte7449lywmexq0e5zrukh97d3r797t2h38hc7znnwfpmlpywjfqdqqcqzysxqrrsssp5nmydq5cy9vjlht5nuekrk9h2y52lyd5sfwn7kj3upq2euja3h9ks9qxpqysgqsdlf0c5dnq60ffu3n2kvyg9fwv4zq738l54efex5jxf949tr28vyy4y70tfv86ua7wtaazq4yd3uuhrz3rlfwz638s09sr0lqgyp6egqn5qcrs'

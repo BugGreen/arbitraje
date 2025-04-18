@@ -5,7 +5,10 @@ expected_insolvent_error_response = {
         'id': None,
         'status': 'unprepared',
         'error_message': 'insolvent',
-        'amount': ['1.001000001', 'ETH']}
+        'amount': ['1.001000001', 'ETH'],
+        'traded_amount': None,
+        'total_exchanged': None
+    }
     }
 
 

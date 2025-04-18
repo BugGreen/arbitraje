@@ -1,9 +1,10 @@
 import json
 from src.arbitrage_bot.arbitrage_bot import ArbitrageBot
+from src.order_types.arbitrage_order import ArbitrageOrder
 from src.exchange_api.buda_proxy import BudaProxy
 from unittest.mock import patch, MagicMock
 import unittest
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union, Optional
 import logging
 from src.exchange_api.tests import constants as test_api_constants
 from src.arbitrage_bot.tests import constants as test_a_bot_constans
@@ -34,12 +35,22 @@ class MockExchange:
         return {"orders": self.mock_orders}
 
 
+class MockArbitrageOrder:
+    """
+    Simple mock substituting ArbitrageOrder for testing.
+    """
+    def __init__(self, original_amount: float):
+        self.original_amount = original_amount
+        self.pending_amount_low_liquidity = original_amount
+
+
 class MockBudaProxySuccess():
     """
     Mock proxy for successful batch creation.
     """
     @staticmethod
-    def batch_creation(self, orders: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def batch_creation(self, orders: List[Dict[str, Any]]) -> List[
+        Union[Dict[str, Optional[str]], Dict[str, Optional[str]]]]:
         return [
             {
                 "id": "1306565374",
@@ -145,6 +156,12 @@ class TestArbitrageBot(unittest.TestCase):
             amount=0.05  # Example amount
         )
         self.bot.exchange_low_liquidity = BudaProxy()
+        self.arb_order = ArbitrageOrder(
+            base_currency="ETH",
+            quote_currency="COP",
+            amount=1.0,
+            original_amount=1.0
+        )
 
     def test_check_sub_orders_status_all_found(self):
         """
@@ -164,12 +181,12 @@ class TestArbitrageBot(unittest.TestCase):
         Test splitting an 'ask' order with a specified delta.
         """
 
-        order_amount = 100.0
+        mock_order = MockArbitrageOrder(original_amount=100.0)
         reference_price = 10000.0
         delta = 50.0
         side = 'ask'
 
-        result = self.bot.split_order_into_suborders(order_amount, reference_price, side, delta=delta)
+        result = self.bot.split_order_into_suborders(mock_order, reference_price, side, delta=delta)
 
         # print(json.dumps(result, indent=2))
         # Check amount distribution
@@ -190,12 +207,13 @@ class TestArbitrageBot(unittest.TestCase):
         Test splitting a 'bid' order without a delta (uses price_diff_treshold).
         """
 
-        order_amount = 200.0
+        mock_order = MockArbitrageOrder(original_amount=200.0)
+
         reference_price = 5000.0
         # No delta given
         side = 'bid'
 
-        result = self.bot.split_order_into_suborders(order_amount, reference_price, side)
+        result = self.bot.split_order_into_suborders(mock_order, reference_price, side)
 
         # Check amount distribution
         self.assertEqual(result[0]["order"]["amount"], 120.0)  # 60% of 200
@@ -223,8 +241,10 @@ class TestArbitrageBot(unittest.TestCase):
 
         # All of these are below 0.001, so each will attempt to merge with the next.
 
+        mock_order = MockArbitrageOrder(original_amount=0.0012)
+
         sub_orders = self.bot.split_order_into_suborders(
-            order_amount=0.0012,
+            order=mock_order,
             reference_price=10000.0,
             side='bid',
             delta=50.0
@@ -263,12 +283,79 @@ class TestArbitrageBot(unittest.TestCase):
         sub_orders_example = test_api_constants.successful_batch_order
 
         # Mock the requests.post in batch_creation method of exchange_low_liquidity object
-        response = self.bot.place_sub_orders(sub_orders_example)
+        response = self.bot.place_sub_orders(sub_orders_example, self.arb_order)
         expected_response = test_api_constants.expected_successful_batch_order_response
         for order in expected_response:
             order['status'] = 'pending'
 
         self.assertEqual(response, expected_response)
+
+    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.successful_batch_order_states)
+    @patch('requests.post')
+    def test_place_sub_orders_traded(self, mock_post, mock_buda):
+        # Change the state of the first sub_order to "traded"
+        test_api_constants.successful_batch_order_states["orders"][0]["state"] = "traded"
+        # Change the traded_amount '0.0' > '0.4'.
+        test_api_constants.successful_batch_order_states["orders"][0]["traded_amount"][0] = "0.4"
+        mock_response = MagicMock()
+        mock_response.json.return_value = test_api_constants.successful_batch_order_mock_response
+
+        mock_post.return_value = mock_response
+
+        sub_orders_example = test_api_constants.successful_batch_order
+
+        # Mock the requests.post in batch_creation method of exchange_low_liquidity object
+        response = self.bot.place_sub_orders(sub_orders_example, self.arb_order)
+        expected_response = test_api_constants.expected_successful_batch_order_response
+        count = 0
+        for order in expected_response:
+            if count == 0:
+                order['status'] = 'traded'
+            else:
+                order['status'] = 'pending'
+            count += 1
+
+        self.assertEqual(response, expected_response)
+        self.assertIsInstance(response, list)
+        # check the updated arb_order
+        # As the mock trade was '0.4' ETH, some attributes should be updated accordingly
+        self.assertAlmostEqual(self.arb_order.traded_amount_low_liquidity, 0.4, places=4)
+        self.assertAlmostEqual(self.arb_order.pending_amount_low_liquidity, 0.6, places=4)
+
+    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.successful_batch_order_states)
+    @patch('requests.post')
+    def test_place_sub_orders_canceled_and_traded(self, mock_post, mock_buda):
+        # Change the state of the first sub_order to "traded"
+        test_api_constants.successful_batch_order_states["orders"][0]["state"] = "canceled_and_traded"
+        # Change the traded_amount '0.0' > '0.4'.
+        test_api_constants.successful_batch_order_states["orders"][0]["traded_amount"][0] = "0.6"
+        test_api_constants.successful_batch_order_states["orders"][1]["state"] = "traded"
+        # Change the traded_amount '0.0' > '0.6'.
+        test_api_constants.successful_batch_order_states["orders"][1]["traded_amount"][0] = "0.4"
+        mock_response = MagicMock()
+        mock_response.json.return_value = test_api_constants.successful_batch_order_mock_response
+
+        mock_post.return_value = mock_response
+
+        sub_orders_example = test_api_constants.successful_batch_order
+
+        # Mock the requests.post in batch_creation method of exchange_low_liquidity object
+        response = self.bot.place_sub_orders(sub_orders_example, self.arb_order)
+        expected_response = test_api_constants.expected_successful_batch_order_response
+        count = 0
+        for order in expected_response:
+            if count == 0:
+                order['status'] = 'canceled_and_traded'
+            else:
+                order['status'] = 'traded'
+            count += 1
+
+        self.assertEqual(response, expected_response)
+        self.assertIsInstance(response, list)
+        # check the updated arb_order
+        # As the mock trade was '0.4' ETH, some attributes should be updated accordingly
+        self.assertAlmostEqual(self.arb_order.traded_amount_low_liquidity, 1.0, places=4)
+        self.assertAlmostEqual(self.arb_order.pending_amount_low_liquidity, 0.0, places=4)
 
     @patch('requests.post')
     def test_place_sub_orders_partial_success(self, mock_post) -> None:
@@ -288,7 +375,7 @@ class TestArbitrageBot(unittest.TestCase):
 
         partial_correct_sub_orders = test_api_constants.partial_successful_batch_order
 
-        place_sub_orders_response = self.bot.place_sub_orders(partial_correct_sub_orders)
+        place_sub_orders_response = self.bot.place_sub_orders(partial_correct_sub_orders, self.arb_order)
         expected_response = test_a_bot_constans.expected_insolvent_error_response
 
         self.assertEqual(place_sub_orders_response, expected_response)
@@ -310,7 +397,8 @@ class TestArbitrageBot(unittest.TestCase):
 
         amount_less_than_minimum_order = test_api_constants.amount_less_than_minimum_order
 
-        amount_less_than_minimum_order_response = self.bot.place_sub_orders(amount_less_than_minimum_order)
+        amount_less_than_minimum_order_response = self.bot.place_sub_orders(amount_less_than_minimum_order,
+                                                                            self.arb_order)
         expected_response = test_a_bot_constans.expected_amount_less_than_minimum_response  # Wrapped response in A.Bot
 
         self.assertEqual(amount_less_than_minimum_order_response, expected_response)
