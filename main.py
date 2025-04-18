@@ -28,8 +28,13 @@ def main() -> None:
     try:
         buda = ExchangeFactory.get_exchange("buda")
         coin = "BTC"
+        binance_ln_invoice = 'lnbc20u1pn5wu93pp5w62264u0skt5k53grvd3rnhecfmqup6ll7zfsrllzrya5rlgq7wsdqqcqzysxqrrsssp5dcxr85nsevpm60expqhn6nyvvrdcnkhnhktts27fmeg3egdv9dzs9qxpqysgq0yd4jxk7zvjfwmumvf70p60c0dum8g5f59sq87c4t66073yzjxezs5vz98duy476k3wz8qjk5zlcq982xwa72erxhhy5wa639xhhsqcq5pq3uv'
+        # ToDo: solve 403 error (Cloudflare blocking)
+        #withdrawal_request = buda.create_withdraw_request(coin=coin, address=binance_ln_invoice, amount=0.00002)
         lightning_invoice = buda.create_deposit_address(amount_satoshis=5000, memo="test")
         print(json.dumps(lightning_invoice, indent=2))
+        #print(json.dumps(withdrawal_request, indent=2))
+
     except Exception as e:
         print(f"Error with BUDA: {e}")
 

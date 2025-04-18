@@ -16,12 +16,6 @@ class BudaProxy(BaseExchange):
     Proxy class for interacting with the BUDA API.
     """
 
-    # ToDo: Implement BUDA calls
-    BASE_URL = "https://api.buda.com"  # Replace with actual BUDA API base URL
-    ENDPOINTS = {
-        "ALL_COINS_INFO": "/api/v2/assets",  # Replace with actual endpoint
-    }
-
     def __init__(self) -> None:
         """
         Initialize the BudaProxy with API key and secret.
@@ -31,6 +25,7 @@ class BudaProxy(BaseExchange):
     BASE_URL = "https://www.buda.com"
     ENDPOINTS = {
         "LIGHTNING_INVOICE": "/api/v2/lightning_network_invoices",
+        "LIGHTNING_WITHDRAWAL": "/reserves/ln-btc/withdrawals"
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -65,12 +60,17 @@ class BudaProxy(BaseExchange):
         return {
             "X-SBTC-APIKEY": self.api_key,
             "X-SBTC-NONCE": nonce,
-            "X-SBTC-SIGNATURE": signature
+            "X-SBTC-SIGNATURE": signature,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Referer": "https://www.buda.com",
+            "Origin": "https://www.buda.com"
         }
 
-    def create_deposit_address(
-        self, coin: str = "BTC", network: Optional[str] = "lightning", amount_satoshis: int = 0,
-            memo: Optional[str] = None, expiry_seconds: Optional[int] = 0) -> Dict:
+    def create_deposit_address(self, coin: str = "BTC", network: Optional[str] = "lightning",
+                               amount_satoshis: int = 0, memo: Optional[str] = None,
+                               expiry_seconds: Optional[int] = 0) -> Dict:
         """
         Create a Lightning Network deposit address (invoice) for BTC.
 
@@ -119,6 +119,41 @@ class BudaProxy(BaseExchange):
     def supports_lightning_network(self, coin: str) -> bool:
         pass
 
-    def create_withdraw_request(self, coin: str, address: str, amount: float,
-                                network: Optional[str] = None, **kwargs) -> Dict:
-        pass
+    def create_withdraw_request(self, coin: str, address: str,
+                                amount: float, simulate: bool = False) -> Dict:
+        """
+        Submit a withdrawal request for a Lightning Network payment.
+
+        :param coin: The cryptocurrency symbol (e.g., 'BTC'). Must be 'BTC' for Lightning Network.
+        :param address: The Lightning Network invoice received from the receiver.
+        :param amount: The withdrawal amount in BTC.
+        :param simulate: Optional flag to simulate the payment request without executing it.
+        :return: A dictionary containing the details of the withdrawal request.
+        :raises ValueError: If the coin is not 'BTC'.
+        :raises Exception: If the request fails or the response contains an error.
+        """
+        if coin.upper() != "BTC":
+            raise ValueError("This method only supports Lightning Network withdrawals for BTC.")
+
+        # Define the endpoint path
+        endpoint_path = self.ENDPOINTS["LIGHTNING_WITHDRAWAL"]
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        payload = {
+            "amount": amount,
+            "withdrawal_data": {
+                "payment_request": address
+            }
+        }
+
+        # Authenticate the request
+        headers = self._sign_request(method="POST", path=endpoint_path, body=payload)
+
+        # Make the API call
+        response = requests.post(url, headers=headers, json=payload)
+
+        # Handle the response
+        if response.status_code in [200, 201]:
+            return response.json()
+        else:
+            raise Exception(f"Error {response.status_code}: {response.text}")

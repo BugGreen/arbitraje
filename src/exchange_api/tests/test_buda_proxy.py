@@ -1,5 +1,6 @@
 from unittest.mock import patch, Mock
 from src.exchange_api.buda_proxy import BudaProxy
+import pytest
 
 
 def test_sign_request():
@@ -25,10 +26,6 @@ def test_sign_request():
     assert "X-SBTC-SIGNATURE" in headers
     assert len(headers["X-SBTC-SIGNATURE"]) == 96  # SHA-384 produces 96-character hex
 
-
-from unittest.mock import patch, Mock
-from src.exchange_api.buda_proxy import BudaProxy
-import pytest
 
 @patch("requests.post")
 def test_create_deposit_address_success(mock_post):
@@ -125,6 +122,97 @@ def test_create_deposit_address_api_error(mock_post):
     with pytest.raises(Exception, match="Error 400: {\"error\": \"Invalid request\"}"):
         buda.create_deposit_address(
             coin="BTC", network="lightning", amount_satoshis=5000, memo="Test Invoice"
+        )
+
+    mock_post.assert_called_once()
+
+
+@patch("requests.post")
+def test_create_withdraw_request_success(mock_post):
+    """
+    Test the create_withdraw_request method with a successful response.
+    """
+    # Arrange
+    buda = BudaProxy()
+    buda.api_key = "test_api_key"
+    buda.api_secret = "test_api_secret"
+
+    expected_response = {
+        "id": 123,
+        "created_at": "2024-11-01T12:00:00Z",
+        "amount": {"amount": "0.01", "currency": "BTC"},
+        "currency": "BTC",
+        "fee": {"amount": "0.0001", "currency": "BTC"},
+        "state": "confirmed",
+        "withdrawal_data": {
+            "type": "lightning_network_withdrawal_data",
+            "payment_request": "lnbc123...",
+            "payment_error": None,
+        },
+    }
+
+    mock_response = Mock()
+    mock_response.status_code = 201
+    mock_response.json.return_value = expected_response
+    mock_post.return_value = mock_response
+
+    # Act
+    result = buda.create_withdraw_request(
+        coin="BTC",
+        payment_request="lnbc123...",
+        amount=0.01,
+        simulate=True
+    )
+
+    # Assert
+    assert result == expected_response
+    mock_post.assert_called_once_with(
+        f"{buda.BASE_URL}{buda.ENDPOINTS['LIGHTNING_WITHDRAWAL']}",
+        headers=mock_post.call_args[1]["headers"],  # Authentication headers
+        json={
+            "amount": 0.01,
+            "withdrawal_data": {"payment_request": "lnbc123..."},
+            "simulate": True
+        }
+    )
+
+
+@patch("requests.post")
+def test_create_withdraw_request_invalid_coin(mock_post):
+    """
+    Test the create_withdraw_request method with an invalid coin.
+    """
+    # Arrange
+    buda = BudaProxy()
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="This method only supports Lightning Network withdrawals for BTC."):
+        buda.create_withdraw_request(
+            coin="ETH", payment_request="lnbc123...", amount=0.01
+        )
+
+    mock_post.assert_not_called()
+
+
+@patch("requests.post")
+def test_create_withdraw_request_api_error(mock_post):
+    """
+    Test the create_withdraw_request method when the API returns an error.
+    """
+    # Arrange
+    buda = BudaProxy()
+    buda.api_key = "test_api_key"
+    buda.api_secret = "test_api_secret"
+
+    mock_response = Mock()
+    mock_response.status_code = 400
+    mock_response.text = '{"error": "Invalid request"}'
+    mock_post.return_value = mock_response
+
+    # Act & Assert
+    with pytest.raises(Exception, match="Error 400: {\"error\": \"Invalid request\"}"):
+        buda.create_withdraw_request(
+            coin="BTC", payment_request="lnbc123...", amount=0.01, simulate=False
         )
 
     mock_post.assert_called_once()
