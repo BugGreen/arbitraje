@@ -13,9 +13,17 @@ def main() -> None:
         coin = "BTC"
         ln_invoice = 'lnbc50u1pn5f8ljpp5dc6y936p79j9dfqs59vdkz6dfurxcgzvsren4mtahdrva9paqxhsdq8w3jhxaqcqzzsxqyz5vqsp5yp9j2fghxfw4dvxnkcu5lyldykew7ymuq27f8jpay8ms7q9kwe9s9qxpqysgqqczpcedj6ry8t8z5emqvz9mvjr263fsv7p64st6j5pyxfcdmm9hparffkgfsxv883kh6hkczfgpktlevn3rldcskqv392fk8n7ad3lcp6yx88t'
         sats_amount = 5000
+        order_amount = 0.00011
+        market_symbol = 'BTCUSDT'
+        price = 90000
+        side = 'BUY'
+        time_in_force = 'GTC'
+        order_type = 'LIMIT'
         #coin_info = binance.supports_lightning_network(coin)
         #withdraw_request = binance.create_withdraw_request(coin=coin, address=ln_invoice, amount=sats_amount)
         #print(json.dumps(withdraw_request, indent=2))
+        #new_order = binance.new_order(symbol=market_symbol, side=side, order_type=order_type, price=price, quantity=order_amount, time_in_force=time_in_force)
+        #print(json.dumps(new_order, indent=2))
 
         #lightning_address = binance.create_deposit_address(coin)
         #print(json.dumps(lightning_address, indent=2))
@@ -28,11 +36,10 @@ def main() -> None:
     try:
         buda = ExchangeFactory.get_exchange("buda")
         coin = "BTC"
-        binance_ln_invoice = 'lnbc20u1pn5wu93pp5w62264u0skt5k53grvd3rnhecfmqup6ll7zfsrllzrya5rlgq7wsdqqcqzysxqrrsssp5dcxr85nsevpm60expqhn6nyvvrdcnkhnhktts27fmeg3egdv9dzs9qxpqysgq0yd4jxk7zvjfwmumvf70p60c0dum8g5f59sq87c4t66073yzjxezs5vz98duy476k3wz8qjk5zlcq982xwa72erxhhy5wa639xhhsqcq5pq3uv'
-        # ToDo: solve 403 error (Cloudflare blocking)
+        #binance_ln_invoice = 'lnbc20u1pn5swdvpp573v84cg3440zgzp9c3wzg0xef62ql4wxgyw2peq4lkpfclqp79gsdqqcqzysxqrrsssp58736wslm5tw8r9eep0fmysj60mf705e5dkk24nxyhpvnp5naaasq9qxpqysgqdfrr8ry3lvrpekepjj9dxualwea305v2craa5c8qy6ww9809tyeksg8s7tue5h3g48xdldc8y3hlfcvx952dk44wl60uprznqx4ehnqpaxjxfv'
         #withdrawal_request = buda.create_withdraw_request(coin=coin, address=binance_ln_invoice, amount=0.00002)
-        lightning_invoice = buda.create_deposit_address(amount_satoshis=5000, memo="test")
-        print(json.dumps(lightning_invoice, indent=2))
+        #lightning_invoice = buda.create_deposit_address(amount_satoshis=5000, memo="test")
+        #print(json.dumps(lightning_invoice, indent=2))
         #print(json.dumps(withdrawal_request, indent=2))
 
     except Exception as e:

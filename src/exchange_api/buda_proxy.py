@@ -25,7 +25,7 @@ class BudaProxy(BaseExchange):
     BASE_URL = "https://www.buda.com"
     ENDPOINTS = {
         "LIGHTNING_INVOICE": "/api/v2/lightning_network_invoices",
-        "LIGHTNING_WITHDRAWAL": "/reserves/ln-btc/withdrawals"
+        "LIGHTNING_WITHDRAWAL": "/api/v2/reserves/ln-btc/withdrawals"
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -157,3 +157,21 @@ class BudaProxy(BaseExchange):
             return response.json()
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
+
+    def new_order(self, symbol: str, side: str, order_type: str,
+                  timestamp: Optional[int],
+                  quantity: Optional[float] = None,
+                  price: Optional[float] = None,
+                  time_in_force: Optional[str] = None,
+                  stop_price: Optional[float] = None,
+                  iceberg_qty: Optional[float] = None,
+                  quote_order_qty: Optional[float] = None,
+                  new_client_order_id: Optional[str] = None,
+                  strategy_id: Optional[int] = None,
+                  strategy_type: Optional[int] = None,
+                  trailing_delta: Optional[int] = None,
+                  new_order_resp_type: Optional[str] = None,
+                  self_trade_prevention_mode: Optional[str] = None,
+                  recv_window: Optional[int] = None) -> Dict:
+        # ToDo: Complete this
+        pass

@@ -1,4 +1,3 @@
-import pytest
 from src.exchange_api.binance_proxy import BinanceProxy
 from unittest.mock import patch, Mock
 
@@ -30,7 +29,6 @@ def test_binance_get_coin_info():
         coin_info = binance.get_coin_info()
         assert coin_info == expected_response
         mock_get.assert_called_once()
-
 
 def test_binance_supports_lightning_network():
     """
@@ -127,3 +125,99 @@ def test_create_withdraw_request():
             headers={"X-MBX-APIKEY": binance.api_key},
             params=mock_post.call_args[1]["params"]  # Ensures parameters match
         )
+
+
+@patch("requests.post")
+def test_new_order_success(mock_post):
+
+    # Setup the Binance instance or class
+    binance = BinanceProxy()
+
+    binance.api_key = "test_api_key"
+    binance.api_secret = "test_api_secret"
+
+    # Sample order parameters
+    symbol = 'BTCUSDT'
+    side = 'BUY'
+    order_type = 'LIMIT'
+    price = 90000
+    quantity = 10
+    time_in_force = 'GTC'
+
+    # Mock response from Binance API
+    expected_response = {
+        "symbol": symbol,
+        "orderId": 12345678,
+        "clientOrderId": "unique_client_id",
+        "transactTime": 1637742499000,
+        "price": str(price),
+        "origQty": str(quantity),
+        "executedQty": '0',
+        "status": 'NEW',
+        "side": side,
+        "type": order_type,
+        "timeInForce": time_in_force
+    }
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = expected_response
+    mock_post.return_value = mock_response
+
+    # Call the new_order function
+    response = binance.new_order(
+        symbol=symbol,
+        side=side,
+        order_type=order_type,
+        price=price,
+        quantity=quantity,
+        time_in_force=time_in_force
+    )
+
+    # Test if the response contains the expected values
+    assert response["symbol"] == symbol
+    assert response["side"] == side
+    assert response["type"] == order_type
+    assert float(response["price"]) == price
+    assert float(response["origQty"]) == quantity
+    assert response["status"] == "NEW"
+    assert response["timeInForce"] == time_in_force
+
+    # Ensure the API was called correctly
+    mock_post.assert_called_once()
+
+
+@patch("requests.post")
+def test_new_order_fail(mock_post):
+    # Setup the Binance instance or class
+    binance = BinanceProxy()
+    binance.api_key, binance.api_secret = 'test_api_key', 'test_api_secret'
+
+    # Simulate an error response from Binance (e.g., invalid API key or other issues)
+    mock_error_response = {"code": -1003, "msg": "Invalid API Key"}
+
+    mock_response = Mock()
+    mock_response.status_code = 400
+    mock_response.json.return_value = mock_error_response
+    mock_post.return_value = mock_response
+
+    mock_post.return_value.json.return_value = mock_error_response
+    mock_post.return_value.status_code = 400
+
+    # Call the new_order function
+    response = binance.new_order(
+        symbol='BTCUSDT',
+        side='SELL',
+        order_type='LIMIT',
+        price=95000,
+        quantity=5,
+        time_in_force='GTC'
+    )
+
+    # Assert that the error message is as expected
+    assert response["msg"] == "Invalid API Key"
+    assert response["code"] == -1003
+
+    # Ensure the API call was made
+    mock_post.assert_called_once()
+
