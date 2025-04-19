@@ -161,21 +161,9 @@ class ArbitrageBot:
             ui_thread.start()
 
         while True:
-            # -------------------- USER INTERFACE COMMANDS -----------------------
-            # Check the shared stop flag from UI
-            if self.ui.get_stop_requested():
-                logger.info("Stop command detected in main arbitrage flow. Exiting.")
-                break
-            # If pause is requested, wait until it is cleared
-            while self.ui.get_pause_requested():
-                logger.info("Arbitrage flow paused. Waiting to continue...")
-                time.sleep(1)
-                if self.ui.get_stop_requested():
-                    logger.info("Stop command detected during pause. Exiting.")
-                    return
 
             try:
-                # ----------------------- ARBITRAGE FLOW --------------------------
+                # -------------------------------- ARBITRAGE FLOW ---------------------------------
 
                 # 1) Get the high-liquidity price with retry mechanism
                 high_liquidity_price = self._get_latest_high_liquidity_price(arb_order=arb_order)
@@ -209,6 +197,22 @@ class ArbitrageBot:
                             first_iteration: bool = True
                         else:
                             logger.warning("Funds transfer failed. Evaluate partial scenario.")
+
+                # ----------------------------- USER INTERFACE COMMANDS ---------------------------------
+
+                # Check the shared stop flag from UI
+                if self.ui.get_stop_requested():
+                    logger.info("Stop command detected in main arbitrage flow. Exiting.")
+                    break
+                # If pause is requested, wait until it is cleared
+                while self.ui.get_pause_requested():
+                    logger.info("Arbitrage flow paused. Waiting to continue...")
+                    time.sleep(1)
+                    if self.ui.get_stop_requested():
+                        logger.info("Stop command detected during pause. Exiting.")
+                        return
+
+                # ----------------------------- END USER INTERFACE COMMANDS ---------------------------------
 
                 # 3) Split sub-orders
                 sub_orders_price = self.split_order_into_suborders(arb_order)
@@ -708,24 +712,24 @@ class ArbitrageBot:
         logger.info("Created sub-orders after enforcing min amounts: %s", result)
         return result
 
-    def place_sub_orders(self, sub_orders: List[Dict[str, Any]], arb_order: ArbitrageOrder) -> \
+    def place_sub_orders(self, sub_orders_prices: List[Dict[str, Any]], arb_order: ArbitrageOrder) -> \
             Union[List[Dict[str, Any]], Dict[str, Any]]:
         """
         Place a batch of sub-orders on the low-liquidity exchange and handle partial or complete success,
         as well as common errors. Also wait for sub-orders that are in 'received' state to transition
         to another state (e.g. 'pending', 'canceled', etc.) before returning.
 
-        :param sub_orders: A list of sub-orders in standardized format.
+        :param sub_orders_prices: A list of sub-orders in standardized format.
         :param arb_order: The ArbitrageOrder object to update with traded amounts or partial fills.
         :return:
             - On success (partial or complete), a list of sub-order responses in standardized format
             - On failure, a dictionary with "error_code" and "message" (and possibly "details").
         """
 
-        logger.info("Placing sub-orders on low-liquidity exchange: %s", sub_orders)
+        logger.info("Placing sub-orders on low-liquidity exchange: %s", sub_orders_prices)
         try:
             # Place the sub-orders on the exchange
-            standardized_response = self.exchange_low_liquidity.batch_creation(sub_orders)
+            standardized_response = self.exchange_low_liquidity.batch_creation(sub_orders_prices)
 
             # Assume it's a list of sub-order responses (partial or complete success)
             logger.info("Exchange sub-order placement response: %s", standardized_response)
