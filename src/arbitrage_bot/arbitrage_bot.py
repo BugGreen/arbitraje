@@ -201,15 +201,15 @@ class ArbitrageBot:
 
         return valid_sub_orders
 
-    def split_order_into_suborders(self, order: ArbitrageOrder, reference_price: float, side: str,
-                                   delta: Optional[float] = None) -> Any:
+    # TODO: HACER MAS GENERAL CUANDO SE INCORPOREN MAS LOW LIQUIDITY EXCHANGES
+    def split_order_into_suborders(self, order: ArbitrageOrder, reference_price: float, delta: Optional[float] = None) \
+            -> Any:
         """
         Split the given `ArbitrageOrder`'s original_amount into multiple sub-orders,
         taking `reference_price` as a base for setting limit prices.
 
         :param order: An `ArbitrageOrder` instance whose `original_amount` will be splitted.
         :param reference_price: The price to use as a base for calculation.
-        :param side: 'bid' or 'ask' - the side of the market.
         :param delta: Optional delta to adjust the price.
         :return: A list of dicts with the structure:
                  [
@@ -220,22 +220,24 @@ class ArbitrageBot:
         """
 
         logger.info("Splitting order into sub-orders: order=%s, reference_price=%s, side=%s, delta=%s",
-                    order, reference_price, side, delta)
+                    order, reference_price, order.order_type.name, delta)
 
         order_amount = order.pending_amount_low_liquidity
-
-        side = side.lower()
         sub_orders_info = [{}, {}, {}]
         # Calculate base price depending on side and delta
 
-        if side == 'ask':
+        order_type_name = order.order_type
+        if order_type_name in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
+            side = 'ask'
             if delta is not None:
                 sub_order_one_price = reference_price + delta
             else:
                 sub_order_one_price = reference_price + self.price_diff_threshold
             sub_order_two_price = sub_order_one_price * 1.001
             sub_order_three_price = sub_order_one_price * 1.002
-        elif side == 'bid':
+
+        elif order_type_name in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
+            side = 'bid'
             if delta is not None:
                 sub_order_one_price = reference_price - delta
             else:

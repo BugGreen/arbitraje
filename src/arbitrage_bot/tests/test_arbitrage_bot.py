@@ -44,6 +44,7 @@ class MockArbitrageOrder:
     def __init__(self, original_amount: float):
         self.original_amount = original_amount
         self.pending_amount_low_liquidity = original_amount
+        self.order_type = OrderType.BUY_LIMIT
 
 
 class MockBudaProxySuccess():
@@ -189,9 +190,9 @@ class TestArbitrageBot(unittest.TestCase):
         mock_order = MockArbitrageOrder(original_amount=100.0)
         reference_price = 10000.0
         delta = 50.0
-        side = 'ask'
+        mock_order.order_type = OrderType.SELL_LIMIT
 
-        result = self.bot.split_order_into_suborders(mock_order, reference_price, side, delta=delta)
+        result = self.bot.split_order_into_suborders(mock_order, reference_price, delta=delta)
 
         # print(json.dumps(result, indent=2))
         # Check amount distribution
@@ -216,9 +217,8 @@ class TestArbitrageBot(unittest.TestCase):
 
         reference_price = 5000.0
         # No delta given
-        side = 'bid'
 
-        result = self.bot.split_order_into_suborders(mock_order, reference_price, side)
+        result = self.bot.split_order_into_suborders(mock_order, reference_price)
 
         # Check amount distribution
         self.assertEqual(result[0]["order"]["amount"], 120.0)  # 60% of 200
