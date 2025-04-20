@@ -1,13 +1,17 @@
-import threading
-import time
-import logging
+from src.order_types.encoders import OrderType, CurrencyOfInterest
+from src.order_types.arbitrage_order import ArbitrageOrder
+from src.user_interface import encoders
+from typing import Optional, List, Dict, Any
+from rich.progress import Progress, BarColumn, TextColumn
+from rich.prompt import Confirm
+from rich.prompt import Prompt
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress, BarColumn, TextColumn
 from rich.panel import Panel
-from typing import Optional, List, Dict, Any
-from src.order_types.arbitrage_order import ArbitrageOrder
+import threading
+import logging
 import queue
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +41,6 @@ class ArbitrageUI:
         )
         self.progress_task = self.progress.add_task("Order Progress", total=100)
 
-        # Trade history table (starts empty)
-        self.trade_history_table: Table = self.create_trade_record_table_placeholder()
-
         # Control flags for UI/flow
         self._stop_requested: bool = False
         self._pause_requested: bool = False
@@ -52,19 +53,22 @@ class ArbitrageUI:
         self.trade_events: "queue.Queue[Dict[str, Any]]" = queue.Queue()
 
     @staticmethod
-    def create_trade_record_table_placeholder() -> Table:
+    def create_trade_record_table_placeholder(arb_order: ArbitrageOrder) -> Table:
         """
         Create an empty trade history table.
+
+        :param arb_order: The current ArbitrageOrder.
+        :return: The Trades History table.
         """
         trade_history_table = Table(title="Trade History")
         trade_history_table.add_column("Timestamp", justify="right", style="cyan")
         trade_history_table.add_column("Order Type", justify="center", style="green")
         trade_history_table.add_column("Price Diff (%)", justify="center", style="magenta")
         trade_history_table.add_column("Profit", justify="center", style="bold yellow")
-        trade_history_table.add_column("Traded (Low Liquidity)", justify="center", style="blue")
-        trade_history_table.add_column("Traded (High Liquidity)", justify="center", style="blue")
-        trade_history_table.add_column("Low Liquidity Price", justify="center", style="cyan")
-        trade_history_table.add_column("High Liquidity Price", justify="center", style="cyan")
+        trade_history_table.add_column(f"Traded ({arb_order.low_liquidity_exchange})", justify="center", style="blue")
+        trade_history_table.add_column(f"Traded ({arb_order.high_liquidity_exchange})", justify="center", style="blue")
+        trade_history_table.add_column(f"{arb_order.low_liquidity_exchange} Price", justify="center", style="cyan")
+        trade_history_table.add_column(f"{arb_order.high_liquidity_exchange} Price", justify="center", style="cyan")
         return trade_history_table
 
     @staticmethod
@@ -87,13 +91,15 @@ class ArbitrageUI:
             f"{trade_record.get('high_price', 0):.2f}"
         )
 
-    def process_trade_events(self) -> None:
+    def process_trade_events(self, trade_history_table: Table) -> None:
         """
         Process trade events from the trade_events queue and update the trade history table.
+
+        :param trade_history_table: Table History Table to update
         """
         while not self.trade_events.empty():
             event = self.trade_events.get()
-            self.append_trade_record(self.trade_history_table, event)
+            self.append_trade_record(trade_history_table, event)
 
     def update_market_data(self, arb_order: ArbitrageOrder) -> None:
         """
@@ -141,6 +147,9 @@ class ArbitrageUI:
 
         :param arb_order: The current ArbitrageOrder instance.
         """
+
+        trade_history_table: Table = self.create_trade_record_table_placeholder(arb_order)
+
         with self.lock:
             self.arb_order = arb_order
 
@@ -160,8 +169,10 @@ class ArbitrageUI:
                     self.update_market_data(arb_order)
                     self.update_progress(arb_order)
                     # Process trade events and update trade history table
-                    self.process_trade_events()
-                    self.console.print(self.trade_history_table)
+                    self.process_trade_events(trade_history_table)
+                    self.console.print(trade_history_table)
+                    self.console.print(
+                        "Enter command (s: stop or p: pause).")
 
         with self.lock:
             self.arb_order = None
@@ -198,3 +209,148 @@ class ArbitrageUI:
 
     def get_pause_requested(self):
         return self._pause_requested
+
+
+def welcome_menu() -> None:
+    """
+    Displays the welcome menu that prompts the user to enter the parameters to initialize the arbitrage bot.
+    """
+    from src.arbitrage_bot.arbitrage_bot import ArbitrageBot
+
+    initialization_values = encoders.initialization_values
+    console = Console()
+
+    console.print("[bold cyan]Welcome to the Arbitrage Bot Setup[/bold cyan]", style="bold green")
+    display_initiation_values_table(initialization_values, console, default_values_mode=True)
+
+    default_values = Confirm.ask("Do you want to use the default values?")
+
+    initialization_values = initialization_values if default_values \
+        else set_initialization_values(console, initialization_values)
+
+    # Create the ArbitrageBot with user inputs
+    bot = ArbitrageBot(
+        exchange_high_liquidity=initialization_values.get("E. High Liquidity"),
+        exchange_low_liquidity=initialization_values.get("E. Low Liquidity"),
+        price_diff_threshold=initialization_values.get("P. Difference"),
+        mode=initialization_values.get("Mode"),
+        base_currency=initialization_values.get("Base Currency"),
+        quote_currency=initialization_values.get("Quote Currency"),
+    )
+
+    # Create the ArbitrageOrder with user-defined parameters
+    arb_order = ArbitrageOrder(
+        base_currency=initialization_values.get("Base Currency"),
+        quote_currency=initialization_values.get("Quote Currency"),
+        original_amount=initialization_values.get("Amount"),
+        currency_of_interest=CurrencyOfInterest.QUOTE,
+        order_type=OrderType.SELL_LIMIT
+    )
+
+    # Start the arbitrage flow
+    bot.run_arbitrage_flow(arb_order=arb_order)
+
+
+def create_initiation_values(default_values_mode: bool = True) -> Table:
+    """
+    Create a rich.Table object to display the initialization values to be used,
+
+    :param default_values_mode: Boolean, True if the default values will be used
+    :return: Table with the initialization values
+    """
+
+    title: str = "Initiation Default Values" if default_values_mode else "Initiation Values"
+    initiation_values_table = Table(title=title)
+    initiation_values_table.add_column("Parameter", justify="left", style="cyan")
+    initiation_values_table.add_column("Value", justify="left", style="green")
+
+    return initiation_values_table
+
+
+def append_initiation_values(initiation_values_table: Table, initiation_values: Dict[str, Any]) -> None:
+    """
+    Append a new trade record to the trade history table.
+
+    :param initiation_values_table: The Trade History table.
+    :param initiation_values: A dictionary with keys: 'E. High Liquidity', 'E. Low Liquidity', 'P. Difference',
+                         'Base Currency', 'Quote Currency', 'Amount', 'Mode'.
+    """
+    for attr, value in initiation_values.items():
+        if isinstance(value, (float, int)):
+            value = f"{value:.2f}"
+        initiation_values_table.add_row(attr, value)
+
+
+def set_initialization_values(console: Console, initiation_values: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Change the initialization values via input
+
+    :param console: Console object from Rich
+    :param initiation_values: Dict containing the initialization values
+    :return: Dict with the modified initialization values
+    """
+    console.print("Please define the following parameters to begin.")
+
+    exchange_high = Prompt.ask(
+        "Select high liquidity exchange",
+        choices=["binance"],  # Example list, modify as needed
+        default="binance"
+    )
+
+    initiation_values["E. High Liquidity"] = exchange_high
+    display_initiation_values_table(initiation_values, console)
+
+    exchange_low = Prompt.ask(
+        "Select low liquidity exchange",
+        choices=["buda"],  # Example list, modify as needed
+        default="buda"
+    )
+
+    initiation_values["E. Low Liquidity"] = exchange_low
+    display_initiation_values_table(initiation_values, console)
+
+    # Prompt for price difference threshold
+    price_diff_threshold = float(Prompt.ask("Enter price difference threshold (e.g., 0.4)", default=0.4))
+    initiation_values["P. Difference"] = price_diff_threshold
+    display_initiation_values_table(initiation_values, console)
+
+    # Prompt for mode (e.g., 'conservative', 'aggressive')
+    mode = Prompt.ask("Enter trading mode", default="conservative")
+    initiation_values["Mode"] = mode
+    display_initiation_values_table(initiation_values, console)
+
+    # Prompt for base currency (e.g., BTC)
+    base_currency = Prompt.ask("Enter base currency", default="BTC")
+    initiation_values["Base Currency"] = base_currency
+    display_initiation_values_table(initiation_values, console)
+
+    # Prompt for quote currency (e.g., USDC)
+    quote_currency = Prompt.ask("Enter quote currency", default="USDC")
+    initiation_values["Quote Currency"] = quote_currency
+    display_initiation_values_table(initiation_values, console)
+
+    # Prompt for the original amount to be traded
+    original_amount = float(Prompt.ask("Enter the original amount to be arbitraged", default=2000))
+    initiation_values["Amount"] = original_amount
+
+    display_initiation_values_table(initiation_values, console)
+
+    return initiation_values
+
+
+def display_initiation_values_table(
+        initiation_values: Dict[str, Any],
+        console: Console,
+        default_values_mode: bool = False) -> None:
+    """
+    Display the initialization values in the console
+
+    :param initiation_values: Dict containing the initialization values
+    :param console: Console object from Rich
+    :param default_values_mode: Boolean, True if the default values will be used
+    """
+    initiation_values_table = create_initiation_values(default_values_mode)
+    append_initiation_values(initiation_values_table, initiation_values)
+
+    console.clear()
+    console.print(initiation_values_table)

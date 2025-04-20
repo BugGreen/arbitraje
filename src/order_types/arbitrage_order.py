@@ -11,21 +11,17 @@ class ArbitrageOrder(Order):
         self,
         base_currency: str,
         quote_currency: str,
-        amount: float,
         currency_of_interest: CurrencyOfInterest,
         order_type: OrderType,
-        price: Optional[float] = None,
-        status: str = 'pending',
-        trades: Optional[List[Dict]] = None,
         original_amount: float = 0.0,
         low_liquidity_exchange: str = "BUDA",
         high_liquidity_exchange: str = "BINANCE"
 
     ):
-        super().__init__(base_currency, quote_currency, amount, price, status, trades, order_type)
+        super().__init__(base_currency=base_currency, quote_currency=quote_currency, order_type=order_type)
 
         # The original total amount we aim to arbitrage
-        self.original_amount = original_amount or amount
+        self.original_amount = original_amount
 
         # Dynamic attributes Low-liquidity side
         self.pending_amount_low_liquidity = self.original_amount  # Initially the entire original amount is pending

@@ -5,6 +5,7 @@ import logging
 from src.arbitrage_bot.arbitrage_bot import ArbitrageBot
 from src.order_types.arbitrage_order import ArbitrageOrder
 from src.order_types.encoders import CurrencyOfInterest, OrderType
+from src.user_interface.arbitrage_ui import welcome_menu
 
 logging.basicConfig(
     level=logging.WARNING,  # Set to DEBUG to capture all levels of log messages
@@ -20,25 +21,23 @@ def main() -> None:
     # Example usage with Binance
 
     try:
-
-        bot = ArbitrageBot(
-            exchange_high_liquidity='binance',
-            exchange_low_liquidity='buda',
-            price_diff_threshold=0.4,
-            mode='conservative',
-            base_currency='BTC',
-            quote_currency='USDC',
-            amount=0.05  # Example amount
-        )
-        arb_order = ArbitrageOrder(
-            base_currency="BTC",
-            quote_currency="USDC",
-            amount=20.0,
-            original_amount=15,
-            currency_of_interest=CurrencyOfInterest.QUOTE,
-            order_type=OrderType.SELL_LIMIT
-        )
-        bot.run_arbitrage_flow(arb_order=arb_order)
+        welcome_menu()
+        # bot = ArbitrageBot(
+        #     exchange_high_liquidity='binance',
+        #     exchange_low_liquidity='buda',
+        #     price_diff_threshold=0.4,
+        #     mode='conservative',
+        #     base_currency='BTC',
+        #     quote_currency='USDC',
+        # )
+        # arb_order = ArbitrageOrder(
+        #     base_currency="BTC",
+        #     quote_currency="USDC",
+        #     original_amount=2000,
+        #     currency_of_interest=CurrencyOfInterest.QUOTE,
+        #     order_type=OrderType.SELL_LIMIT
+        # )
+        # bot.run_arbitrage_flow(arb_order=arb_order)
 
         binance = ExchangeFactory.get_exchange("binance")
         coin = "USDC"
@@ -137,8 +136,8 @@ def main() -> None:
         # print(json.dumps(buda.create_quote_currency_address('usdc')))
         #order_canceled = buda.cancel_order(base_currency, quote_currency, order_id)
         #print(json.dumps(order_canceled, indent=2))
-        order_states = buda.get_order_states(base_currency, quote_currency)
-        print(json.dumps(order_states, indent=2))
+        # order_states = buda.get_order_states(base_currency, quote_currency)
+        # print(json.dumps(order_states, indent=2))
         #ltc_withdrawal = buda.create_withdraw_request(coin='ltc', amount=0.00702, address=ltc_address, simulate=True)
         #print(json.dumps(ltc_withdrawal, indent=2))
         #order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')

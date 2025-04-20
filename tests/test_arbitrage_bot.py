@@ -997,7 +997,7 @@ class TestArbitrageBot(unittest.TestCase):
             order_type=OrderType.BUY_LIMIT
         )
         arb_order.traded_base_amount_low_liquidity = 0.000095
-        arb_order.traded_quote_amount_low_liquidity = 20
+        arb_order.traded_quote_amount_low_liquidity = 21
 
         transfer_completion = self.bot.quote_currency_transfer(arb_order)
         # Check that LN invoice was created once
@@ -1367,7 +1367,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=100.0,
             original_amount=15,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT

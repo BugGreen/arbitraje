@@ -17,9 +17,8 @@ class Order(ABC):
     def __init__(self,
                  base_currency: str,
                  quote_currency: str,
-                 amount: float,
                  price: Optional[float] = None,
-                 status: str = 'pending',
+                 status: Optional[str] = 'pending',
                  trades: Optional[List[Dict]] = None,
                  order_type: Optional[str] = None):
         """
@@ -33,7 +32,6 @@ class Order(ABC):
         """
         self.base_currency = base_currency.upper()
         self.quote_currency = quote_currency.upper()
-        self.amount = amount
         self.price = price
         self.status = status
         self.trades = trades or []

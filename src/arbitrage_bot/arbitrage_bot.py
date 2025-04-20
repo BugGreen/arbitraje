@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class ArbitrageBot:
     def __init__(self, exchange_high_liquidity: str, exchange_low_liquidity: str, price_diff_threshold: float,
-                 base_currency: str, quote_currency: str, amount: float, mode: Optional[str] = 'conservative'):
+                 base_currency: str, quote_currency: str, mode: Optional[str] = 'conservative'):
         """
         Initializes the arbitrage bot with the specified exchanges, price difference threshold,
         and mode for order execution.
@@ -30,7 +30,6 @@ class ArbitrageBot:
         :param mode: The mode of operation for the bot (e.g., 'aggressive', 'conservative').
         :param base_currency: The base currency of the trading pair (e.g., 'btc').
         :param quote_currency: The quote currency of the trading pair (e.g., 'usd').
-        :param amount: The total amount to be traded for arbitrage.
         """
         self.exchange_high_liquidity: BinanceProxy = self._create_exchange(exchange_high_liquidity)
         self.exchange_low_liquidity: BudaProxy = self._create_exchange(exchange_low_liquidity)
@@ -38,11 +37,10 @@ class ArbitrageBot:
         self.mode = mode
         self.base_currency = base_currency
         self.quote_currency = quote_currency
-        self.amount = amount
         self.currency_of_interest = CurrencyOfInterest.QUOTE  # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
         self.ui = ArbitrageUI()
 
-    def run_arbitrage_flow(self, arb_order: ArbitrageOrder, mode: str = "infinite_loop", sleep_interval: float = 0.111) \
+    def run_arbitrage_flow(self, arb_order: ArbitrageOrder, mode: str = "infinite_loop", sleep_interval: float = 0.5) \
             -> None:
         """
         Execute the arbitrage flow using REST calls to fetch the high-liquidity price.
@@ -123,6 +121,8 @@ class ArbitrageBot:
                     logger.warning("Funds transfer failed. Evaluate partial scenario.")
             else:
                 # Not completed => Cancel sub-orders
+                time.sleep(sleep_interval)
+
                 cancel_response = self.place_sub_order_cancellations(place_result, arb_order)
                 order_completion = self.arbitrage_order_completion(arb_order)
                 if order_completion:
@@ -261,17 +261,18 @@ class ArbitrageBot:
         highest_bid = max(float_bids)
 
         # 3) Decide formula based on order_type
+        # TODO: Adaptar a BUY_MARKET y SELL_MARKET
         order_type_name = arb_order.order_type
         if order_type_name in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
             # p_diff = (high_liquidity_price - lowest_exchange_lowest_ask) / lowest_exchange_lowest_ask
             price_reference = min([lowest_ask, high_liquidity_price])
-            low_liquidity_price = lowest_ask
-            p_diff = (high_liquidity_price - lowest_ask) / lowest_ask
+            low_liquidity_price = lowest_ask if order_type_name is OrderType.BUY_MARKET else highest_bid
+            p_diff = (high_liquidity_price - low_liquidity_price) / low_liquidity_price
         elif order_type_name in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
             # p_diff = (lowest_exchange_highest_bid - high_liquidity_price) / high_liquidity_price
             price_reference = max([highest_bid, high_liquidity_price])
-            low_liquidity_price = highest_bid
-            p_diff = (highest_bid - high_liquidity_price) / high_liquidity_price
+            low_liquidity_price = highest_bid if order_type_name is OrderType.SELL_MARKET else lowest_ask
+            p_diff = (low_liquidity_price - high_liquidity_price) / high_liquidity_price
         else:
             logger.error("Unrecognized order type for price diff: %s", order_type_name)
             return 0.0, 0.0  # or raise an exception
@@ -1277,147 +1278,3 @@ class ArbitrageBot:
                 )
                 return False
 
-    def execute_arbitrage(self) -> Dict:
-        """
-        Executes the arbitrage strategy if the price difference between the two exchanges exceeds
-        the defined threshold. The bot will place orders on both exchanges accordingly.
-
-        :return: A dictionary with the result of the arbitrage execution.
-        """
-        price_diff = self.get_price_difference()
-        if price_diff < self.price_difference:
-            return {"status": "no arbitrage", "price_diff": price_diff}
-
-        # Decide whether to place limit or market orders based on the mode
-        if self.mode == 'aggressive':
-            order_type = 'market'
-        elif self.mode == 'conservative':
-            order_type = 'limit'
-        else:
-            raise ValueError("Unsupported mode. Use 'aggressive' or 'conservative'.")
-
-        # Create and place orders
-        order_a = Order(self.base_currency, self.quote_currency, self.amount / 2, order_type=order_type)
-        order_b = Order(self.base_currency, self.quote_currency, self.amount / 2, order_type=order_type)
-
-        # Place orders on both exchanges
-        order_a_response = self.exchange_high_liquidity.new_order(order_a)
-        order_b_response = self.exchange_low_liquidity.new_order(order_b)
-
-        return {
-            "status": "arbitrage executed",
-            "order_a": order_a_response,
-            "order_b": order_b_response,
-            "price_diff": price_diff
-        }
-
-    def conservative_strategy(self, target_exchange_price: float, price_diff_threshold: float,
-                              order: Order, delta: float) -> Dict[str, Any]:
-        """
-        Executes the conservative strategy logic.
-
-        :param target_exchange_price: The current price of the target exchange (e.g. Binance price).
-        :param price_diff_threshold: The minimum price difference threshold to trigger the strategy.
-        :param order: The Order instance to work with.
-        :param delta: A minimum gap used to adjust the target price of the sub-orders.
-        :return: A dictionary with information about the operation performed.
-        """
-        logger.info("Starting conservative strategy...")
-
-        # Determine if this is a new order or previously created
-        # Assume: If order.sub_orders is empty => new order, else => previously created
-        previously_created = len(order.sub_orders) > 0
-
-        low_liquidity_exchange = "buda"  # Example: low liquidity exchange
-        high_liquidity_exchange = "binance"  # Example: high liquidity exchange
-
-        if not previously_created:
-            # New Order scenario
-            # Get order_book from low liquidity exchange
-            order_book = self.get_order_book(low_liquidity_exchange, order.base_currency, order.quote_currency)
-            bids = order_book.get("bids", [])
-            asks = order_book.get("asks", [])
-
-            # Extract placeholders for prices:
-            # In reality, you'd determine which prices correspond to p_binance, buda_lowest_ask, etc.
-            p_binance = target_exchange_price
-            buda_lowest_ask = asks[0][0] if asks else p_binance * 1.01  # Placeholder
-            buda_highest_bid = bids[0][0] if bids else p_binance * 0.99  # Placeholder
-            highest_bid = buda_highest_bid  # Could be something else if we differentiate.
-
-            # Check order type
-            if order.order_type == 'bid_limit':
-                # p_diff = (p_binance - buda_lowest_ask) / buda_lowest_ask
-                p_diff = (p_binance - buda_lowest_ask) / buda_lowest_ask
-
-                if p_diff > price_diff_threshold:
-                    # Split into batch of buda_limit_bid sub_orders at price = buda_lowest_ask - delta
-                    sub_orders = self.split_order_into_suborders(order, buda_lowest_ask - delta, side='buy')
-                else:
-                    # p_diff <= price_diff_treshold
-                    # Split into batch of buda_limit_bid sub_orders at price = binance_price - price_diff_treshold
-                    sub_orders = self.split_order_into_suborders(order, p_binance - price_diff_threshold, side='buy')
-
-                # Place sub orders
-                responses = self.place_sub_orders(low_liquidity_exchange, sub_orders)
-                order.sub_orders = responses
-                return {
-                    "status": "sub_orders_placed",
-                    "sub_orders": responses
-                }
-
-            else:
-                # order_type != 'bid_limit' => treat as ask scenario
-                # p_diff = (highest_bid - p_binance) / p_binance
-                p_diff = (buda_highest_bid - p_binance) / p_binance
-
-                if p_diff > price_diff_threshold:
-                    # Split into buda_limit_ask at price = buda_highest_bid + delta
-                    sub_orders = self.split_order_into_suborders(order, buda_highest_bid + delta, side='sell')
-                else:
-                    # Split into buda_limit_ask at price = binance_price + price_diff_treshold
-                    sub_orders = self.split_order_into_suborders(order, p_binance + price_diff_threshold, side='sell')
-
-                responses = self.place_sub_orders(low_liquidity_exchange, sub_orders)
-                order.sub_orders = responses
-                return {
-                    "status": "sub_orders_placed",
-                    "sub_orders": responses
-                }
-
-        else:
-            # Previously created order, check status
-            sub_order_ids = [o["id"] for o in order.sub_orders]
-            statuses = self.check_sub_orders_status(low_liquidity_exchange, sub_order_ids)
-
-            # Check if any sub_order traded or partially_traded
-            traded_statuses = ['traded', 'parcially_traded']
-            any_traded = any(s["status"] in traded_statuses for s in statuses)
-
-            if any_traded:
-                # Execute opposite order on target exchange
-                executed_amount = sum(s["amount"] for s in order.sub_orders if s["status"] in traded_statuses)
-                side = 'sell' if order.order_type == 'bid_limit' else 'buy'
-                opposite_order_price = target_exchange_price  # This could be refined
-
-                opposite_response = None
-                order.executed_amount += opposite_response["executed_amount"]
-
-                # Cancel resting sub_orders
-                # (In production, you'd call an API method to cancel each)
-                for s in order.sub_orders:
-                    if s["status"] not in traded_statuses:
-                        s["status"] = "canceled"
-
-                return {
-                    "status": "opposite_order_executed",
-                    "executed_amount": order.executed_amount,
-                    "opposite_order_response": opposite_response
-                }
-            else:
-                # No sub_order traded, cancel them
-                for s in order.sub_orders:
-                    s["status"] = "canceled"
-                return {
-                    "status": "sub_orders_canceled"
-                }
