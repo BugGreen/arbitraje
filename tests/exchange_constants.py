@@ -171,6 +171,103 @@ successful_batch_order_mock_response = {"orders_diff": [
                 }
               ]}
 
+
+successful_batch_order_mock_partial_success_response = {"orders_diff": [
+                {
+                  "mode": "place",
+                  "order": {
+                    "order": {
+                      "id": 1306565374,
+                      "uuid": "fb9bc6ff-d73a-483d-b185-4292f4d3adf8",
+                      "market_id": "ETH-COP",
+                      "account_id": 143870,
+                      "type": "Bid",
+                      "state": "received",
+                      "created_at": "2024-12-27T14:04:32.810Z",
+                      "fee_currency": "ETH",
+                      "price_type": "limit",
+                      "source": "null",
+                      "client_id": "null",
+                      "message": "null",
+                      "order_type": "gtc",
+                      "expire_at": 0,
+                      "limit": [
+                        "10000000.0",
+                        "COP"
+                      ],
+                      "amount": [
+                        "0.001000001",
+                        "ETH"
+                      ],
+                      "original_amount": [
+                        "0.001000001",
+                        "ETH"
+                      ],
+                      "traded_amount": [
+                        "0.0",
+                        "ETH"
+                      ],
+                      "total_exchanged": [
+                        "0.0",
+                        "COP"
+                      ],
+                      "paid_fee": [
+                        "0.0",
+                        "ETH"
+                      ],
+                      "stop_price": "null"
+                    }
+                  }
+                },
+                {
+                  "mode": "place",
+                  "order": {
+                    "order": {
+                      "id": 1306565375,
+                      "uuid": "37bf5d0f-548a-40d1-9893-6a8e078bfb94",
+                      "market_id": "ETH-COP",
+                      "account_id": 143870,
+                      "type": "Bid",
+                      "state": "received",
+                      "created_at": "2024-12-27T14:04:32.830Z",
+                      "fee_currency": "ETH",
+                      "price_type": "limit",
+                      "source": "null",
+                      "client_id": "null",
+                      "message": "null",
+                      "order_type": "gtc",
+                      "expire_at": 0,
+                      "limit": [
+                        "10000000.0",
+                        "COP"
+                      ],
+                      "amount": [
+                        "0.0012",
+                        "ETH"
+                      ],
+                      "original_amount": [
+                        "0.0012",
+                        "ETH"
+                      ],
+                      "traded_amount": [
+                        "0.0",
+                        "ETH"
+                      ],
+                      "total_exchanged": [
+                        "0.0",
+                        "COP"
+                      ],
+                      "paid_fee": [
+                        "0.0",
+                        "ETH"
+                      ],
+                      "stop_price": "null"
+                    }
+                  }
+                }
+              ]}
+
+
 successful_batch_order_states = {
   "orders": [
     {

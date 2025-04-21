@@ -1,5 +1,5 @@
 from src.exchange_api.binance_proxy import BinanceProxy
-from src.exchange_api.tests import constants
+from tests import exchange_constants as constants
 from unittest.mock import patch, Mock
 from json import dumps as jprint
 

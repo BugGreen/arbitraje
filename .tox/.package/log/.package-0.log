@@ -1,0 +1,4 @@
+action: .package, msg: getenv
+cwd: /Users/nicolasrojasbernal/PycharmProjects/arbitraje/.tox
+cmd: /Users/nicolasrojasbernal/PycharmProjects/arbitraje/venv/bin/python3 -m virtualenv --no-download --python /Users/nicolasrojasbernal/PycharmProjects/arbitraje/venv/bin/python3 .package
+RuntimeError: failed to detect cpython3.8.5-64|cpython3.8.5|cpython3.8-64|cpython3.8|cpython3-64|cpython3|cpython-64|cpython|python3.8.5-64|python3.8.5|python3.8-64|python3.8|python3-64|python3|python-64|python in /Library/Frameworks/Python.framework/Versions/3.8/bin:/Library/Frameworks/Python.framework/Versions/3.8

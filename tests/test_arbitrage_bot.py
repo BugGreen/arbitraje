@@ -1,4 +1,3 @@
-import json
 from src.arbitrage_bot.arbitrage_bot import ArbitrageBot
 from src.order_types.arbitrage_order import ArbitrageOrder
 from src.exchange_api.buda_proxy import BudaProxy
@@ -7,8 +6,7 @@ from unittest.mock import patch, MagicMock
 import unittest
 from typing import List, Dict, Any, Union, Optional
 import logging
-from src.exchange_api.tests import constants as test_api_constants
-from src.arbitrage_bot.tests import constants as test_a_bot_constans
+from tests import exchange_constants as test_api_constants, a_bot_constants as test_a_bot_constans
 from src.order_types.encoders import OrderType, CurrencyOfInterest
 
 
