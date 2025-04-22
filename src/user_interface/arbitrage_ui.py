@@ -192,3 +192,9 @@ class ArbitrageUI:
                 else:
                     self.console.print(
                         "[bold red]Unrecognized command.[/bold red] Valid commands: s (stop), p (pause), c (continue).")
+
+    def get_stop_requested(self):
+        return self._stop_requested
+
+    def get_pause_requested(self):
+        return self._pause_requested

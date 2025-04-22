@@ -70,6 +70,19 @@ class ArbitrageBot:
         ui_thread.start()
 
         while True:
+            # Check the shared stop flag from UI
+            if self.ui.get_stop_requested():
+                logger.info("Stop command detected in main arbitrage flow. Exiting.")
+                break
+
+            # If pause is requested, wait until it is cleared
+            while self.ui.get_pause_requested():
+                logger.info("Arbitrage flow paused. Waiting to continue...")
+                time.sleep(1)
+                if self.ui.get_stop_requested():
+                    logger.info("Stop command detected during pause. Exiting.")
+                    return
+
             # 1) Get the high-liquidity price
             high_liquidity_price = self._get_latest_high_liquidity_price(arb_order=arb_order)
             if high_liquidity_price is None:
