@@ -189,6 +189,9 @@ Executes **both** `btc_transfer` and `quote_currency_transfer` **in parallel**, 
 ---
 
 ### 14. `btc_transfer(arb_order: ArbitrageOrder) -> bool`
+
+![funds_transfer_flow](../../images/funds_transfers.png)
+
 Synchronously transfers BTC between exchanges (low-liquidity ↔ high-liquidity) based on the order type (buy or sell). 
 It splits the total BTC if needed, creates LN invoices on the receiver, pays them from the sender, then waits for 
 confirmation on the sender side.
