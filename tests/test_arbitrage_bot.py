@@ -160,12 +160,12 @@ class TestArbitrageBot(unittest.TestCase):
         """
 
         mock_order = MockArbitrageOrder(original_amount=100.0)
-        reference_price = 10000.0
+        mock_order.price_reference = 10000.0
         delta = 0.5 / 100
         mock_order.order_type = OrderType.SELL_LIMIT
         mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
 
-        result = self.bot.split_order_into_suborders(mock_order, reference_price, delta=delta)
+        result = self.bot.split_order_into_suborders(mock_order, delta=delta)
 
         # print(json.dumps(result, indent=2))
         # Check amount distribution
@@ -174,7 +174,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(result[2]["order"]["amount"], 10.0 / result[2]["order"]["limit"])
 
         # Check price calculations
-        expected_one_price = reference_price * (1 + delta + self.bot.price_diff_threshold)  # 10000 + 50 = 10050
+        expected_one_price = mock_order.price_reference * (1 + delta + self.bot.price_diff_threshold)  # 10000 + 50 = 10050
         expected_two_price = expected_one_price * 1.001
         expected_three_price = expected_one_price * 1.002
         self.assertAlmostEqual(result[0]["order"]["limit"], expected_one_price)
@@ -187,12 +187,12 @@ class TestArbitrageBot(unittest.TestCase):
         """
 
         mock_order = MockArbitrageOrder(original_amount=200.0)
+        mock_order.price_reference = 5000
         mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
 
-        reference_price = 5000.0
-        # No delta given
+       # No delta given
 
-        result = self.bot.split_order_into_suborders(mock_order, reference_price)
+        result = self.bot.split_order_into_suborders(mock_order)
 
         # Check amount distribution
         self.assertEqual(result[0]["order"]["amount"], 120.0 / result[0]["order"]["limit"])  # 60% of 200 in Base Currency
@@ -200,7 +200,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(result[2]["order"]["amount"], 20.0 / result[2]["order"]["limit"])  # 10% of 200
 
         # Check price calculations: reference_price - price_diff_treshold (5000 - 10 = 4990)
-        expected_one_price = reference_price * (1 - self.bot.price_diff_threshold)
+        expected_one_price = mock_order.price_reference * (1 - self.bot.price_diff_threshold)
         expected_two_price = expected_one_price * 0.999
         expected_three_price = expected_one_price * 0.998
         self.assertAlmostEqual(result[0]["order"]["limit"], expected_one_price)
@@ -222,10 +222,9 @@ class TestArbitrageBot(unittest.TestCase):
 
         mock_order = MockArbitrageOrder(original_amount=15)
         mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
-
+        mock_order.price_reference = 10000.0
         sub_orders = self.bot.split_order_into_suborders(
             arb_order=mock_order,
-            reference_price=10000.0,
             delta=.5 / 100
         )
 
@@ -249,9 +248,9 @@ class TestArbitrageBot(unittest.TestCase):
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
         )
+        arb_order.price_reference = 15000
         result = self.bot.split_order_into_suborders(
-            arb_order=arb_order,
-            reference_price=15000,
+            arb_order=arb_order
         )
         self.assertIsInstance(result, dict)
         self.assertEqual(result.get('code'), 'ERROR_BELOW_MIN_TOTAL')
@@ -1247,7 +1246,44 @@ class TestArbitrageBot(unittest.TestCase):
         expected_price = min([second_lowest_ask_price, high_liquidity_price])
         p_diff, reference_price = self.bot.get_price_reference(high_liquidity_price, arb_order)
         self.assertEqual(p_diff, expected_p_diff)
-        self.assertEqual(reference_price, expected_price)
+        self.assertEqual(arb_order.price_reference, expected_price)
+
+
+    @patch.object(BudaProxy, 'get_order_book',
+                  return_value=test_api_constants.buda_order_book_response_to_filter)
+    def test_get_price_reference_multiple_orders(self, buda_order_book_mock):
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        arb_order_buy = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+        high_liquidity_price = 100.8
+        second_highest_bid_price = 100
+        # lowest_ask=103 => p_diff = (103 - 100.8)/100.8 = ~0.04040
+        expected_p_diff = (103 - high_liquidity_price) / high_liquidity_price
+        expected_price = max([second_highest_bid_price, high_liquidity_price])
+
+        p_diff, reference_price = self.bot.get_price_reference(high_liquidity_price, [arb_order, arb_order_buy])
+
+        # self.assertEqual(p_diff, expected_p_diff)
+        self.assertEqual(arb_order.price_reference, expected_price)
+
+        second_lowest_ask_price = 104
+        # highest_bid=101 => p_diff = (103 - 101)/101 = ~0.04040
+        expected_p_diff = (high_liquidity_price - 101) / 101
+        expected_price = min([second_lowest_ask_price, high_liquidity_price])
+        # self.assertEqual(p_diff, expected_p_diff)
+        self.assertEqual(arb_order_buy.price_reference, expected_price)
+
 
     def test_arbitrage_order_completion(self):
         """

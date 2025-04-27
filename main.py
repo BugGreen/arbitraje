@@ -51,7 +51,7 @@ def main() -> None:
         base_currency, quote_currency = 'btc', 'usdc'
         price = 98000
         order_amount = str(round(fiat_amount_usdc / price, 5))
-        print(order_amount)
+        #print(order_amount)
         side = 'BUY'
         time_in_force = 'GTC'
         order_type = 'MARKET'
@@ -62,8 +62,8 @@ def main() -> None:
 
         #usdc_deposit_addres = binance.create_deposit_address(coin=coin, network='ETH')
         #print(json.dumps(usdc_deposit_addres, indent=2))
-        print(binance.get_withdraw_history('BTC'))
-        print(binance.get_deposit_history())
+        # print(binance.get_withdraw_history('BTC'))
+        # print(binance.get_deposit_history())
 
         # coin_info = binance.get_coin_info(base_currency)
         # print(json.dumps(coin_info, indent=2))
@@ -90,7 +90,7 @@ def main() -> None:
         #print(json.dumps(cancel_order, indent=2))
         #lightning_address = binance.create_lightning_invoice(.01)
         # print(json.dumps(lightning_address, indent=2))
-        binance.check_datetime_differences()
+        # binance.check_datetime_differences()
         #print(json.dumps(coin_info, indent=2))
     except Exception as e:
         print(f"Error with Binance: {e}")

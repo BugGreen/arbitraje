@@ -61,9 +61,17 @@ class ArbitrageOrder(Order):
         self.low_liquidity_exchange: str = low_liquidity_exchange
         self.high_liquidity_exchange: str = high_liquidity_exchange
 
-        # Optionally, define a callback that gets invoked whenever pending_amount_high_liquidity changes.
-        # e.g. def on_pending_high_liquidity_update(arb_order, delta): ...
-        self.on_pending_high_liquidity_updated: Optional[Callable[['ArbitrageOrder', float], None]] = None
+        self.price_reference = None  # Store price reference here
+
+    def update_price_reference(self, price_reference: float):
+        """
+        Update the price reference.
+        WARNING: This is not the order price, but the reference price to place the order.
+
+        :param price_reference: float representing the price used as a reference to calculate the real price to place
+        an order.
+        """
+        self.price_reference = price_reference  # Update it when necessary
 
     def get_arbitrage_order_info(self) -> dict:
         arbitrage_order_info = {
@@ -105,9 +113,6 @@ class ArbitrageOrder(Order):
         # Move that same traded_delta to pending
         self._pending_quote_amount_high_liquidity += traded_quote_delta
         self._pending_base_amount_high_liquidity += traded_base_delta
-
-        if self.on_pending_high_liquidity_updated is not None:
-            self.on_pending_high_liquidity_updated(self, traded_quote_delta)
 
     def update_market_data(self,
                            price_diff: float,

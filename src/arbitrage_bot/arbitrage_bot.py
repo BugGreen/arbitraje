@@ -191,7 +191,7 @@ class ArbitrageBot:
                             p_diff, reference_price, arb_order.order_type.name)
 
                 # 3) Split sub-orders
-                sub_orders = self.split_order_into_suborders(arb_order, reference_price)
+                sub_orders = self.split_order_into_suborders(arb_order)
 
                 if isinstance(sub_orders, dict) and "code" in sub_orders:
                     logger.error("place_sub_orders failed: %s", sub_orders)
@@ -402,7 +402,11 @@ class ArbitrageBot:
         return None
 
     # TODO: LA LOGICA DEBE TENER EN CUENTA BUY_MARKET Y SELL_MARKET, hasta ahora solo es valida para las otras ordenes
-    def get_price_reference(self, high_liquidity_price: float, arb_order: ArbitrageOrder) -> Tuple[float, float]:
+    def get_price_reference(
+            self,
+            high_liquidity_price: float,
+            arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]]
+    ) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
         """
         Retrieve the order book from the low-liquidity exchange, filter the levels to ensure that the
         cumulative volume meets a minimum threshold, and compute a price difference (%) relative to
@@ -414,9 +418,33 @@ class ArbitrageBot:
         (using the lowest ask that meets the volume threshold).
 
         :param high_liquidity_price: The asset price on the high-liquidity exchange (float).
-        :param arb_order: The ArbitrageOrder describing the operation type.
+        :param arb_orders: The `ArbitrageOrder` instance or a list of instances describing the operation type.
         :return: A tuple (p_diff, price_reference) where p_diff is the price difference in decimal form (e.g., 0.05 = 5%)
-                 and price_reference is the filtered price level from the low-liquidity exchange.
+                 and price_reference is the filtered price level from the low-liquidity exchange, or a list of such tuples
+                 if multiple orders are provided.
+        :raises RuntimeError: If the order book data is missing/invalid or if no price level meets the volume threshold.
+        """
+        if isinstance(arb_orders, list):
+            results = []
+            for arb_order in arb_orders:
+                p_diff, price_reference = self._get_price_reference_single_order(high_liquidity_price, arb_order)
+                arb_order.update_price_reference(price_reference)  # Store the price reference in the order
+                results.append((p_diff, price_reference))
+            return results
+        else:
+            p_diff, price_reference = self._get_price_reference_single_order(high_liquidity_price, arb_orders)
+            arb_orders.update_price_reference(price_reference)  # Store the price reference in the order
+            return p_diff, price_reference
+
+    def _get_price_reference_single_order(self, high_liquidity_price: float, arb_order: ArbitrageOrder) \
+            -> Tuple[float, float]:
+        """
+        Helper function to handle the price reference logic for a single arbitrage order.
+
+        :param high_liquidity_price: The asset price on the high-liquidity exchange (float).
+        :param arb_order: The `ArbitrageOrder` instance describing the operation type.
+        :return: A tuple (p_diff, price_reference) where p_diff is the price difference in decimal form and
+                 price_reference is the filtered price level from the low-liquidity exchange.
         :raises RuntimeError: If the order book data is missing/invalid or if no price level meets the volume threshold.
         """
         logger.info(
@@ -437,7 +465,6 @@ class ArbitrageBot:
             raise RuntimeError("Order book is missing asks/bids data.")
 
         # 2) Convert all asks/bids to floats, ensuring positivity
-        #    Then find the minimum ask, maximum bid
         try:
             float_asks = [float(ask[0]) for ask in asks]
             float_bids = [float(bid[0]) for bid in bids]
@@ -557,7 +584,7 @@ class ArbitrageBot:
         return valid_sub_orders
 
     # TODO: HACER LA LOGICA MAS GENERAL CUANDO SE INCORPOREN MAS LOW LIQUIDITY EXCHANGES
-    def split_order_into_suborders(self, arb_order: ArbitrageOrder, reference_price: float,
+    def split_order_into_suborders(self, arb_order: ArbitrageOrder,
                                    delta: Optional[float] = None) \
             -> Any:
         """
@@ -565,7 +592,6 @@ class ArbitrageBot:
         taking `reference_price` as a base for setting limit prices.
 
         :param arb_order: An `ArbitrageOrder` instance whose `original_amount` will be splitted.
-        :param reference_price: The price to use as a base for calculation.
         :param delta: Optional delta to adjust the price.
         :return: A list of dicts with the structure:
                  [
@@ -574,7 +600,7 @@ class ArbitrageBot:
                     {"mode": "place", "order": {...}}
                  ]
         """
-
+        reference_price: float = arb_order.price_reference
         logger.info("Splitting order into sub-orders: order=%s, reference_price=%s, side=%s, delta=%s",
                     arb_order, reference_price, arb_order.order_type.name, delta)
 

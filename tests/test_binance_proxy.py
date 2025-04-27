@@ -1,6 +1,6 @@
 import json
 from unittest import TestCase
-from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
+from src.exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
 from src.exchange_api.exchange_factory import ExchangeFactory
 from tests import exchange_constants as constants
 from unittest.mock import patch, Mock
