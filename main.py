@@ -28,7 +28,12 @@ def main() -> None:
 
     try:
 
-        welcome_menu()
+        #welcome_menu()
+        buda_proxy = BudaProxy()
+
+        # Connect to the WebSocket for BTC/USDT market
+        initial_order_book_ss = buda_proxy.get_order_book('BTC', 'clp')
+        buda_proxy.connect_to_order_book('BTC', 'clp', initial_order_book_ss)
         # bot = ArbitrageBot(
         #     exchange_high_liquidity='binance',
         #     exchange_low_liquidity='buda',

@@ -64,7 +64,7 @@ class BaseLowLiquidityExchange(BaseExchange, ABC):
         """
 
     @abstractmethod
-    def _translate_batch_response(response: Union[Dict[str, Any], Exception]) \
+    def _translate_batch_response(self, response: Union[Dict[str, Any], Exception]) \
             -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """
         Translate the low liquidity exchange response into a standardized format.

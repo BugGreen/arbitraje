@@ -642,3 +642,58 @@ class TestBudaProxy(unittest.TestCase):
             assert False, "Expected Exception was not raised."
         except Exception as e:
             assert "Unexpected error" in str(e), "Exception message should contain 'Unexpected error'."
+
+
+class TestBudaProxyOrderBook(unittest.TestCase):
+
+    def setUp(self):
+        self.proxy = BudaProxy()
+        self.proxy.order_book_snapshot = {"asks": {}, "bids": {}}
+
+    def test_set_initial_order_book(self):
+        snapshot = {
+            "order_book": {
+                "asks": [["79084646.0", "0.008751"], ["79090631.0", "0.64661344"]],
+                "bids": [["78402123.0", "0.00154805"], ["78400770.0", "0.476906"]]
+            },
+            "market_id": "BTC-CLP"
+        }
+        self.proxy.set_initial_order_book(snapshot)
+        current = self.proxy.get_current_order_book()
+        expected = {
+            "asks": {"79084646.0": "0.008751", "79090631.0": "0.64661344"},
+            "bids": {"78402123.0": "0.00154805", "78400770.0": "0.476906"}
+        }
+        self.assertEqual(current, expected)
+
+    def test_update_order_book_state_add(self):
+        # Start with empty state, add a positive change
+        self.proxy.update_order_book_state("asks", "79559436.91", "0.00156315")
+        current = self.proxy.get_current_order_book()
+        self.assertIn("79559436.91", current["asks"])
+        self.assertAlmostEqual(float(current["asks"]["79559436.91"]), 0.00156315, places=8)
+
+    def test_update_order_book_state_increment(self):
+        # Set initial value, then add more
+        self.proxy.order_book_snapshot = {"asks": {"79559436.91": "0.00156315"}, "bids": {}}
+        self.proxy.update_order_book_state("asks", "79559436.91", "0.00043685")
+        current = self.proxy.get_current_order_book()
+        # Expected new amount = 0.00156315 + 0.00043685 = 0.002
+        self.assertIn("79559436.91", current["asks"])
+        self.assertAlmostEqual(float(current["asks"]["79559436.91"]), 0.002, places=8)
+
+    def test_update_order_book_state_decrement_partial(self):
+        # Set initial value, then subtract partially
+        self.proxy.order_book_snapshot = {"asks": {"79559436.91": "0.002"}, "bids": {}}
+        self.proxy.update_order_book_state("asks", "79559436.91", "-0.001")
+        current = self.proxy.get_current_order_book()
+        # Expected new amount = 0.002 - 0.001 = 0.001
+        self.assertIn("79559436.91", current["asks"])
+        self.assertAlmostEqual(float(current["asks"]["79559436.91"]), 0.001, places=8)
+
+    def test_update_order_book_state_remove(self):
+        # Set initial value, then subtract enough to remove the level.
+        self.proxy.order_book_snapshot = {"asks": {"79559436.91": "0.001"}, "bids": {}}
+        self.proxy.update_order_book_state("asks", "79559436.91", "-0.0011")
+        current = self.proxy.get_current_order_book()
+        self.assertNotIn("79559436.91", current["asks"])

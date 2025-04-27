@@ -2,6 +2,8 @@
 from src.exchange_api.low_liquidity_exchanges.base_low_liquidity_exchange import BaseLowLiquidityExchange
 from src.exchange_api.utils import load_api_keys, handle_api_response
 from typing import List, Dict, Optional, Union, Any
+from threading import Thread, Lock
+import websocket
 import requests
 import logging
 import hashlib
@@ -26,6 +28,8 @@ class BudaProxy(BaseLowLiquidityExchange):
         """
         self.api_key, self.api_secret = load_api_keys("BUDA")
         self.name: str = "BUDA"
+        self.order_book_snapshot = {"asks": {}, "bids": {}}  # Shared order book state (e.g., {'asks': {...}, 'bids': {...}})
+        self.order_book_lock = Lock()  # Lock to protect order book updates
 
     BASE_URL = "https://www.buda.com"
     ENDPOINTS = {
@@ -44,6 +48,182 @@ class BudaProxy(BaseLowLiquidityExchange):
         "MARKETS": "/api/v2/markets/{}",
         "BALANCES": "/api/v2/balances/{}"
     }
+
+    def set_initial_order_book(self, snapshot: dict) -> None:
+        """
+        Sets the initial order book snapshot (from REST) in a thread-safe manner.
+        Converts the order book lists to dictionaries for easier updates.
+
+        :param snapshot: The initial snapshot with structure:
+                         {'order_book': {'asks': List[List[str]], 'bids': List[List[str]]}, 'market_id': str}
+        """
+        order_book_data = snapshot.get("order_book", {})
+        asks_list = order_book_data.get("asks", [])
+        bids_list = order_book_data.get("bids", [])
+        with self.order_book_lock:
+            self.order_book_snapshot = {
+                "asks": {price: amount for price, amount in asks_list},
+                "bids": {price: amount for price, amount in bids_list}
+            }
+        logger.info("Initial order book snapshot set: %s", self.order_book_snapshot)
+
+    def on_message_order_book(self, ws, message):
+        """
+        Handles incoming messages for the order book from the WebSocket server,
+        processes order book changes or snapshots.
+
+        :param ws: WebSocket instance.
+        :param message: Message received from WebSocket.
+        """
+        try:
+            data = json.loads(message)
+            if "ev" in data:
+                if data["ev"] == "book-changed":
+                    self.process_order_book_update(data)
+                elif data["ev"] == "book-sync":
+                    self.process_order_book_snapshot(data)
+                else:
+                    logger.warning(f"Unknown event type: {data['ev']}")
+            else:
+                logger.warning(f"Invalid message format: {message}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode WebSocket message: {e}")
+
+    @staticmethod
+    def on_open_order_book(ws):
+        """
+        Called when the WebSocket connection for the order book is established.
+        :param ws: WebSocket instance.
+        """
+        logger.info("WebSocket connected to order book.")
+
+    def connect_to_order_book(self, base_currency: str, quote_currency: str, initial_snapshot: dict = None) -> None:
+        """
+        Connects to the order book channel of the specified market pair using WebSocket.
+        Optionally accepts an initial snapshot to set the internal state before starting the stream.
+
+        :param base_currency: Base currency (e.g., BTC).
+        :param quote_currency: Quote currency (e.g., USDT).
+        :param initial_snapshot: Optional initial snapshot from REST.
+        """
+        market_id = f"{base_currency.lower()}{quote_currency.lower()}"
+        socket_url = f"wss://realtime.buda.com/sub?channel=book%40{market_id}"
+
+        if initial_snapshot is not None:
+            self.set_initial_order_book(initial_snapshot)
+
+        websocket.enableTrace(True)
+        self.ws = websocket.WebSocketApp(
+            socket_url,
+            on_message=self.on_message_order_book,
+            on_open=self.on_open_order_book
+        )
+        thread = Thread(target=self.ws.run_forever, kwargs={"ping_interval": 10})
+        thread.daemon = True
+        thread.start()
+
+    def process_order_book_update(self, data: dict) -> None:
+        """
+        Processes the 'book-changed' event to update the order book incrementally.
+
+        :param data: The message data from the 'book-changed' event.
+                     Expected structure:
+                     {'mk': <market_id>, 'ts': <timestamp>, 'ev': 'book-changed', 'change': [side, price, amount_change]}
+        """
+        change = data.get("change", [])
+        if len(change) != 3:
+            logger.error("Invalid 'change' format: %s", change)
+            return
+        side, price_level, amount_change = change
+        logger.info("Processing order book update. Side: %s, Price: %s, Amount Change: %s", side, price_level,
+                    amount_change)
+        self.update_order_book_state(side, price_level, amount_change)
+
+    def process_order_book_snapshot(self, data: dict) -> None:
+        """
+        Processes the 'book-sync' event to replace the full order book snapshot.
+
+        :param data: The message data from the 'book-sync' event.
+                     Expected structure: {'ev': 'book-sync', 'order_book': <serialized order book>}
+        """
+        snapshot = data.get("order_book", {})
+        logger.info("Processing order book snapshot.")
+        self.update_order_book_snapshot(snapshot)
+
+    def update_order_book_state(self, side: str, price_level: str, amount_change: str) -> None:
+        """
+        Thread-safely updates the order book state for a given side (asks or bids) based on a change event.
+        Instead of deleting the price level immediately when a negative change is received,
+        this method subtracts the change from the current level. If the resulting aggregate amount
+        is less than or equal to a small threshold, the price level is removed.
+
+        :param side: 'asks' or 'bids'
+        :param price_level: The price level affected (as string).
+        :param amount_change: The change in the amount at that price level (as string).
+        """
+        with self.order_book_lock:
+            # Convert amount_change to float
+            try:
+                change_value = float(amount_change)
+            except ValueError:
+                logger.error("Invalid amount_change value: %s", amount_change)
+                return
+
+            # Ensure the side exists
+            if side not in self.order_book_snapshot:
+                self.order_book_snapshot[side] = {}
+
+            # Get the current amount at this price level, defaulting to 0 if not present.
+            current_str = self.order_book_snapshot[side].get(price_level, "0")
+            try:
+                current_amount = float(current_str)
+            except ValueError:
+                logger.error("Invalid current amount at price level %s: %s", price_level, current_str)
+                current_amount = 0.0
+
+            # Calculate the new amount
+            new_amount = current_amount + change_value
+
+            # Define a threshold to consider the level as empty (to avoid floating-point issues)
+            epsilon = 1e-8
+            if new_amount <= epsilon:
+                if price_level in self.order_book_snapshot[side]:
+                    del self.order_book_snapshot[side][price_level]
+                    logger.info("Removed price level %s from %s (new amount: %f)", price_level, side, new_amount)
+                    print("Removed price level %s from %s (new amount: %f)", price_level, side, new_amount)
+                else:
+                    logger.info("Price level %s not found in %s for removal.", price_level, side)
+                    print("Price level %s not found in %s for removal.", price_level, side)
+            else:
+                self.order_book_snapshot[side][price_level] = f"{new_amount}"
+                logger.info("Updated %s at price %s to new amount: %f", side, price_level, new_amount)
+                print("Updated %s at price %s to new amount: %f", side, price_level, new_amount)
+
+    def update_order_book_snapshot(self, order_book: dict) -> None:
+        """
+        Thread-safely updates the entire order book snapshot.
+        Converts list representation into a dictionary representation for easier updates.
+
+        :param order_book: The full order book snapshot. Expected structure:
+                           {'asks': List[List[str]], 'bids': List[List[str]]}
+        """
+        with self.order_book_lock:
+            asks_list = order_book.get("asks", [])
+            bids_list = order_book.get("bids", [])
+            self.order_book_snapshot = {
+                "asks": {price: amount for price, amount in asks_list},
+                "bids": {price: amount for price, amount in bids_list}
+            }
+            logger.debug("Order book snapshot updated: %s", self.order_book_snapshot)
+
+    def get_current_order_book(self) -> dict:
+        """
+        Thread-safely retrieves a copy of the current order book snapshot.
+
+        :return: A copy of the current order book snapshot.
+        """
+        with self.order_book_lock:
+            return self.order_book_snapshot.copy()
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
         """
