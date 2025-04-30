@@ -1140,3 +1140,14 @@ class TestArbitrageBot(unittest.TestCase):
 
         arb_order.traded_quote_amount_low_liquidity = 2400
         assert not self.bot.arbitrage_order_completion(arb_order)
+
+    @patch.object(BinanceProxy, 'get_price', return_value=test_api_constants.binance_get_price_response)
+    def test_get_latest_high_liquidity_price(self, get_price_binance_mock):
+        self.arb_order.base_currency = 'BTC'
+        self.arb_order.quote_currency = 'USDC'
+
+        btc_price_high_liq_exchange = self.bot._get_latest_high_liquidity_price(self.arb_order)
+
+        assert isinstance(btc_price_high_liq_exchange, float)
+        self.assertEqual(btc_price_high_liq_exchange, 104738.01000000)
+

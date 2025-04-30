@@ -29,8 +29,8 @@ class ArbitrageBot:
         :param quote_currency: The quote currency of the trading pair (e.g., 'usd').
         :param amount: The total amount to be traded for arbitrage.
         """
-        self.exchange_high_liquidity = self._create_exchange(exchange_high_liquidity)
-        self.exchange_low_liquidity = self._create_exchange(exchange_low_liquidity)
+        self.exchange_high_liquidity: BinanceProxy = self._create_exchange(exchange_high_liquidity)
+        self.exchange_low_liquidity: BudaProxy = self._create_exchange(exchange_low_liquidity)
         self.price_diff_threshold = price_diff_threshold
         self.mode = mode
         self.base_currency = base_currency
@@ -61,6 +61,13 @@ class ArbitrageBot:
             # If not found, decide how to handle: raise an error or default to 0
             raise ValueError(f"No minimum amount configured for market {market_name}")
         return min_amt
+
+    def _get_latest_high_liquidity_price(self, arb_order: ArbitrageOrder) -> float:
+        base_currency, quote_currency = arb_order.base_currency, arb_order.quote_currency
+
+        price_info = self.exchange_high_liquidity.get_price(base_currency=base_currency, quote_currency=quote_currency)
+        price = float(price_info.get('price'))
+        return price
 
     def get_price_difference(self, high_liquidity_price: float, arb_order: "ArbitrageOrder") -> Tuple[float, float]:
         """
