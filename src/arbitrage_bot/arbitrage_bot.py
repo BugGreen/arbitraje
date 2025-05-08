@@ -31,12 +31,99 @@ class ArbitrageBot:
         """
         self.exchange_high_liquidity: BinanceProxy = self._create_exchange(exchange_high_liquidity)
         self.exchange_low_liquidity: BudaProxy = self._create_exchange(exchange_low_liquidity)
-        self.price_diff_threshold = price_diff_threshold
+        self.price_diff_threshold = price_diff_threshold / 100
         self.mode = mode
         self.base_currency = base_currency
         self.quote_currency = quote_currency
         self.amount = amount
         self.currency_of_interest = CurrencyOfInterest.QUOTE  # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
+
+    def run_arbitrage_flow(self, arb_order: ArbitrageOrder, mode: str = "infinite_loop", sleep_interval: float = 3.0) \
+            -> None:
+        """
+        Execute the arbitrage flow using REST calls to fetch the high-liquidity price.
+        The flow is:
+
+         1) Attempt to retrieve high-liquidity price (REST).
+         2) Call get_price_difference => (p_diff, reference_price).
+         3) If p_diff is large enough (optional threshold check), then:
+            a) split_order_into_suborders => sub_orders
+            b) place_sub_orders => place_result
+            c) if success, check if the entire order is completed:
+               - if yes => funds_transfer => reset or create new order
+               - if no => place_sub_order_cancellations => confirm_cancellations => re-check next iteration
+         4) Sleep a bit, or exit if mode=='single_cycle'.
+
+        :param arb_order: The ArbitrageOrder describing order_type, amounts, etc.
+        :param mode: 'infinite_loop' or 'single_cycle'. If 'single_cycle', we do one iteration then exit.
+        :param sleep_interval: Seconds to sleep if no price or after each iteration.
+        :return: None. Blocks or loops until user stops or single cycle completes.
+        """
+        logger.info("Starting arbitrage flow with REST-based price retrieval. mode=%s", mode)
+
+        while True:
+            # 1) Get the high-liquidity price
+            high_liquidity_price = self._get_latest_high_liquidity_price(arb_order=arb_order)
+            if high_liquidity_price is None:
+                logger.debug("No valid price from REST. Sleeping for %.1fs", sleep_interval)
+                time.sleep(sleep_interval)
+                if mode == "single_cycle":
+                    break
+                continue
+
+            # 2) Compute price difference
+            p_diff, reference_price = self.get_price_difference(high_liquidity_price, arb_order)
+            logger.info("p_diff=%.4f, reference_price=%.2f for order_type=%s",
+                        p_diff, reference_price, arb_order.order_type.name)
+
+            # (Optional) define threshold
+            # if p_diff < 0.003:  # e.g. < 0.3% difference
+            #     logger.info("Arbitrage difference too small, skip iteration.")
+            #     if mode == "single_cycle":
+            #         break
+            #     time.sleep(sleep_interval)
+            #     continue
+
+            # 3) Split sub-orders
+            sub_orders = self.split_order_into_suborders(arb_order, reference_price)
+
+            # 4) Place sub-orders
+            place_result = self.place_sub_orders(sub_orders, arb_order)
+            if isinstance(place_result, dict) and "error_code" in place_result:
+                logger.error("place_sub_orders failed: %s", place_result)
+                # Depending on logic, continue or break
+                if mode == "single_cycle":
+                    break
+                time.sleep(sleep_interval)
+                continue
+
+            # 5) Check completion
+            if self.arbitrage_order_completion(arb_order):
+                # If fully done => funds_transfer
+                success_transfer = self.funds_transfer(arb_order)
+                if success_transfer:
+                    logger.info("Funds transferred successfully. Reset order or create a new one.")
+                    arb_order.reset()  # hypothetical method to reset or you can create a new one
+                else:
+                    logger.warning("Funds transfer failed. Evaluate partial scenario.")
+            else:
+                # Not completed => Cancel sub-orders
+                cancel_response = self.place_sub_order_cancellations(sub_orders, arb_order)
+                # confirm
+                if self.confirm_cancellations(cancel_response):
+                    logger.info("Cancellations confirmed. We'll re-check next iteration with a new price.")
+                else:
+                    logger.warning("Cancellations partial or failed. Evaluate fallback.")
+
+            # 6) Break if single cycle
+            if mode == "single_cycle":
+                break
+
+            # 7) Otherwise, loop again
+            logger.debug("Waiting %.1fs before next iteration...", sleep_interval)
+            time.sleep(sleep_interval)
+
+        logger.info("Arbitrage flow ended. mode=%s", mode)
 
     @staticmethod
     def _create_exchange(exchange_name: str) -> Type[BinanceProxy or BudaProxy]:
@@ -63,13 +150,22 @@ class ArbitrageBot:
         return min_amt
 
     def _get_latest_high_liquidity_price(self, arb_order: ArbitrageOrder) -> float:
+        """
+        Returns the `base_currency` price in expressed in `quote_currency`.
+        The market symbol is constructed based on the attributes `base_currency` and `quote_currency` of an
+        `ArbitrageOrder` object.
+
+        :param arb_order: The `ArbitrageOrder` with attributes `base_currency` and `quote_currency`.
+        :return: A float number representing the requested price
+        """
         base_currency, quote_currency = arb_order.base_currency, arb_order.quote_currency
 
         price_info = self.exchange_high_liquidity.get_price(base_currency=base_currency, quote_currency=quote_currency)
         price = float(price_info.get('price'))
         return price
 
-    def get_price_difference(self, high_liquidity_price: float, arb_order: "ArbitrageOrder") -> Tuple[float, float]:
+    # TODO: LA LOGICA DEBE TENER EN CUENTA BUY_MARKET Y SELL_MARKET, hasta ahora solo esl valida para las otras ordenes
+    def get_price_difference(self, high_liquidity_price: float, arb_order: ArbitrageOrder) -> Tuple[float, float]:
         """
         Retrieve the order book from the low-liquidity exchange and compute a price difference (%)
         relative to `high_liquidity_price`.
@@ -92,9 +188,9 @@ class ArbitrageBot:
             "Computing price difference with high_liquidity_price=%.6f for order_type=%s",
             high_liquidity_price, arb_order.order_type.name
         )
-
+        base_currency, quote_currency = arb_order.base_currency, arb_order.quote_currency
         # 1) Fetch the order book from the low-liquidity exchange
-        response_data: Dict[str, Any] = self.exchange_low_liquidity.get_order_book()
+        response_data: Dict[str, Any] = self.exchange_low_liquidity.get_order_book(base_currency, quote_currency)
         if "order_book" not in response_data or not response_data["order_book"]:
             raise RuntimeError("Missing 'order_book' in low-liquidity response.")
         order_book = response_data["order_book"]
@@ -127,11 +223,11 @@ class ArbitrageBot:
         order_type_name = arb_order.order_type
         if order_type_name in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
             # p_diff = (high_liquidity_price - lowest_exchange_lowest_ask) / lowest_exchange_lowest_ask
-            price_reference = lowest_ask
+            price_reference = min([lowest_ask, high_liquidity_price])
             p_diff = (high_liquidity_price - lowest_ask) / lowest_ask
         elif order_type_name in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
             # p_diff = (lowest_exchange_highest_bid - high_liquidity_price) / high_liquidity_price
-            price_reference = highest_bid
+            price_reference = max([highest_bid, high_liquidity_price])
             p_diff = (highest_bid - high_liquidity_price) / high_liquidity_price
         else:
             logger.error("Unrecognized order type for price diff: %s", order_type_name)
@@ -208,7 +304,7 @@ class ArbitrageBot:
 
         return valid_sub_orders
 
-    # TODO: HACER MAS GENERAL CUANDO SE INCORPOREN MAS LOW LIQUIDITY EXCHANGES
+    # TODO: HACER LA LOGICA MAS GENERAL CUANDO SE INCORPOREN MAS LOW LIQUIDITY EXCHANGES
     def split_order_into_suborders(self, order: ArbitrageOrder, reference_price: float, delta: Optional[float] = None) \
             -> Any:
         """
@@ -236,19 +332,19 @@ class ArbitrageBot:
         order_type_name = order.order_type
         if order_type_name in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
             side = 'ask'
+            increase_factor = 1 + self.price_diff_threshold
             if delta is not None:
-                sub_order_one_price = reference_price + delta
-            else:
-                sub_order_one_price = reference_price + self.price_diff_threshold
+                increase_factor += delta
+            sub_order_one_price = reference_price * increase_factor
             sub_order_two_price = sub_order_one_price * 1.001
             sub_order_three_price = sub_order_one_price * 1.002
 
         elif order_type_name in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
             side = 'bid'
+            reduction_factor = 1 - self.price_diff_threshold
             if delta is not None:
-                sub_order_one_price = reference_price - delta
-            else:
-                sub_order_one_price = reference_price - self.price_diff_threshold
+                reduction_factor -= delta
+            sub_order_one_price = reference_price * reduction_factor
             sub_order_two_price = sub_order_one_price * 0.999
             sub_order_three_price = sub_order_one_price * 0.998
         else:

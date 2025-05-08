@@ -15,17 +15,6 @@ from src.order_types.encoders import OrderType, CurrencyOfInterest
 logger = logging.getLogger(__name__)
 
 
-def test_get_price_difference():
-    # Setup
-    bot = ArbitrageBot(exchange_high_liquidity='binance', exchange_low_liquidity='buda', price_diff_threshold=1.0,
-                       mode='aggressive', base_currency='btc', quote_currency='usd', amount=1000)
-
-    # Test if the price difference is correctly calculated
-    price_diff = bot.get_price_difference()
-    assert isinstance(price_diff, float), "Price difference should be a float."
-    assert price_diff >= 0, "Price difference should be positive or zero."
-
-
 class MockExchange:
     """
     A mock exchange class to simulate the `get_order_states` response.
@@ -152,7 +141,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.bot = ArbitrageBot(
             exchange_high_liquidity='binance',
             exchange_low_liquidity='buda',
-            price_diff_threshold=10.0,
+            price_diff_threshold=0.4,
             mode='conservative',
             base_currency='ETH',
             quote_currency='COP',
@@ -189,7 +178,7 @@ class TestArbitrageBot(unittest.TestCase):
 
         mock_order = MockArbitrageOrder(original_amount=100.0)
         reference_price = 10000.0
-        delta = 50.0
+        delta = 0.5 / 100
         mock_order.order_type = OrderType.SELL_LIMIT
 
         result = self.bot.split_order_into_suborders(mock_order, reference_price, delta=delta)
@@ -201,7 +190,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(result[2]["order"]["amount"], 10.0)
 
         # Check price calculations
-        expected_one_price = reference_price + delta  # 10000 + 50 = 10050
+        expected_one_price = reference_price * (1 + delta + self.bot.price_diff_threshold)  # 10000 + 50 = 10050
         expected_two_price = expected_one_price * 1.001
         expected_three_price = expected_one_price * 1.002
         self.assertAlmostEqual(result[0]["order"]["limit"], expected_one_price)
@@ -226,9 +215,9 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(result[2]["order"]["amount"], 20.0)  # 10% of 200
 
         # Check price calculations: reference_price - price_diff_treshold (5000 - 10 = 4990)
-        expected_one_price = 4990
-        expected_two_price = 4990 * 0.999
-        expected_three_price = 4990 * 0.998
+        expected_one_price = reference_price * (1 - self.bot.price_diff_threshold)
+        expected_two_price = expected_one_price * 0.999
+        expected_three_price = expected_one_price * 0.998
         self.assertAlmostEqual(result[0]["order"]["limit"], expected_one_price)
         self.assertAlmostEqual(result[1]["order"]["limit"], expected_two_price)
         self.assertAlmostEqual(result[2]["order"]["limit"], expected_three_price)
@@ -251,7 +240,6 @@ class TestArbitrageBot(unittest.TestCase):
         sub_orders = self.bot.split_order_into_suborders(
             order=mock_order,
             reference_price=10000.0,
-            side='bid',
             delta=50.0
         )
 
@@ -463,7 +451,6 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(arb_order.traded_quote_amount_low_liquidity, 3000)
         self.assertEqual(arb_order.pending_amount_low_liquidity, 7000)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, arb_order.traded_amount_base_high_liquidity)
-
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response)
@@ -1099,11 +1086,11 @@ class TestArbitrageBot(unittest.TestCase):
         # highest_bid=836677.14 => p_diff = (836677.14 - 837000)/837000 = ~-0.000385
         p_diff = self.bot.get_price_difference(837000.0, arb_order)
         self.assertAlmostEqual(p_diff[0], -0.00071, places=5)
-        self.assertEqual(p_diff[1], 837597.23)
+        self.assertEqual(p_diff[1], 837000.0)
 
     @patch.object(BudaProxy, 'get_order_book',
                   return_value=test_api_constants.buda_order_book_response)
-    def test_get_price_difference_buy_limit(self, buda_order_book_mock):
+    def test_get_price_difference_sell_limit(self, buda_order_book_mock):
         # For a BUY, p_diff = (highest_bid - high_liquidity_price)/high_liquidity_price
         arb_order = ArbitrageOrder(
             base_currency="BTC",
@@ -1151,3 +1138,17 @@ class TestArbitrageBot(unittest.TestCase):
         assert isinstance(btc_price_high_liq_exchange, float)
         self.assertEqual(btc_price_high_liq_exchange, 104738.01000000)
 
+    def test_run_arbitrage_flow(self):
+        """
+        Test the arbitrage flow, on a first iteration condition
+        """
+
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=300.0,
+            original_amount=300,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+        self.bot.run_arbitrage_flow(arb_order=arb_order)
