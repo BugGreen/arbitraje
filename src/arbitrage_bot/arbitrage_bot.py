@@ -13,6 +13,7 @@ from datetime import datetime
 from decimal import Decimal
 import threading
 import logging
+import inspect
 import time
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ class ArbitrageBot:
         :param quote_currency: The quote currency of the trading pair (e.g., 'usd').
         """
         self.exchange_high_liquidity: BaseHighLiquidityExchange = self._create_exchange(exchange_high_liquidity)
-        self.exchange_low_liquidity: BaseHighLiquidityExchange = self._create_exchange(exchange_low_liquidity)
+        self.exchange_low_liquidity: BaseLowLiquidityExchange = self._create_exchange(exchange_low_liquidity)
         self.price_diff_threshold: float = price_diff_threshold / 100
         self.mode: str = mode
         self.base_currency: str = base_currency  # To deprecate
@@ -1013,7 +1014,6 @@ class ArbitrageBot:
         :param arb_order: The ArbitrageOrder object to update.
         :param limit_price_low_liquidity: The limit price in the low liquidity exchange
         """
-        symbol = arb_order.base_currency.upper() + arb_order.quote_currency.upper()
 
         to_trade_quote_currency = arb_order.get_pending_quote_amount_high_liquidity
         to_trade_base_currency = arb_order.get_pending_base_amount_high_liquidity  # Pending amount, in base currency
@@ -1083,8 +1083,9 @@ class ArbitrageBot:
             return order_resp
 
         except Exception as e:
-            logger.error("Error placing order on high-liquidity exchange: %s", e, exc_info=True)
-            return {"code": -9999, "msg": str(e)}
+            current_method_name = inspect.currentframe().f_code.co_name
+            logger.error(f"{current_method_name} - Error from Binance: {e}")
+            raise
 
     @staticmethod
     def _calculate_real_price_diff(arb_order: ArbitrageOrder, limit_low_liquidity: float, limit_high_liquidity: float) \
@@ -1198,7 +1199,7 @@ class ArbitrageBot:
         :return: Boolean value defining the completion state of the order
         """
 
-        min_notional_low_liquidity_quote = self.minimum_notional_low_liquidity * reference_price
+        min_notional_low_liquidity_quote = self.minimum_notional_low_liquidity * reference_price * 1.1
 
         return arb_order.traded_quote_amount_low_liquidity \
                >= (arb_order.original_amount - min_notional_low_liquidity_quote)

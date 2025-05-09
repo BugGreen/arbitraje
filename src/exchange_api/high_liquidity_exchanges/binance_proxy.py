@@ -462,12 +462,12 @@ class BinanceProxy(BaseHighLiquidityExchange):
         url = f"{self.BASE_URL}{self.ENDPOINTS['NEW_ORDER']}"
         headers = {"X-MBX-APIKEY": self.api_key}
 
-        current_method_name = inspect.currentframe().f_code.co_name
         try:
             response = requests.post(url, headers=headers, params=signed_params)
             # Use the standard response handler to handle errors and responses
             return handle_api_response(response)
         except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
             logger.error(f"{current_method_name} - Error fetching new order request from Binance: {e}")
             raise
 

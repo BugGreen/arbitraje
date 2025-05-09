@@ -1,7 +1,9 @@
-from src.exchange_api.exchange_factory import ExchangeFactory
-from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
 from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
+from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
+from src.exchange_api.exchange_factory import ExchangeFactory
+from src.telegram_bot.telegram_alert import TelegramAlert
 from user_interface.arbitrage_ui import welcome_menu
+import asyncio
 import logging
 import json
 
@@ -22,6 +24,12 @@ def main() -> None:
     # Example usage with Binance
 
     try:
+        def send_message_async():
+            telegram_bot_instance = TelegramAlert()
+            asyncio.run(telegram_bot_instance.send_error_alert("Hola"))
+
+        # Call the function
+        send_message_async()
         # welcome_menu()
         # bot = ArbitrageBot(
         #     exchange_high_liquidity='binance',
@@ -147,8 +155,8 @@ def main() -> None:
         #order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')
         #print(json.dumps(order_book, indent=2))
         #print(buda.get_price('btc', "usdc"))
-        market_info = buda.get_market_info(base_currency, quote_currency)
-        print(json.dumps(market_info, indent=2))
+        # market_info = buda.get_market_info(base_currency, quote_currency)
+        # print(json.dumps(market_info, indent=2))
     except Exception as e:
         print(f"Error with BUDA: {e}")
 
