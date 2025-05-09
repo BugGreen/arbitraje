@@ -3,6 +3,7 @@ from src.exchange_api.exchange_factory import ExchangeFactory
 from src.arbitrage_bot.order import Order
 from src.exchange_api.binance_proxy import BinanceProxy
 from src.exchange_api.buda_proxy import BudaProxy
+from src.arbitrage_bot.constants import MIN_AMOUNT_REQUIREMENTS
 import logging
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,19 @@ class ArbitrageBot:
         :raises ValueError: If an unsupported exchange is provided.
         """
         return ExchangeFactory.get_exchange(exchange_name)
+
+    def get_min_amount_for_market(self) -> float:
+        """
+        Retrieve the minimum amount for the current market (base_currency-quote_currency).
+
+        :return: The minimum amount required by this market.
+        """
+        market_name = f"{self.base_currency.upper()}-{self.quote_currency.upper()}"
+        min_amt = MIN_AMOUNT_REQUIREMENTS.get(market_name)
+        if min_amt is None:
+            # If not found, decide how to handle: raise an error or default to 0
+            raise ValueError(f"No minimum amount configured for market {market_name}")
+        return min_amt
 
     def get_price_difference(self) -> float:
         """
@@ -91,6 +105,7 @@ class ArbitrageBot:
 
         return sub_orders_info
 
+
     def execute_opposite_order_on_target_exchange(self, amount: float, side: str, price: float) -> Dict[str, Any]:
         """
         Execute the opposite order on the target exchange. This is a placeholder.
@@ -105,7 +120,7 @@ class ArbitrageBot:
         return {"status": "executed", "executed_amount": amount, "price": price}
 
     def split_order_into_suborders(self, order_amount: float, reference_price: float, side: str,
-                                   delta: Optional[float] = None) -> List[Dict[str, Any]]:
+                                   delta: Optional[float] = None) -> Any:
         """
         Split the given amount into multiple sub-orders taking as a reference `reference_price`.
 
@@ -184,12 +199,103 @@ class ArbitrageBot:
 
             return sub_order_template
 
-        orders = []
+        sub_orders = []
 
         for sub_order in sub_orders_info:
-            orders.append(place_sub_order(sub_order.get("amount"), sub_order.get("price"), market_name, side))
+            sub_orders.append(place_sub_order(sub_order.get("amount"), sub_order.get("price"), market_name, side))
 
-        return orders
+        # Enforce minimum amounts
+        result = self._enforce_minimum_amounts(sub_orders, side)
+
+        # If result is a dict with 'code', we treat it as an error
+        if isinstance(result, dict) and "code" in result:
+            logger.error("Enforcing min amounts failed: %s", result)
+            return result
+
+        logger.info("Created sub-orders after enforcing min amounts: %s", result)
+        return result
+
+    def _enforce_minimum_amounts(self, sub_orders: List[Dict[str, Any]], side: str) -> Any:
+        """
+        Enforces the minimum amount requirement for sub-orders.
+
+        1) If the total is below the market's minimum, return an error dict with a short code.
+        2) Otherwise, for each sub-order that is below the minimum:
+            - Merge it into the single "target" sub-order.
+              - For 'ask', merge into the sub-order with the lowest price.
+              - For 'bid', merge into the sub-order with the highest price.
+        3) If after merging, we still have no valid sub-orders, return an error dict.
+
+        :param sub_orders: List of sub-order dicts.
+        :param side: 'bid' or 'ask'.
+        :return: A list of valid sub-orders or an error dict.
+        """
+        min_required = self.get_min_amount_for_market()
+
+        # 1) Check overall total
+        total_amount = sum(so["order"]["amount"] for so in sub_orders)
+        if total_amount < min_required:
+            logger.warning(
+                "Total order amount %.8f is below the minimum %.8f for market %s",
+                total_amount, min_required, f"{self.base_currency}-{self.quote_currency}"
+            )
+            return {
+                "code": "ERROR_BELOW_MIN_TOTAL",
+                "msg": "Overall order amount is below the minimum."
+            }
+
+        # 2) Identify the "target" sub-order for merging:
+        #    - For 'ask': sub-order with the lowest price
+        #    - For 'bid': sub-order with the highest price
+        if side == 'ask':
+            # Sort ascending by price
+            sub_orders_sorted = sorted(sub_orders, key=lambda x: x["order"]["limit"])
+            target_sub_order = sub_orders_sorted[0]
+            others = sub_orders_sorted[1:]
+        else:  # side == 'bid'
+            # Sort descending by price
+            sub_orders_sorted = sorted(sub_orders, key=lambda x: x["order"]["limit"], reverse=True)
+            target_sub_order = sub_orders_sorted[0]
+            others = sub_orders_sorted[1:]
+
+        # 3) Merge sub-orders below the minimum into `target_sub_order`
+        valid_sub_orders = []
+        for so in others:
+            so_amount = so["order"]["amount"]
+            if so_amount < min_required:
+                # Merge into the target sub-order
+                target_sub_order["order"]["amount"] += so_amount
+                logger.debug(
+                    "Merged sub-order with amount=%.8f into target sub-order. New target amount=%.8f",
+                    so_amount, target_sub_order["order"]["amount"]
+                )
+            else:
+                valid_sub_orders.append(so)
+
+        # Always keep the target sub-order
+        valid_sub_orders.append(target_sub_order)
+
+        # 4) Re-sort them back to the original order (if you need stable ordering):
+        #    - For 'ask': ascending by limit
+        #    - For 'bid': descending by limit
+        if side == 'ask':
+            valid_sub_orders = sorted(valid_sub_orders, key=lambda x: x["order"]["limit"])
+        else:
+            valid_sub_orders = sorted(valid_sub_orders, key=lambda x: x["order"]["limit"], reverse=True)
+
+        # 5) After merges, check if the target sub-order itself is below min
+        #    If it's still below min, there's no way to fix it => return error
+        if all(so["order"]["amount"] < min_required for so in valid_sub_orders):
+            logger.warning(
+                "Even after merges, sub-orders are below minimum (%.8f).",
+                min_required
+            )
+            return {
+                "code": "ERROR_CANNOT_MERGE_ABOVE_MIN",
+                "msg": "Cannot create a valid sub-order above the minimum amount."
+            }
+
+        return valid_sub_orders
 
     def execute_arbitrage(self) -> Dict:
         """
