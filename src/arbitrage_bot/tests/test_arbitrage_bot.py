@@ -419,11 +419,14 @@ class TestArbitrageBot(unittest.TestCase):
 
         self.assertEqual(amount_less_than_minimum_order_response, expected_response)
 
+    @patch.object(BinanceProxy, 'new_order',
+                  return_value=test_api_constants.binance_successful_sell_market_order_response_after_cancelaion_profit)
     @patch.object(BudaProxy, 'batch_cancellation', return_value=test_api_constants.sub_orders_canceled_response)
     @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_cancel_states)
     @patch.object(ArbitrageBot, 'place_sub_orders',
                   return_value=test_a_bot_constans.placed_sub_orders_to_cancel_response)
-    def test_cancel_sub_orders(self, place_sub_orders_mock, get_order_states_mock, batch_cancellation_mock):
+    def test_cancel_sub_orders(self, place_sub_orders_mock, get_order_states_mock, batch_cancellation_mock,
+                               new_order_mock):
         """
         Test place_sub_order_cancelations with sub_orders from place_sub_orders
         """
@@ -435,6 +438,13 @@ class TestArbitrageBot(unittest.TestCase):
 
         place_response = self.bot.place_sub_orders(sub_orders, self.arb_order)
 
+        arb_order = ArbitrageOrder(
+            base_currency="ETH",
+            quote_currency="USDC",
+            amount=10000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
         # We expect place_response to have sub-orders with IDs: 130000, 130001
         # and status 'received'
         self.assertEqual(len(place_response), 2)
@@ -442,11 +452,16 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(place_response[0]["status"], "received")
 
         # 2. Now we want to cancel them
-        cancel_response = self.bot.place_sub_order_cancellations(place_response, self.arb_order)
+        cancel_response = self.bot.place_sub_order_cancellations(place_response, arb_order)
 
         # We expect a list of cancel requests with mode='cancel' and order_id=...
         self.assertEqual(len(cancel_response), 2)
         self.assertEqual(cancel_response, test_a_bot_constans.expected_sub_orders_cancelled_response)
+        self.assertEqual(arb_order.profit.amount, 300)
+        self.assertEqual(arb_order.profit.currency, 'USDC')
+        self.assertEqual(arb_order.traded_amount_high_liquidity, 3300)
+        self.assertEqual(arb_order.traded_quote_amount_low_liquidity, 3000)
+        self.assertEqual(arb_order.pending_amount_low_liquidity, 7000)
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response)
@@ -535,7 +550,7 @@ class TestArbitrageBot(unittest.TestCase):
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
     def test_synchronous_opposite_order_buy_limit_base_no_profit(self, batch_creation_mock, get_order_states_mock,
-                                                       binance_market_order_mock):
+                                                                 binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` without profit
         i.e., high_liquidity_exchange_price < low_liquidity_exchange_price.
@@ -570,14 +585,13 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertAlmostEqual(arb_order.profit.amount, -0.02222, places=4)
         self.assertEqual(arb_order.profit.currency, 'BTC')
 
-
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_quote_no_profit)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
     def test_synchronous_opposite_order_buy_limit_quote_no_profit(self, batch_creation_mock, get_order_states_mock,
-                                                       binance_market_order_mock):
+                                                                  binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` without profit
         i.e., high_liquidity_exchange_price < low_liquidity_exchange_price.
@@ -618,7 +632,7 @@ class TestArbitrageBot(unittest.TestCase):
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_multiple_traded_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
     def test_synchronous_opposite_order_buy_limit_quote_multiple_profit(self, batch_creation_mock, get_order_states_mock,
-                                                                  binance_market_order_mock):
+                                                                        binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` without profit
         i.e., high_liquidity_exchange_price < low_liquidity_exchange_price.
@@ -658,7 +672,7 @@ class TestArbitrageBot(unittest.TestCase):
     @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
     def test_synchronous_opposite_order_sell_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
-                                                               binance_market_order_mock):
+                                                                binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with profit
         i.e., high_liquidity_exchange_price > low_liquidity_exchange_price.
@@ -696,7 +710,7 @@ class TestArbitrageBot(unittest.TestCase):
     @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
     def test_synchronous_opposite_order_sell_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
-                                                               binance_market_order_mock):
+                                                                binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with profit
         i.e., high_liquidity_exchange_price > low_liquidity_exchange_price.
@@ -778,7 +792,7 @@ class TestArbitrageBot(unittest.TestCase):
     @patch.object(BudaProxy, 'batch_creation',
                   return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
     def test_synchronous_opposite_order_buy_limit_base_no_profit(self, batch_creation_mock, get_order_states_mock,
-                                                              binance_market_order_mock):
+                                                                 binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with actual profit
         i.e., high_liquidity_exchange_price > low_liquidity_exchange_price.
@@ -813,7 +827,6 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertAlmostEqual(arb_order.profit.amount, -0.01819, places=4)
         self.assertEqual(arb_order.profit.currency, 'BTC')
 
-
     @patch.object(BinanceProxy, 'new_order',
                   side_effect=[
                       test_api_constants.binance_successful_sell_market_order_response_with_less_than_minimum_1,
@@ -822,12 +835,16 @@ class TestArbitrageBot(unittest.TestCase):
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states_with_one_less_than_minimum)
     @patch.object(BudaProxy, 'batch_creation',
                   return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance_with_one_less_than_minimum)
-    def test_synchronous_opposite_order_buy_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
-                                                               binance_market_order_mock):
+    def test_synchronous_opposite_order_buy_limit_quote_profit_with_less_than_minimum(self,
+                                                                                      batch_creation_mock,
+                                                                                      get_order_states_mock,
+                                                                                      binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with profit
         i.e., high_liquidity_exchange_price > low_liquidity_exchange_price.
         In this case, the currency of interest is the quote one.
+        In this test, one of the sub_orders in the low_liquidity exchange are traded with an amount that is less than
+        the minimum_amount allowed in the high_liquidity exchange
         """
 
         self.bot.base_currency = "BTC"

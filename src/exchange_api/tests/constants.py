@@ -749,7 +749,6 @@ binance_successful_sell_market_order_response_quote_no_profit = {
   "selfTradePreventionMode": "EXPIRE_MAKER"
 }
 
-
 binance_successful_sell_market_order_response_quotes_profit = {
   "symbol": "BTCUSDC",
   "orderId": 3713981899,
@@ -864,7 +863,6 @@ sub_orders_to_execute_in_binance_multiple_traded_states = {
       }
   ]
 }
-
 
 sub_orders_to_execute_in_binance_states_with_one_less_than_minimum = {
   "orders": [
@@ -1050,3 +1048,30 @@ binance_successful_sell_market_order_response_with_less_than_minimum_2 = {
   "selfTradePreventionMode": "EXPIRE_MAKER"
 }
 
+binance_successful_sell_market_order_response_after_cancelaion_profit = {
+  "symbol": "ETHUSDC",
+  "orderId": 3713981899,
+  "orderListId": -1,
+  "clientOrderId": "JvCHh6jhpSYzm24YfSU86a",
+  "transactTime": 1736099553299,
+  "price": "0.00000000",
+  "origQty": "0.30000000",
+  "executedQty": "0.30000000",
+  "origQuoteOrderQty": "0.00000000",
+  "cummulativeQuoteQty": "3300.00000000",
+  "status": "FILLED",
+  "timeInForce": "GTC",
+  "type": "MARKET",
+  "side": "SELL",
+  "workingTime": 1736099553299,
+  "fills": [
+    {
+      "price": "11000.00000000",
+      "qty": "0.30000000",
+      "commission": "0.01114035",
+      "commissionAsset": "USDC",
+      "tradeId": 126826282
+    }
+  ],
+  "selfTradePreventionMode": "EXPIRE_MAKER"
+}

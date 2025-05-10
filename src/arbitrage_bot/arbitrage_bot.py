@@ -161,13 +161,17 @@ class ArbitrageBot:
             st_id = st.get("id")
             if st_id in cancelled_orders_id:
                 st_state = st.get("state")
-                traded_amount = float(st.get("traded_amount", 0.0)[0])
+                base_currency_traded_amount = float(st.get("traded_amount", 0.0)[0])
+                quote_currency_traded_amount = float(st.get("total_exchanged", 0.0)[0])
+
                 self._update_arbitrage_order_on_fill(
                     sub_order_dict=so,
                     new_state=st_state,
-                    traded_amount=traded_amount,
+                    traded_base_amount=base_currency_traded_amount,
+                    traded_quote_amount=quote_currency_traded_amount,
                     arb_order=arb_order
                 )
+
                 sub_order_cancelled = {
                     "id": st_id,
                     "status": st_state,
