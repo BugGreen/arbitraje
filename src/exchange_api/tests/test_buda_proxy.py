@@ -1,7 +1,10 @@
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
+import unittest
 from src.exchange_api.buda_proxy import BudaProxy
 from src.exchange_api.exchange_factory import ExchangeFactory
 import pytest
+import requests
+from src.exchange_api.tests import constants
 
 
 def test_sign_request():
@@ -365,134 +368,6 @@ def test_batch_cancellation_success(mock_post):
     assert mock_post.called_once()
 
 
-@patch("requests.post")
-def test_batch_creation_success(mock_post):
-    # Mocking the response from the Buda API
-    expected_response = {
-      "orders_diff": [
-        {
-          "mode": "place",
-          "order": {
-            "order": {
-              "id": 1268015221,
-              "uuid": "2dc37e23-227f-4031-984f-1e738192ab53",
-              "market_id": "ETH-COP",
-              "account_id": 143870,
-              "type": "Bid",
-              "state": "received",
-              "created_at": "2024-12-03T16:05:34.487Z",
-              "fee_currency": "ETH",
-              "price_type": "limit",
-              "source": "null",
-              "client_id": "null",
-              "message": "null",
-              "order_type": "gtc",
-              "expire_at": 0,
-              "limit": [
-                "15000000.0",
-                "COP"
-              ],
-              "amount": [
-                "0.0012",
-                "ETH"
-              ],
-              "original_amount": [
-                "0.0012",
-                "ETH"
-              ],
-              "traded_amount": [
-                "0.0",
-                "ETH"
-              ],
-              "total_exchanged": [
-                "0.0",
-                "COP"
-              ],
-              "paid_fee": [
-                "0.0",
-                "ETH"
-              ],
-              "stop_price": "null"
-            }
-          }
-        },
-        {
-          "mode": "place",
-          "order": {
-            "order": {
-              "id": 1268015222,
-              "uuid": "53a369ec-6900-43f9-bad8-6b2077705e57",
-              "market_id": "ETH-COP",
-              "account_id": 143870,
-              "type": "Bid",
-              "state": "received",
-              "created_at": "2024-12-03T16:05:34.496Z",
-              "fee_currency": "ETH",
-              "price_type": "limit",
-              "source": "null",
-              "client_id": "null",
-              "message": "null",
-              "order_type": "gtc",
-              "expire_at": 0,
-              "limit": [
-                "15000000.0",
-                "COP"
-              ],
-              "amount": [
-                "0.0012",
-                "ETH"
-              ],
-              "original_amount": [
-                "0.0012",
-                "ETH"
-              ],
-              "traded_amount": [
-                "0.0",
-                "ETH"
-              ],
-              "total_exchanged": [
-                "0.0",
-                "COP"
-              ],
-              "paid_fee": [
-                "0.0",
-                "ETH"
-              ],
-              "stop_price": "null"
-            }
-          }
-        }
-      ]
-    }
-
-    orders = [
-        {"mode": "place",
-         "order": {"amount": 0.0012, "limit": 15000000, "market_name": "eth-cop", "price_type": "limit",
-                   "type": "Bid"}},
-        {"mode": "place",
-         "order": {"amount": 0.0012, "limit": 15000000, "market_name": "eth-cop", "price_type": "limit",
-                   "type": "Bid"}},
-    ]
-
-    # Setup mock to return a success response
-    mock_response = Mock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = expected_response
-    mock_post.return_value = mock_response
-
-    buda = BudaProxy()
-    buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
-
-    # Call the batch_cancelation method
-    response = buda.batch_cancellation(orders)
-
-    # Assert the response data
-    assert isinstance(response['orders_diff'], list)
-    for order in response['orders_diff']:
-        assert order['mode'] == 'place'
-    assert mock_post.called_once()
-
-
 @patch("requests.get")
 def test_get_order_book_success(mock_get):
     """
@@ -561,3 +436,118 @@ def test_get_order_book_failure(mock_get):
     except Exception as e:
         assert "Error 404" in str(e), "Exception message should contain 'Error 404'."
 
+
+class TestBudaProxy(unittest.TestCase):
+    def setUp(self):
+        self.proxy = BudaProxy()
+
+    @patch('requests.post')
+    def test_batch_creation_success(self, mock_post) -> None:
+        # Mock a successful API response
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = constants.successful_batch_order_mock_response
+
+        mock_post.return_value = mock_response
+
+        orders = constants.successful_batch_order
+
+        expected_output = constants.expected_successful_batch_order_response
+
+        response = self.proxy.batch_creation(orders)
+        self.assertEqual(response, expected_output)
+        mock_post.assert_called_once()
+
+    @patch('requests.post')
+    def test_batch_creation_partial_success(self, mock_post) -> None:
+        """
+        An example is when one of the suborder of the batch attempts to execute an amount that is not currently
+        available.
+
+        :param mock_post:
+        :return:
+        """
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = constants.successful_batch_order_mock_response
+        mock_post.return_value = mock_response
+
+        orders = constants.partial_successful_batch_order
+
+        expected_output = constants.expected_successful_batch_order_response
+
+        response = self.proxy.batch_creation(orders)
+        self.assertEqual(response, expected_output)
+        mock_post.assert_called_once()
+
+    @patch('requests.post')
+    def test_batch_creation_amount_less_than_minimum_error(self, mock_post):
+        # Mock an API-level error response
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = \
+            requests.exceptions.HTTPError("EXCHANGE_API_ERROR_invalid_record")
+        mock_response.status_code = 422
+        mock_response.json.return_value = constants.amount_less_than_minimum_order_mock_response
+        mock_post.return_value = mock_response
+
+        orders = constants.amount_less_than_minimum_order
+
+        expected_output = constants.expected_amount_less_than_minimum_response
+
+        response = self.proxy.batch_creation(orders)
+        self.assertEqual(response, expected_output)
+        mock_post.assert_called_once()
+
+    @patch('requests.post')
+    def test_batch_creation_request_exception(self, mock_post):
+        # Mock a network-related exception
+        mock_post.side_effect = requests.exceptions.Timeout("Connection timed out")
+
+        orders = [
+            {
+                "mode": "place",
+                "order": {
+                    "amount": 0.0012,
+                    "limit": 10000000.0,
+                    "market_name": "eth-cop",
+                    "price_type": "limit",
+                    "type": "Bid"
+                }
+            }
+        ]
+
+        expected_output = {
+            "error_code": "REQUEST_EXCEPTION",
+            "message": "Connection timed out"
+        }
+
+        response = self.proxy.batch_creation(orders)
+        self.assertEqual(response, expected_output)
+        mock_post.assert_called_once()
+
+    @patch('requests.post')
+    def test_batch_creation_unexpected_exception(self, mock_post):
+        # Mock an unexpected exception
+        mock_post.side_effect = Exception("Unexpected error")
+
+        orders = [
+            {
+                "mode": "place",
+                "order": {
+                    "amount": 0.0012,
+                    "limit": 10000000.0,
+                    "market_name": "eth-cop",
+                    "price_type": "limit",
+                    "type": "Bid"
+                }
+            }
+        ]
+
+        expected_output = {
+            "error_code": "UNKNOWN_ERROR",
+            "message": "Unexpected error"
+        }
+
+        response = self.proxy.batch_creation(orders)
+        self.assertEqual(response, expected_output)
+        mock_post.assert_called_once()

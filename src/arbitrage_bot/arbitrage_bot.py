@@ -1,4 +1,4 @@
-from typing import Optional, Type, Dict, List, Any
+from typing import Optional, Type, Dict, List, Any, Union
 from src.exchange_api.exchange_factory import ExchangeFactory
 from src.arbitrage_bot.order import Order
 from src.exchange_api.binance_proxy import BinanceProxy
@@ -70,23 +70,62 @@ class ArbitrageBot:
         price_diff = abs(price_a - price_b) / min(price_a, price_b) * 100
         return price_diff
 
-    def place_sub_orders(self, sub_orders: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def place_sub_orders(self, sub_orders: List[Dict[str, Any]]) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """
-        Place a batch of sub-orders on the given exchange.
+        Place a batch of sub-orders on the low liquidity exchange.
+        Standardizes the response for downstream usage.
 
-        :param sub_orders: A list of dicts representing sub-orders with 'price', 'amount', etc.
-        :return: A list of response dicts, each containing order_id and initial status.
+        :param sub_orders: A list of sub-orders. Example:
+                           [
+                               {
+                                 "mode": "place",
+                                 "order": {
+                                     "amount": 0.0012,
+                                     "limit": 15000000,
+                                     "market_name": "eth-cop",
+                                     "price_type": "limit",
+                                     "type": "Bid"
+                                 }
+                               },
+                               ...
+                           ]
+        :return: On success, a list of sub-order responses in a standardized format:
+                 [
+                   {
+                     "id": "12345",
+                     "status": "received",
+                     "error_message": None
+                   }, ...
+                 ]
+                 On failure, a dict with an error code and message, e.g.:
+                 {
+                   "error_code": "EXCHANGE_HTTP_ERROR",
+                   "message": "Connection timed out"
+                 }
         """
-        orders = [
-            {"mode": "place",
-             "order": {"amount": 0.0012, "limit": 15000000, "market_name": "eth-cop", "price_type": "limit",
-                       "type": "Bid"}},
-            {"mode": "place",
-             "order": {"amount": 0.0012, "limit": 15000000, "market_name": "eth-cop", "price_type": "limit",
-                       "type": "Bid"}},
-        ]
+        logger.info("Placing sub-orders on low-liquidity exchange: %s", sub_orders)
+        try:
+            # 1. Call the exchange’s batch creation method
+            standardized_response = self.exchange_low_liquidity.batch_creation(sub_orders)
 
-        return self.exchange_low_liquidity.batch_creation(sub_orders)
+            # 2. Check if the response is an error dict
+            if isinstance(standardized_response, dict) and "error_code" in standardized_response:
+                logger.error("Exchange returned an error: %s", standardized_response)
+                return standardized_response
+
+            # 3. Otherwise, assume it's a list of standardized sub-orders
+            logger.info("Exchange sub-order placement response: %s", standardized_response)
+            return standardized_response
+
+        except Exception as e:
+            # 4. Catch unexpected issues such as network errors
+            logger.error("Failed to place sub-orders on exchange: %s", e, exc_info=True)
+            # Return a low-level error code or structure
+            return {
+                "error_code": "EXCHANGE_HTTP_ERROR",
+                "message": str(e)
+            }
+
 
     def check_sub_orders_status(self, sub_order_ids: List[str]) -> Dict[dict, Any]:
         """
@@ -104,7 +143,6 @@ class ArbitrageBot:
                 sub_orders_info[str(order.get("id"))] = order
 
         return sub_orders_info
-
 
     def execute_opposite_order_on_target_exchange(self, amount: float, side: str, price: float) -> Dict[str, Any]:
         """
@@ -232,7 +270,6 @@ class ArbitrageBot:
         """
         min_required = self.get_min_amount_for_market()
 
-        # 1) Check overall total
         total_amount = sum(so["order"]["amount"] for so in sub_orders)
         if total_amount < min_required:
             logger.warning(
@@ -244,7 +281,7 @@ class ArbitrageBot:
                 "msg": "Overall order amount is below the minimum."
             }
 
-        # 2) Identify the "target" sub-order for merging:
+        # Identify the "target" sub-order for merging:
         #    - For 'ask': sub-order with the lowest price
         #    - For 'bid': sub-order with the highest price
         if side == 'ask':
@@ -258,7 +295,6 @@ class ArbitrageBot:
             target_sub_order = sub_orders_sorted[0]
             others = sub_orders_sorted[1:]
 
-        # 3) Merge sub-orders below the minimum into `target_sub_order`
         valid_sub_orders = []
         for so in others:
             so_amount = so["order"]["amount"]
@@ -275,25 +311,10 @@ class ArbitrageBot:
         # Always keep the target sub-order
         valid_sub_orders.append(target_sub_order)
 
-        # 4) Re-sort them back to the original order (if you need stable ordering):
-        #    - For 'ask': ascending by limit
-        #    - For 'bid': descending by limit
         if side == 'ask':
             valid_sub_orders = sorted(valid_sub_orders, key=lambda x: x["order"]["limit"])
         else:
             valid_sub_orders = sorted(valid_sub_orders, key=lambda x: x["order"]["limit"], reverse=True)
-
-        # 5) After merges, check if the target sub-order itself is below min
-        #    If it's still below min, there's no way to fix it => return error
-        if all(so["order"]["amount"] < min_required for so in valid_sub_orders):
-            logger.warning(
-                "Even after merges, sub-orders are below minimum (%.8f).",
-                min_required
-            )
-            return {
-                "code": "ERROR_CANNOT_MERGE_ABOVE_MIN",
-                "msg": "Cannot create a valid sub-order above the minimum amount."
-            }
 
         return valid_sub_orders
 

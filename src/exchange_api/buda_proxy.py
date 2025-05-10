@@ -5,10 +5,14 @@ import time
 import hmac
 import hashlib
 from urllib.parse import urlencode
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union, Any
 from src.exchange_api.base_exchange import BaseExchange
 from src.exchange_api.utils import load_api_keys
 import json
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class BudaProxy(BaseExchange):
@@ -73,6 +77,106 @@ class BudaProxy(BaseExchange):
             "Referer": "https://www.buda.com",
             "Origin": "https://www.buda.com"
         }
+
+    @staticmethod
+    def _translate_batch_response(response: Union[Dict[str, Any], Exception]) \
+            -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+        """
+        Translate Buda's response into a standardized format.
+
+        :param response: The raw response from Buda or an Exception.
+        :return: Standardized response.
+        """
+        if isinstance(response, Exception):
+            logger.error("Exception during Buda batch_creation: %s", response)
+            return {
+                "error_code": "EXCHANGE_HTTP_ERROR",
+                "message": str(response)
+            }
+
+        if "orders_diff" not in response:
+            # It's an API-level error
+            logger.error("Placement of order batch was not possible")
+            error_code = response.get("code", "UNKNOWN_ERROR")
+            message = response.get("message", "An unknown error occurred.")
+            details = response.get("errors", [])
+            return {
+                "error_code": f"EXCHANGE_API_ERROR_{error_code}",
+                "message": message,
+                "details": details
+            }
+
+        standardized_orders = []
+        for order_diff in response.get("orders_diff", []):
+            order = order_diff.get("order", {})
+            order_details = order.get("order", {})
+
+            order_id = str(order_details.get("id")) if order_details.get("id") else None
+            state = order_details.get("state", "error")
+            error_msg = order_details.get("message")
+            amount = order_details.get("amount")
+
+            # Map Buda's 'state' field to a unified 'status'
+            if state in ("received", "pending", "traded", "canceled"):
+                status = state
+            elif state == "unprepared":
+                # MEANING: Insolvent error
+                logger.error("Insolvent error, for amount: %s", str(amount))
+                status = "unprepared"
+            else:
+                status = "error"
+
+            standardized_orders.append({
+                "id": order_id,
+                "status": status,
+                "error_message": error_msg,
+                "amount": amount
+            })
+
+        return standardized_orders
+
+    def batch_creation(self, orders: List[Dict[str, Any]]) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+        """
+        Create new orders in batch on the Buda exchange.
+
+        :param orders: A list of orders to be created, where each order is a dictionary containing order details.
+        :return: A standardized response indicating success or error.
+        """
+        endpoint_path = self.ENDPOINTS["BATCH_ORDERS"]
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        payload = {'diff': []}
+        for order in orders:
+            if order.get("mode") == "place":
+                payload['diff'].append({
+                    'mode': 'place',
+                    'order': order.get('order')
+                })
+
+        headers = self._sign_request(method="POST", path=endpoint_path, body=payload)
+
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=10)  # Added timeout
+            return self._translate_batch_response(response.json())
+        except requests.exceptions.HTTPError as http_err:
+            logger.error("HTTP error during Buda batch_creation: %s", http_err)
+            return {
+                "error_code": "HTTP_ERROR",
+                "message": str(http_err),
+                "status_code": response.status_code
+            }
+        except requests.exceptions.RequestException as req_err:
+            logger.error("Request exception during Buda batch_creation: %s", req_err)
+            return {
+                "error_code": "REQUEST_EXCEPTION",
+                "message": str(req_err)
+            }
+        except Exception as e:
+            logger.error("Unexpected exception during Buda batch_creation: %s", e, exc_info=True)
+            return {
+                "error_code": "UNKNOWN_ERROR",
+                "message": str(e)
+            }
 
     def get_order_book(self, base_currency: str, quote_currency: str) -> Dict:
         """
@@ -302,38 +406,6 @@ class BudaProxy(BaseExchange):
 
         # Make the API call to cancel the order
         response = requests.get(url, headers=headers)
-
-        # Return the response as a dictionary
-        return response.json()
-
-    def batch_creation(self, orders: List[Dict]) -> Dict:
-        """
-                Create new orders in batch on the Buda exchange.
-
-                :param orders: A list of orders to be created, where each order is a dictionary containing order details.
-                :return: The response from the exchange API indicating whether the batch creation was successful.
-                """
-
-        # Define the endpoint path
-        endpoint_path = self.ENDPOINTS["BATCH_ORDERS"]
-        url = f"{self.BASE_URL}{endpoint_path}"
-
-        # Prepare the request payload
-        payload = {'diff': []}
-
-        # Add 'place' orders to the payload
-        for order in orders:
-            if order.get("mode") == "place":
-                payload['diff'].append({
-                    'mode': 'place',
-                    'order': order.get('order')
-                })
-
-        # Sign the request
-        headers = self._sign_request(method="POST", path=endpoint_path, body=payload)
-
-        # Make the API call to create the batch orders
-        response = requests.post(url, headers=headers, json=payload)
 
         # Return the response as a dictionary
         return response.json()

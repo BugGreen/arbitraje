@@ -1,6 +1,13 @@
 import json
 from src.exchange_api.exchange_factory import ExchangeFactory
 import requests
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,  # Set to DEBUG to capture all levels of log messages
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # Log message format
+)
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -48,10 +55,10 @@ def main() -> None:
 
         orders = [
             {"mode": "place",
-             "order": {"amount": 0.0012, "limit": 15000000, "market_name": "eth-cop", "price_type": "limit",
+             "order": {"amount": 0.0000000012, "limit": 10000000, "market_name": "eth-cop", "price_type": "limit",
                        "type": "Bid"}},
             {"mode": "place",
-             "order": {"amount": 0.0012, "limit": 15000000, "market_name": "eth-cop", "price_type": "limit",
+             "order": {"amount": 0.0012, "limit": 10000000, "market_name": "eth-cop", "price_type": "limit",
                        "type": "Bid"}},
         ]
         order_to_cancel = [
@@ -61,8 +68,8 @@ def main() -> None:
 
         ltc_address = "LeMNHpnvULWbh9wHqNPdPwnip3vnSsXATY"
 
-        #batch_response = buda.batch_creation(orders)
-        #print(json.dumps(batch_response, indent=2))
+        batch_response = buda.batch_creation(orders)
+        print(json.dumps(batch_response, indent=2))
 
         #new_order = buda.new_order(base_currency, quote_currency, side, order_type, order_amount, price=price)
         binance_ln_invoice = 'lnbc20u1pn57w8spp5tte7449lywmexq0e5zrukh97d3r797t2h38hc7znnwfpmlpywjfqdqqcqzysxqrrsssp5nmydq5cy9vjlht5nuekrk9h2y52lyd5sfwn7kj3upq2euja3h9ks9qxpqysgqsdlf0c5dnq60ffu3n2kvyg9fwv4zq738l54efex5jxf949tr28vyy4y70tfv86ua7wtaazq4yd3uuhrz3rlfwz638s09sr0lqgyp6egqn5qcrs'
@@ -72,12 +79,12 @@ def main() -> None:
         #print(json.dumps(new_order, indent=2))
         #order_canceled = buda.cancel_order(base_currency, quote_currency, order_id)
         #print(json.dumps(order_canceled, indent=2))
-        order_states = buda.get_order_states(base_currency, quote_currency)
-        print(json.dumps(order_states, indent=2))
+        #order_states = buda.get_order_states(base_currency, quote_currency)
+        #print(json.dumps(order_states, indent=2))
         #ltc_withdrawal = buda.create_withdraw_request(coin='ltc', amount=0.00702, address=ltc_address, simulate=True)
         #print(json.dumps(ltc_withdrawal, indent=2))
-        order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')
-        print(json.dumps(order_book, indent=2))
+        #order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')
+        #print(json.dumps(order_book, indent=2))
     except Exception as e:
         print(f"Error with BUDA: {e}")
 
