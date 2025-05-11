@@ -1,8 +1,8 @@
-from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
-from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
+from src.exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
+from src.exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
 from src.exchange_api.exchange_factory import ExchangeFactory
 from src.telegram_bot.telegram_alert import TelegramAlert
-from user_interface.arbitrage_ui import welcome_menu
+from src.user_interface.arbitrage_ui import welcome_menu
 import asyncio
 import logging
 import json
@@ -158,6 +158,7 @@ def main() -> None:
 
 def json_print(json_dict: json, indent: int = 2) -> None:
     print(json.dumps(json_dict, indent=indent))
+
 
 if __name__ == "__main__":
     main()

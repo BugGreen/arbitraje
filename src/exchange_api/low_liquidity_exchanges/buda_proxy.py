@@ -649,6 +649,46 @@ class BudaProxy(BaseLowLiquidityExchange):
                          f"Payload: {payload}")
             raise
 
+    def cancel_all_orders(self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Cancel an existing order on Buda exchange.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'btc' in 'btc-clp').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'clp' in 'btc-clp').
+        :param order_id: The ID of the order to be canceled.
+        :return: The response from the exchange API as a dictionary containing order details after cancellation.
+        """
+
+        market_id = "-".join([base_currency.lower(), quote_currency.lower()]) if base_currency and quote_currency \
+            else ""
+
+        # Define the endpoint path for canceling the order
+        endpoint_path = self.ENDPOINTS["CANCEL_ORDER"].rstrip("/{}")
+
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Prepare the request payload to cancel the order
+        payload = {
+            'market': market_id,
+        } if market_id else {}
+
+        # Sign the request
+        headers = self._sign_request(method="DELETE", path=endpoint_path, body=payload)
+
+        # Make the API call to cancel the order
+
+        # Return the response as a dictionary
+        # Make the API call
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.delete(url, headers=headers, json=payload)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching cancel all orders request from Buda: {e} \n "
+                         f"Payload: {payload}")
+            raise
+
     def get_order_states(self, base_currency: str, quote_currency: str) -> Dict:
         """
         Get the states of orders in a given market.

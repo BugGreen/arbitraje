@@ -1,11 +1,13 @@
+from src.exchange_api.low_liquidity_exchanges.base_low_liquidity_exchange import BaseLowLiquidityExchange
+from src.exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
 from src.order_types.encoders import OrderType, CurrencyOfInterest
 from src.order_types.arbitrage_order import ArbitrageOrder
-from src.user_interface import encoders
-from typing import Optional, List, Dict, Any
 from rich.progress import Progress, BarColumn, TextColumn
+from typing import Optional, List, Dict, Any, Tuple
+from src.user_interface import encoders
+from rich.console import Console
 from rich.prompt import Confirm
 from rich.prompt import Prompt
-from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 import threading
@@ -247,8 +249,112 @@ def welcome_menu() -> None:
         order_type=OrderType.SELL_LIMIT
     )
 
+    frozen_amounts: bool = display_balances(bot, arb_order, console)
+
+    if frozen_amounts:
+        cancel_orders = Confirm.ask("Do you want to cancel the frozen amounts?")
+        if cancel_orders:
+
+            cancel_all_orders(bot, arb_order)
+            display_balances(bot, arb_order, console)
+            continue_with_current_balance = Confirm.ask("This is your current Balance, do you want to continue?")
+            if not continue_with_current_balance:
+                welcome_menu()
+    else:
+        continue_with_current_balance = Confirm.ask("This is your current Balance, do you want to continue?")
+        if not continue_with_current_balance:
+            welcome_menu()
+
     # Start the arbitrage flow
     bot.run_arbitrage_flow(arb_order=arb_order)
+
+
+def cancel_all_orders(bot: "ArbitrageBot", arb_order: ArbitrageOrder) -> None:
+    """
+    Cancel all pending orders in a marker with symbol base_currency-quote_currency.
+
+    :param bot: ArbitrageBot object with the exchanges' information.
+    :param arb_order:  ArbitrageOrder with the base and quote currency info.
+    """
+    low_liquidity_exchange: BaseLowLiquidityExchange = bot.exchange_low_liquidity
+    base_currency: str = arb_order.base_currency
+    quote_currency: str = arb_order.quote_currency
+
+    low_liquidity_exchange.cancel_all_orders(base_currency, quote_currency)
+
+
+def create_balances_table(bot: "ArbitrageBot", arb_order: ArbitrageOrder) -> Tuple[Table, bool]:
+    """
+    Create a rich.Table object to display the current balance in the low liquidity exchanfe for a given base-quote
+    currency market.
+
+    :param bot: ArbitrageBot object with the exchanges' information.
+    :param arb_order:  ArbitrageOrder with the base and quote currency info.
+    :return: Tuple a Table with the balance information, and a boolean representing the presence of frozen amount.
+    """
+    balances_table = Table(title="Balances")
+
+    balances_table.add_column("Currency", justify="center", style="bold", no_wrap=True)
+    balances_table.add_column("Amount", justify="center", style="cyan")
+    balances_table.add_column("Available Amount", justify="center", style="green")
+    balances_table.add_column("Frozen Amount", justify="center", style="red")
+
+    balances_table, frozen_amounts = append_balance_values(balances_table, bot, arb_order)
+
+    return balances_table, frozen_amounts
+
+
+def append_balance_values(balances_table: Table, bot: "ArbitrageBot", arb_order: ArbitrageOrder) -> Tuple[Table, bool]:
+    """
+    Populate the rich.Table object to display the current balance in the low liquidity exchange for a given base-quote
+    currency market.
+
+    :param bot: ArbitrageBot object with the exchanges' information.
+    :param arb_order:  ArbitrageOrder with the base and quote currency info.
+    :return: Tuple a Table with the balance information, and a boolean representing the presence of frozen amount.
+    """
+
+    low_liquidity_exchange: BaseLowLiquidityExchange = bot.exchange_low_liquidity
+    high_liquidity_exchange: BaseHighLiquidityExchange = bot.exchange_high_liquidity
+    base_currency: str = arb_order.base_currency
+    quote_currency: str = arb_order.quote_currency
+
+    low_liquidity_balances: Dict[str, List] = low_liquidity_exchange.get_balances().get('balances')
+
+    new_row = list()
+    frozen_amount_bool: bool = False
+
+    for balance in low_liquidity_balances:
+        currency_id = balance['id']
+        if currency_id in [base_currency, quote_currency]:
+            total_amount: float = round(float(balance['amount'][0]), 6)
+            available_amount: float = round(float(balance['available_amount'][0]), 6)
+            frozen_amount: float = round(float(balance['frozen_amount'][0]), 6)
+
+            new_row.append("{:,}".format(total_amount))
+            new_row.append("{:,}".format(available_amount))
+            new_row.append("{:,}".format(frozen_amount))
+            balances_table.add_row(currency_id, new_row[0], new_row[1], new_row[2])
+
+            frozen_amount_bool: bool = bool(frozen_amount) if not frozen_amount_bool else frozen_amount_bool
+
+        new_row = list()
+
+    return balances_table, frozen_amount_bool
+
+
+def display_balances(bot: "ArbitrageBot", arb_order: ArbitrageOrder, console: Console) -> bool:
+    """
+    Display the current balances in the low liquidity exchange.
+
+    :param bot: ArbitrageBot object with the exchanges' information.
+    :param arb_order:  ArbitrageOrder with the base and quote currency info.
+    :param console: rich.Console object.
+    :return: Boolean, True if there is a frozen amount that can be cancelled.
+    """
+    balances_table, frozen_amounts = create_balances_table(bot, arb_order)
+    console.print(balances_table)
+    return frozen_amounts
 
 
 def create_initiation_values(default_values_mode: bool = True) -> Table:

@@ -121,7 +121,7 @@ class BinanceProxy(BaseHighLiquidityExchange):
                 return response
 
         except Exception as e:
-            logger.error(f"{current_method_name} - Error fetching cpin information from Binance: {e}")
+            logger.error(f"{current_method_name} - Error fetching coin information from Binance: {e}")
             raise
 
     def supports_lightning_network(self, coin: str) -> bool:

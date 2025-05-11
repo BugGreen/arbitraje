@@ -96,15 +96,15 @@ def test_get_market_info():
 
 def test_get_all_balances():
     buda = BudaProxy()
-    market_info = buda.get_balances()
-    assert market_info.get("balances")
+    balances = buda.get_balances()
+    assert balances.get("balances")
 
 
 def test_get_btc_balances():
     buda = BudaProxy()
     coin = "BTC"
-    market_info = buda.get_balances(coin)
-    assert market_info.get('balance', {}).get("id", "") == coin
+    balance = buda.get_balances(coin)
+    assert balance.get('balance', {}).get("id", "") == coin
 
 
 @patch("requests.post")
@@ -539,48 +539,21 @@ def test_get_order_book_failure():
         assert "Error 401" in str(e), "Exception message should contain 'Error 404'."
 
 
+def test_cancel_all_orders_specific_market():
+    """
+    Test retrieval of the order book when the API call fails.
+    """
+    buda: BudaProxy = BudaProxy()
+    base_currency: str = "btc"
+    quote_currency: str = "usdc"
+
+    cancel_response = buda.cancel_all_orders(base_currency, quote_currency)
+    assert "orders" in cancel_response
+
+
 class TestBudaProxy(unittest.TestCase):
     def setUp(self):
         self.proxy = BudaProxy()
-
-    # @patch('requests.post')
-    # def test_batch_creation_success(self, mock_post) -> None:
-    #     # Mock a successful API response
-    #     mock_response = MagicMock()
-    #     mock_response.raise_for_status.return_value = None
-    #     mock_response.json.return_value = constants.successful_batch_order_mock_response
-    #
-    #     mock_post.return_value = mock_response
-    #
-    #     orders = constants.successful_batch_order
-    #
-    #     expected_output = constants.expected_successful_batch_order_response
-    #
-    #     response = self.proxy.batch_creation(orders)
-    #     self.assertEqual(response, expected_output)
-    #     mock_post.assert_called_once()
-    #
-    # @patch('requests.post')
-    # def test_batch_creation_partial_success(self, mock_post) -> None:
-    #     """
-    #     An example is when one of the suborder of the batch attempts to execute an amount that is not currently
-    #     available.
-    #
-    #     :param mock_post:
-    #     :return:
-    #     """
-    #     mock_response = MagicMock()
-    #     mock_response.raise_for_status.return_value = None
-    #     mock_response.json.return_value = constants.successful_batch_order_mock_response
-    #     mock_post.return_value = mock_response
-    #
-    #     orders = constants.partial_successful_batch_order
-    #
-    #     expected_output = constants.expected_successful_batch_order_response
-    #
-    #     response = self.proxy.batch_creation(orders)
-    #     self.assertEqual(response, expected_output)
-    #     mock_post.assert_called_once()
 
     @patch('requests.post')
     def test_batch_creation_amount_less_than_minimum_error(self, mock_post):
