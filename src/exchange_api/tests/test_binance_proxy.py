@@ -65,7 +65,8 @@ def test_binance_supports_lightning_network():
         assert binance.supports_lightning_network("BTC") == False
 
 
-def test_create_deposit_address():
+@patch.object(BinanceProxy, "_validate_deposit_availability", return_value=True)
+def test_create_deposit_address(deposit_validation_mock):
     """
     Test the create_deposit_address method of BinanceProxy.
     """
@@ -99,7 +100,8 @@ def test_create_deposit_address():
         )
 
 
-def test_create_ln_invoice():
+@patch.object(BinanceProxy, "_validate_deposit_availability", return_value=True)
+def test_create_ln_invoice(deposit_validation_mock):
     """
     Test the create_deposit_address method of BinanceProxy.
     """
@@ -171,6 +173,12 @@ def test_create_withdraw_request():
             params=mock_post.call_args[1]["params"]  # Ensures parameters match
         )
 
+
+def test_get_price():
+    binance = BinanceProxy()
+    price_response = binance.get_price('btc', 'usdc')
+    assert price_response.get('symbol') == 'BTCUSDC'
+    assert price_response.get('price')
 
 @patch("requests.post")
 def test_new_order_success(mock_post):

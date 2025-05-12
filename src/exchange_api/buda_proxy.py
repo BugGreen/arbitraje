@@ -37,7 +37,8 @@ class BudaProxy(BaseExchange):
         "ORDER_BOOK": "/api/v2/markets/{}/order_book",
         "WITHDRAW_HISTORY": "/api/v2/currencies/{}/{}",
         "ADDRESS_ID": "/api/v2/currencies/{}/receive_addresses",
-        "DEPOSIT_ADDRESS": "/api/v2/currencies/{}/receive_addresses/{}"
+        "DEPOSIT_ADDRESS": "/api/v2/currencies/{}/receive_addresses/{}",
+        "PRICE": "/api/v2/markets/{}/ticker"
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -303,6 +304,8 @@ class BudaProxy(BaseExchange):
             if not self._validate_address_availability(response):
                 logger.error(f"Deposit address is not available, got this response:")
                 raise Exception(f"Error for deposit address {response.status_code}: {response.text}")
+        else:
+            raise ValueError(f"Error coin {coin.upper()} is not supported")
 
         # Handle the response
         if response.status_code in [200, 201]:
@@ -636,5 +639,31 @@ class BudaProxy(BaseExchange):
         return response.json()
 
     def get_price(self, base_currency: str, quote_currency: str) -> Dict:
-        # ToDo
-        return 10
+        """
+        Retrieve the price of an asset in a specified market.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'USD').
+        :return: A dictionary containing the price information.
+        :raises Exception: If the API request fails.
+        """
+        symbol = base_currency.lower() + '-' + quote_currency.lower()
+
+        # Define the endpoint path
+        endpoint_path = self.ENDPOINTS["PRICE"].format(symbol)
+        url = f"{self.BASE_URL}{endpoint_path}"
+        response = requests.get(url)
+        # Check for successful response
+        if response.status_code == 200:
+            response = response.json()
+            info = response.get('ticker')
+            symbol: str = info.get("market_id")
+            last_price: str = info.get("last_price")[0]
+
+            price_info = {
+                'symbol': symbol.replace("-", ''),
+                'price': last_price
+            }
+            return price_info
+        else:
+            raise Exception(f"Error {response.status_code}: {response.text}")

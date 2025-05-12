@@ -28,7 +28,8 @@ class BinanceProxy(BaseExchange):
         'NEW_ORDER': '/api/v3/order',
         'CANCEL_ORDER': '/api/v3/order',
         'WITHDRAW_HISTORY': '/sapi/v1/capital/withdraw/history',
-        "DEPOSIT_HISTORY": "/sapi/v1/capital/deposit/hisrec"
+        "DEPOSIT_HISTORY": "/sapi/v1/capital/deposit/hisrec",
+        "PRICE": "https://data-api.binance.vision/api/v3/ticker/price?symbol={}"
     }
 
     def __init__(self) -> None:
@@ -460,8 +461,25 @@ class BinanceProxy(BaseExchange):
         pass
 
     def get_price(self, base_currency: str, quote_currency: str) -> Dict:
-        # ToDo
-        pass
+        """
+        Retrieve the price of an asset in a specified market.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'USD').
+        :return: A dictionary containing the price information.
+        :raises Exception: If the API request fails.
+        """
+        symbol = base_currency.upper() + quote_currency.upper()
+
+        # Make the API request
+        url = self.ENDPOINTS['PRICE'].format(symbol)
+        response = requests.get(url)
+
+        # Check for successful response
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception(f"Error {response.status_code}: {response.text}")
 
     def get_order_book(self, base_currency: str, quote_currency: str) -> Dict:
         # ToDo

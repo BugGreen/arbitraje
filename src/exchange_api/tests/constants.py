@@ -1480,3 +1480,13 @@ buda_usdc_withdrawal_history: List[Dict] = [
         'usd_amount': ['19.84', 'USD']
     }
 ]
+
+binance_get_price_response: Dict[str, str] = {
+    'symbol': 'BTCUSDC',
+    'price': '104738.01000000'
+}
+
+buda_get_price_response: Dict[str, str] = {
+    'symbol': 'BTCUSDC',
+    'price': '103507.07'
+}

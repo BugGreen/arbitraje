@@ -30,6 +30,8 @@ def main() -> None:
         order_type = 'MARKET'
         order_id = 33188802974
 
+        print(binance.get_price('btc', "usdc"))
+
         #usdc_deposit_addres = binance.create_deposit_address(coin=coin, network='ETH')
         #print(json.dumps(usdc_deposit_addres, indent=2))
         # print(binance.get_withdraw_history('BTC'))
@@ -115,8 +117,9 @@ def main() -> None:
         #print(json.dumps(order_states, indent=2))
         #ltc_withdrawal = buda.create_withdraw_request(coin='ltc', amount=0.00702, address=ltc_address, simulate=True)
         #print(json.dumps(ltc_withdrawal, indent=2))
-        order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')
-        print(json.dumps(order_book, indent=2))
+        #order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')
+        #print(json.dumps(order_book, indent=2))
+        print(buda.get_price('btc', "usdc"))
     except Exception as e:
         print(f"Error with BUDA: {e}")
 

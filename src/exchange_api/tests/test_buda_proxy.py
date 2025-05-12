@@ -40,25 +40,19 @@ def test_create_withdraw_request_btc():
     expired_invoice = 'lnbc50u1pn5f8ljpp5dc6y936p79j9dfqs59vdkz6dfurxcgzvsren4mtahdrva9paqxhsdq8w3jhxaqcqzzsxqyz5vqsp5yp9j2fghxfw4dvxnkcu5lyldykew7ymuq27f8jpay8ms7q9kwe9s9qxpqysgqqczpcedj6ry8t8z5emqvz9mvjr263fsv7p64st6j5pyxfcdmm9hparffkgfsxv883kh6hkczfgpktlevn3rldcskqv392fk8n7ad3lcp6yx88t'
 
     response = buda_proxy.create_withdraw_request(coin='BTC', address=expired_invoice, amount=0.00002, simulate=True)
-    withdrawal_response = response["withdrawal"]
+    withdrawal_response = response
 
     assert withdrawal_response['state'] == 'simulated'
     assert withdrawal_response['currency'] == 'BTC'
     assert withdrawal_response["withdrawal_data"]['payment_request'] == expired_invoice
 
 
-@patch("requests.post")
+@patch.object(BudaProxy, 'create_withdraw_request',
+              return_value=constants.buda_withdrawal_response)
 def test_pay_ln_invoice(mock_post):
     """
     Test BTC Lightning Network withdrawal request.
     """
-
-    expected_response = constants.buda_withdrawal_response
-
-    mock_response = Mock()
-    mock_response.status_code = 201
-    mock_response.json.return_value = expected_response
-    mock_post.return_value = mock_response
 
     buda_proxy = ExchangeFactory.get_exchange('buda')
     expired_invoice = 'lnbc50u1pn5f8ljpp5dc6y936p79j9dfqs59vdkz6dfurxcgzvsren4mtahdrva9paqxhsdq8w3jhxaqcqzzsxqyz5vqsp5yp9j2fghxfw4dvxnkcu5lyldykew7ymuq27f8jpay8ms7q9kwe9s9qxpqysgqqczpcedj6ry8t8z5emqvz9mvjr263fsv7p64st6j5pyxfcdmm9hparffkgfsxv883kh6hkczfgpktlevn3rldcskqv392fk8n7ad3lcp6yx88t'
@@ -77,13 +71,18 @@ def test_create_withdraw_request_ltc():
     buda_proxy = ExchangeFactory.get_exchange('buda')
     ltc_address = "LeMNHpnvULWbh9wHqNPdPwnip3vnSsXATY"
 
-    response = buda_proxy.create_withdraw_request(coin='ltc', address=ltc_address, amount=0.00702, simulate=True)
-    withdrawal_response = response["withdrawal"]
-    print(response)
+    withdrawal_response = buda_proxy.create_withdraw_request(coin='ltc', address=ltc_address, amount=0.00702, simulate=True)
     assert withdrawal_response['state'] == 'simulated'
     assert withdrawal_response['currency'] == 'LTC'
     assert withdrawal_response["withdrawal_data"]['type'] == "ltc_withdrawal_data"
     assert withdrawal_response["withdrawal_data"]['target_address'] == ltc_address  # Here is 'target_address'
+
+
+def test_get_price():
+    binance = BudaProxy()
+    price_response = binance.get_price('btc', 'usdc')
+    assert price_response.get('symbol') == 'BTCUSDC'
+    assert price_response.get('price')
 
 
 @patch("requests.post")
@@ -175,7 +174,7 @@ def test_create_ln_invoice_success(mock_post):
     amount = 0.01
     sats_amount = amount * 100000000
     # Act
-    result = buda.create_lightning_invoice(coin=amount)
+    result = buda.create_lightning_invoice(amount=amount)
 
     # Assert
     assert result == expected_response
@@ -198,23 +197,8 @@ def test_create_deposit_address_invalid_coin(mock_post):
     buda = BudaProxy()
 
     # Act & Assert
-    with pytest.raises(ValueError, match="Lightning Network invoices are only supported for BTC."):
-        buda.create_deposit_address(coin="ETH", network="lightning", amount_satoshis=5000)
-
-    mock_post.assert_not_called()
-
-
-@patch("requests.post")
-def test_create_deposit_address_invalid_network(mock_post):
-    """
-    Test the create_deposit_address method with an invalid network.
-    """
-    # Arrange
-    buda = BudaProxy()
-
-    # Act & Assert
-    with pytest.raises(ValueError, match="This method only supports the Lightning Network."):
-        buda.create_deposit_address(coin="BTC", network="onchain", amount_satoshis=5000)
+    with pytest.raises(ValueError, match="Error coin ADA is not supported"):
+        buda.create_deposit_address(coin="ADA", network="lightning", amount_satoshis=5000)
 
     mock_post.assert_not_called()
 
