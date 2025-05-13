@@ -743,7 +743,7 @@ class ArbitrageBot:
             standardized_response = self.exchange_low_liquidity.batch_creation(sub_orders_prices)
 
             # Update arb_orders `sub_orders_ids` attribute
-            self._assing_order_ids(arb_orders, standardized_response)
+            self._assign_order_ids(arb_orders, standardized_response)
             # Assume it's a list of sub-order responses (partial or complete success)
             logger.info("Exchange sub-order placement response: %s", standardized_response)
 
@@ -772,7 +772,7 @@ class ArbitrageBot:
             }
 
     @staticmethod
-    def _assing_order_ids(
+    def _assign_order_ids(
             arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]],
             standardized_response: List[Dict[str, Any]]
     ) -> None:
@@ -989,19 +989,27 @@ class ArbitrageBot:
         logger.warning("Unknown structure for sub_order_responses: %s", sub_order_responses)
         return None
 
-    def _wait_for_orders_to_leave_received(self, received_orders: List[Dict[str, Any]],
-                                           arb_order: ArbitrageOrder, max_wait_seconds: int = 10) -> None:
+    def _wait_for_orders_to_leave_received(
+            self,
+            received_orders: List[Dict[str, Any]],
+            arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]],
+            max_wait_seconds: int = 10
+    ) -> None:
         """
         Wait for sub-orders in 'received' state to transition to another state.
         If the sub-order transitions to a traded-related state, update `arb_order` dynamic amounts.
 
         :param received_orders: The sub-order responses that are in 'received' state.
-        :param arb_order: The ArbitrageOrder to update with partial/traded amounts.
+        :param arb_orders: A single ArbitrageOrder or list of ArbitrageOrder objects to be updated with partial/traded
+        amounts.
         :param max_wait_seconds: How long to keep polling before giving up.
         :return: None (updates the sub-orders in-place, updates `arb_order` amounts).
         """
         logger.info("Waiting for %d sub-orders to transition out of 'received'...", len(received_orders))
         start_time = time.time()
+
+        if not isinstance(arb_orders, list):
+            arb_orders = [arb_orders]
 
         # We store the IDs of sub-orders that are 'received'
         received_ids = [o["id"] for o in received_orders if o.get("id") is not None]
@@ -1021,8 +1029,10 @@ class ArbitrageBot:
             time.sleep(0.2)
 
             # 1. Retrieve updated states from the exchange
-            states_response = self.exchange_low_liquidity.get_order_states(arb_order.base_currency,
-                                                                           arb_order.quote_currency)
+            states_response = self.exchange_low_liquidity.get_order_states(
+                arb_orders[0].base_currency,
+                arb_orders[0].quote_currency
+            )
             all_states = states_response.get("orders", [])
 
             # 2. Update sub-orders that are 'received'
@@ -1044,19 +1054,21 @@ class ArbitrageBot:
                             base_currency_traded_amount = float(st.get("traded_amount", 0.0)[0])
                             quote_currency_traded_amount = float(st.get("total_exchanged", 0.0)[0])
                             limit_price = float(st.get("limit", 0.0)[0])
-                            paid_fee_base_currency, paid_fee_quote_currency = \
-                                self._calculate_paid_fee_low_liquidity(st, arb_order)
 
-                            self._update_arbitrage_order_on_fill(
-                                sub_order_dict=ro,
-                                new_state=st_state,
-                                traded_base_amount=base_currency_traded_amount,
-                                traded_quote_amount=quote_currency_traded_amount,
-                                paid_fee_base_currency=paid_fee_base_currency,
-                                paid_fee_quote_currency=paid_fee_quote_currency,
-                                limit_price_low_liquidity=limit_price,
-                                arb_order=arb_order
-                            )
+                            for arb_order in arb_orders:
+                                if st_id in arb_order.sub_orders_ids:
+                                    paid_fee_base_currency, paid_fee_quote_currency = \
+                                        self._calculate_paid_fee_low_liquidity(st, arb_order)
+                                    self._update_arbitrage_order_on_fill(
+                                        sub_order_dict=ro,
+                                        new_state=st_state,
+                                        traded_base_amount=base_currency_traded_amount,
+                                        traded_quote_amount=quote_currency_traded_amount,
+                                        paid_fee_base_currency=paid_fee_base_currency,
+                                        paid_fee_quote_currency=paid_fee_quote_currency,
+                                        limit_price_low_liquidity=limit_price,
+                                        arb_order=arb_order
+                                    )
 
                     # Remove from 'received_ids'
                     received_ids.remove(st_id)

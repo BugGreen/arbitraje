@@ -539,9 +539,21 @@ class TestArbitrageBot(unittest.TestCase):
         )
 
         # 3. Place sub-orders on low-liquidity
-        sub_orders = [
-            {"mode": "place", "order": {"amount": 200.0}},  # Just an example
-            {"mode": "place", "order": {"amount": 800.0}},
+        sub_orders =         sub_orders = [
+            {"mode": "place", "order": {
+                "amount": 200.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
+            {"mode": "place", "order": {
+                "amount": 800.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
         ]
         arb_order.update_sub_orders_info(sub_orders)
         self.bot.place_sub_orders(arb_order)
@@ -635,8 +647,20 @@ class TestArbitrageBot(unittest.TestCase):
 
         # 3. Place sub-orders on low-liquidity
         sub_orders = [
-            {"mode": "place", "order": {"amount": 200.0}},
-            {"mode": "place", "order": {"amount": 800.0}},
+            {"mode": "place", "order": {
+                "amount": 200,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
+            {"mode": "place", "order": {
+                "amount": 800,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
         ]
         self.bot.place_sub_orders(sub_orders, arb_order)
 
@@ -678,8 +702,20 @@ class TestArbitrageBot(unittest.TestCase):
 
         # 3. Place sub-orders on low-liquidity
         sub_orders = [
-            {"mode": "place", "order": {"amount": 200.0}},
-            {"mode": "place", "order": {"amount": 800.0}},
+            {"mode": "place", "order": {
+                "amount": 200.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
+            {"mode": "place", "order": {
+                "amount": 800.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
         ]
         arb_order.update_sub_orders_info(sub_orders)
         self.bot.place_sub_orders(arb_order)
@@ -720,8 +756,20 @@ class TestArbitrageBot(unittest.TestCase):
 
         # 3. Place sub-orders on low-liquidity
         sub_orders = [
-            {"mode": "place", "order": {"amount": 500.0}},
-            {"mode": "place", "order": {"amount": 500.0}},
+            {"mode": "place", "order": {
+                "amount": 500.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
+            {"mode": "place", "order": {
+                "amount": 500.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
         ]
 
         low_liquidity_price = 1000
@@ -770,8 +818,20 @@ class TestArbitrageBot(unittest.TestCase):
 
         # 3. Place sub-orders on low-liquidity
         sub_orders = [
-            {"mode": "place", "order": {"amount": 200.0}},  # Just an example
-            {"mode": "place", "order": {"amount": 800.0}},
+            {"mode": "place", "order": {
+                "amount": 200.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
+            {"mode": "place", "order": {
+                "amount": 800.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
         ]
         self.bot.place_sub_orders(sub_orders, arb_order)
 
@@ -808,8 +868,20 @@ class TestArbitrageBot(unittest.TestCase):
 
         # 3. Place sub-orders on low-liquidity
         sub_orders = [
-            {"mode": "place", "order": {"amount": 200.0}},  # Just an example
-            {"mode": "place", "order": {"amount": 800.0}},
+            {"mode": "place", "order": {
+                "amount": 200.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
+            {"mode": "place", "order": {
+                "amount": 800.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
         ]
 
         arb_order.update_sub_orders_info(sub_orders)
@@ -852,8 +924,20 @@ class TestArbitrageBot(unittest.TestCase):
 
         # 3. Place sub-orders on low-liquidity
         sub_orders = [
-            {"mode": "place", "order": {"amount": 200.0}},
-            {"mode": "place", "order": {"amount": 800.0}},
+            {"mode": "place", "order": {
+                "amount": 200.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
+            {"mode": "place", "order": {
+                "amount": 800.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
         ]
         arb_order.update_sub_orders_info(sub_orders)
         self.bot.place_sub_orders(arb_order)
@@ -896,8 +980,20 @@ class TestArbitrageBot(unittest.TestCase):
 
         # 3. Place sub-orders on low-liquidity
         sub_orders = [
-            {"mode": "place", "order": {"amount": 200.0}},
-            {"mode": "place", "order": {"amount": 800.0}},
+            {"mode": "place", "order": {
+                "amount": 200.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
+            {"mode": "place", "order": {
+                "amount": 800.0,
+                "limit": 1000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
         ]
         arb_order.update_sub_orders_info(sub_orders)
         self.bot.place_sub_orders(arb_order)
@@ -955,8 +1051,27 @@ class TestArbitrageBot(unittest.TestCase):
 
         # 3. Place sub-orders on low-liquidity
         sub_orders = [
-            {"mode": "place", "order": {"amount": 200.0}},  # Just an example
-            {"mode": "place", "order": {"amount": 800.0}},
+            {"mode": "place", "order": {
+                "amount": 192.0,
+                "limit": 10000000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},  # Just an example
+            {"mode": "place", "order": {
+                "amount": 8.0,
+                "limit": 10000000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }},
+            {"mode": "place", "order": {
+                "amount": 800.0,
+                "limit": 10000000,
+                "market_name": "eth-cop",
+                "price_type": "limit",
+                "type": "Bid"
+            }}
         ]
         arb_order.update_sub_orders_info(sub_orders)
         self.bot.place_sub_orders(arb_order)
@@ -1572,7 +1687,7 @@ class TestArbitrageBot(unittest.TestCase):
                                         'market_name': 'BTC-USDC', 'price_type': 'limit', 'type': 'ask'}}
         ]
         arb_order.sub_orders_info = sub_orders_info
-        self.bot._assing_order_ids(arb_order, self.standardized_response)
+        self.bot._assign_order_ids(arb_order, self.standardized_response)
         self.assertEqual(arb_order.sub_orders_ids, [1413479079, 1413479080, 1413479082])
 
     def test_assign_order_ids_multiple_orders(self):
@@ -1613,7 +1728,7 @@ class TestArbitrageBot(unittest.TestCase):
              'type': 'Ask', 'limit': ['12345.670000', 'USDC']}
         ]
         # Call with a list of orders
-        self.bot._assing_order_ids([arb_order, arb_order_2], standardized_response_extended)
+        self.bot._assign_order_ids([arb_order, arb_order_2], standardized_response_extended)
         self.assertEqual(arb_order.sub_orders_ids, [1413479079, 1413479080, 1413479082])
         self.assertEqual(arb_order_2.sub_orders_ids, [1413479090])
 

@@ -34,7 +34,7 @@ successful_batch_order = [
                 "mode": "place",
                 "order": {
                     "amount": 0.0012,
-                    "limit": 15000000,
+                    "limit": 10000000,
                     "market_name": "eth-cop",
                     "price_type": "limit",
                     "type": "Bid"
@@ -44,7 +44,7 @@ successful_batch_order = [
                 "mode": "place",
                 "order": {
                     "amount": 0.0012,
-                    "limit": 15000000,
+                    "limit": 10000000,
                     "market_name": "eth-cop",
                     "price_type": "limit",
                     "type": "Bid"

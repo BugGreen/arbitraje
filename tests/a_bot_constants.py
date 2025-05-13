@@ -119,7 +119,9 @@ placed_sub_orders_to_execute_in_binance = [
                 "total_exchanged": [
                     "200.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['1000', 'USDC']
             },
             {
                 "id": 130001,
@@ -136,7 +138,9 @@ placed_sub_orders_to_execute_in_binance = [
                 "total_exchanged": [
                     "0.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['1000', 'USDC']
             }
         ]
 
@@ -156,7 +160,9 @@ placed_sub_orders_to_execute_in_binance_quote_profit = [
                 "total_exchanged": [
                     "200.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['1000', 'USDC']
             },
             {
                 "id": 130001,
@@ -173,7 +179,9 @@ placed_sub_orders_to_execute_in_binance_quote_profit = [
                 "total_exchanged": [
                     "0.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['1000', 'USDC']
             }
         ]
 
@@ -193,7 +201,9 @@ placed_sub_orders_to_execute_in_binance_buy_limit = [
                 "total_exchanged": [
                     "200.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['1000', 'USDC']
             },
             {
                 "id": 130001,
@@ -210,7 +220,9 @@ placed_sub_orders_to_execute_in_binance_buy_limit = [
                 "total_exchanged": [
                     "0.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['1000', 'USDC']
             }
         ]
 
@@ -230,7 +242,9 @@ placed_sub_orders_to_execute_in_binance_quote_no_profit = [
                 "total_exchanged": [
                     "200.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['1000', 'USDC']
             },
             {
                 "id": 130001,
@@ -247,7 +261,9 @@ placed_sub_orders_to_execute_in_binance_quote_no_profit = [
                 "total_exchanged": [
                     "0.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['1000', 'USDC']
             }
         ]
 
@@ -267,7 +283,9 @@ placed_sub_orders_to_execute_in_binance_quote_multiple_profit = [
                 "total_exchanged": [
                     "200.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['1000', 'USDC']
             },
             {
                 "id": 130001,
@@ -284,7 +302,9 @@ placed_sub_orders_to_execute_in_binance_quote_multiple_profit = [
                 "total_exchanged": [
                     "0.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['1000', 'USDC']
             }
         ]
 
@@ -304,7 +324,9 @@ placed_sub_orders_to_execute_in_binance_base_profit = [
                 "total_exchanged": [
                     "200.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['1000', 'USDC']
             },
             {
                 "id": 130001,
@@ -321,7 +343,9 @@ placed_sub_orders_to_execute_in_binance_base_profit = [
                 "total_exchanged": [
                     "0.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['1000', 'USDC']
             }
         ]
 
@@ -378,7 +402,9 @@ placed_sub_orders_to_execute_in_binance_with_one_less_than_minimum = [
                 "total_exchanged": [
                     "192.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['10000000.0', 'COP']
             },
             {
                 "id": 130001,
@@ -395,7 +421,9 @@ placed_sub_orders_to_execute_in_binance_with_one_less_than_minimum = [
                 "total_exchanged": [
                     "8.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['10000000.0', 'COP']
             },
             {
                 "id": 130002,
@@ -412,7 +440,9 @@ placed_sub_orders_to_execute_in_binance_with_one_less_than_minimum = [
                 "total_exchanged": [
                     "800.0",
                     "USDC"
-                ]
+                ],
+                'type': 'Bid',
+                'limit': ['10000000.0', 'COP']
             }
         ]
 
