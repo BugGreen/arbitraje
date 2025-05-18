@@ -11,6 +11,7 @@ from rich.prompt import Prompt
 from rich.table import Table
 from rich.panel import Panel
 import threading
+from tabulate import tabulate
 import logging
 import queue
 import time
@@ -22,6 +23,58 @@ logger = logging.getLogger(__name__)
 def clear():
     # ANSI escape sequence: \033[2J = clear screen, \033[H = move cursor to home
     print('\033[2J\033[H', end='')
+
+
+def rich_table_to_tabulate(rich_table: Table) -> str:
+    """
+    Converts a Rich Table to a plain text table rendered by Tabulate.
+
+    This function extracts headers and row data from the given Rich Table object and
+    uses Tabulate to render a table in a plain text format (e.g. grid). This is useful
+    for non-interactive environments (e.g., log aggregators) where ANSI formatting
+    from Rich might not be fully visible.
+
+    :param rich_table: A Rich Table object.
+    :type rich_table: Table
+    :return: A string containing the rendered table from Tabulate.
+    :rtype: str
+    """
+    # Extract headers from each column's header attribute.
+    headers: List[str] = [col.header for col in rich_table.columns]
+
+    rows: List[List[str]] = []
+
+    # Check if our columns have the protected attribute _cells.
+    if rich_table.columns and hasattr(rich_table.columns[0], "_cells"):
+        num_rows = len(rich_table.columns[0]._cells)
+        # Iterate over the rows based on _cells from each column.
+        for i in range(num_rows):
+            row = []
+            for col in rich_table.columns:
+                if hasattr(col, "_cells"):
+                    try:
+                        # Extract the value from _cells list at index i.
+                        value = col._cells[i]
+                        row.append(str(value))
+                    except IndexError:
+                        logger.warning("IndexError: Column %s has no value at index %d", col.header, i)
+                        row.append("")
+                else:
+                    row.append("")
+            rows.append(row)
+    else:
+        # Fallback: iterate over rich_table.rows (if present) or simply use string conversion.
+        for row_obj in rich_table.rows:
+            if hasattr(row_obj, "cells"):
+                row = [str(cell) for cell in row_obj.cells]
+            else:
+                # If row_obj isn't iterable, convert its string and split on whitespace.
+                row = str(row_obj).split()
+            rows.append(row)
+
+    # Now, use Tabulate to format the table into plain text.
+    plain_text_table: str = tabulate(rows, headers=headers, tablefmt="fancy_grid")
+    return plain_text_table
 
 
 class ArbitrageUI:
@@ -95,9 +148,15 @@ class ArbitrageUI:
         :param trade_record: A dictionary with keys: 'timestamp', 'order_type', 'price_difference',
                              'profit', 'traded_low', 'traded_high', 'low_price', 'high_price'.
         """
+        order_type: str = trade_record.get("order_type", "")
+        if "SELL" in order_type:
+            order_color: str = '\033[31m{}\033[0m'  # RED
+        elif "BUY" in order_type:
+            order_color: str = '\033[34m{}\033[0m'  # BLUE
+        order_type = order_color.format(order_type)
         history_table.add_row(
             trade_record.get("timestamp", ""),
-            trade_record.get("order_type", ""),
+            order_type,
             f"{trade_record.get('price_difference', 0) * 100:.2f}%",
             f"{trade_record.get('profit', 0):.2f}",
             f"{trade_record.get('traded_low', 0):.2f}",
@@ -185,7 +244,7 @@ class ArbitrageUI:
 
                     # Process trade events and update trade history table
                     self.process_trade_events(trade_history_table)
-                    self.console.print(trade_history_table)
+                    print(rich_table_to_tabulate(trade_history_table))
                     if len(arb_orders) == 2:
                         self.update_progress(arb_orders[0], self.progress_one, self.progress_task_one)
                         self.update_progress(arb_orders[1], self.progress_two, self.progress_task_two)
@@ -484,10 +543,12 @@ def append_initiation_values(initiation_values_table: Table, initiation_values: 
 
 def one_side_order_creation(
         console: Console,
-        market: str = "BTC-USDC"
+        market: str = "BTC-USDC",
+        side: str = 'SELL_LIMIT'
 ) -> ArbitrageOrder:
 
-    arb_order_one_side_default: Dict[str, Any] = encoders.arb_oder_sell_limit_values
+    arb_order_one_side_default: Dict[str, Any] = encoders.arb_oder_sell_limit_values if side == 'SELL_LIMIT' else \
+        encoders.arb_oder_buy_limit_values
     display_initiation_values_table(arb_order_one_side_default, console, default_values_mode=True)
     default_values = Confirm.ask(f"Do you want to use the default Arbitrage Order values?")
 
@@ -534,7 +595,7 @@ def create_arb_orders(console: Console, mode: str, side: str, market: str = "BTC
 
     ones_side_mode: bool = True if mode == "ONE_SIDE" else False
     if ones_side_mode:
-        one_side_order: ArbitrageOrder = one_side_order_creation(console, market)
+        one_side_order: ArbitrageOrder = one_side_order_creation(console, market, side)
         arb_orders.append(one_side_order)
     else:
         for order_type in encoders.arb_orders_values.values():
