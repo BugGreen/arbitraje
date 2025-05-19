@@ -1,11 +1,12 @@
-import json
-from unittest import TestCase
 from src.exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
 from src.exchange_api.exchange_factory import ExchangeFactory
 from tests import exchange_constants as constants
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
 from json import dumps as jprint
 from typing import List, Dict
+from unittest import TestCase
+import requests
+import json
 
 binance: BinanceProxy = ExchangeFactory.get_exchange('binance')
 
@@ -358,9 +359,13 @@ class BinanceTestCase(TestCase):
         # Simulate an error response from Binance (e.g., invalid API key or other issues)
         mock_error_response = {"code": -1003, "msg": "Invalid API Key"}
 
-        mock_response = Mock()
+        mock_response = MagicMock()
         mock_response.status_code = 400
-        mock_response.json.return_value = mock_error_response
+
+        mock_exception = requests.exceptions.Timeout(mock_error_response)
+        mock_exception.response = mock_response
+
+        mock_response.raise_for_status.side_effect = mock_exception
         mock_post.return_value = mock_response
 
         # Call the new_order function
@@ -376,7 +381,7 @@ class BinanceTestCase(TestCase):
             )
 
         # Ensure the API call was made
-        mock_post.assert_called_once()
+        assert mock_post.call_count == 3
 
 
 @patch('requests.delete')

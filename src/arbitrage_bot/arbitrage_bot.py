@@ -618,7 +618,7 @@ class ArbitrageBot:
                 result = self._split_order_for_single(arb_order, delta)
                 if isinstance(result, dict) and "code" in result and result["code"] == "ERROR_BELOW_MIN_TOTAL":
                     logger.error("Order amount below minimum for %s: %s", arb_order, result)
-                    return [result]  # Return early on failure for any order in the list
+                    return result  # Return early on failure for any order in the list
                 arb_order.update_sub_orders_info(result)
                 results.append(result)
 

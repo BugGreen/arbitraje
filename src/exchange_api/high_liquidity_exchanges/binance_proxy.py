@@ -93,37 +93,6 @@ class BinanceProxy(BaseHighLiquidityExchange):
         time_difference = abs(local_time - binance_time)
         print(f"Time difference: {time_difference} ms")
 
-    def get_coin_info(self, coin: Optional[str] = None) -> Union[Dict, List[Dict]]:
-        """
-        Fetch information of all coins from Binance API.
-        If a coin's name is provided, returns only the coin's information.
-
-        :param coin: str representing the name of the coin.
-        :return: List of dictionaries containing coin information.
-        """
-        current_method_name = inspect.currentframe().f_code.co_name
-
-        url = f"{self.BASE_URL}{self.ENDPOINTS['ALL_COINS_INFO']}"
-        headers = {"X-MBX-APIKEY": self.api_key}
-        params = self._sign_request({})
-        try:
-            response = requests.get(url, headers=headers, params=params)
-            # Use the standard response handler to handle errors and responses
-            response = handle_api_response(response)
-            if coin:
-                coins_info = response
-                for coin_info in coins_info:
-                    if coin_info.get("coin") == coin.upper():
-                        # Uncomment to display the response
-                        # print(json.dumps(coin_info, indent=2))
-                        return coin_info
-            else:
-                return response
-
-        except Exception as e:
-            logger.error(f"{current_method_name} - Error fetching coin information from Binance: {e}")
-            raise
-
     def supports_lightning_network(self, coin: str) -> bool:
         """
         Check if Binance supports the Lightning Network for a specific coin.
@@ -141,6 +110,41 @@ class BinanceProxy(BaseHighLiquidityExchange):
                         return network.get("withdrawEnable", False)
         return False
 
+    def get_coin_info(self, coin: Optional[str] = None) -> Union[Dict, List[Dict]]:
+        """
+        Fetch information of all coins from Binance API.
+        If a coin's name is provided, returns only the coin's information.
+
+        :param coin: str representing the name of the coin.
+        :return: List of dictionaries containing coin information.
+        """
+
+        url = f"{self.BASE_URL}{self.ENDPOINTS['ALL_COINS_INFO']}"
+
+        def api_call():
+            params = self._sign_request({})
+            headers = {"X-MBX-APIKEY": self.api_key}
+            response = requests.get(url, headers=headers, params=params)
+            return response
+
+        try:
+            # Use the standard response handler to handle errors and responses
+            response = handle_api_response(api_call)
+            if coin:
+                coins_info = response
+                for coin_info in coins_info:
+                    if coin_info.get("coin") == coin.upper():
+                        # Uncomment to display the response
+                        # print(json.dumps(coin_info, indent=2))
+                        return coin_info
+            else:
+                return response
+
+        except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
+            logger.error(f"{current_method_name} - Error fetching coin information from Binance: {e}")
+            raise
+
     def get_withdraw_history(self, coin: Optional[str] = None, withdraw_order_id: Optional[str] = None) -> List[Dict]:
         """
         Get the withdrawal history of a given coin, or a given order.
@@ -149,32 +153,61 @@ class BinanceProxy(BaseHighLiquidityExchange):
         :param withdraw_order_id: id of a specific order
         :return: Withdrawal history
         """
-        current_method_name = inspect.currentframe().f_code.co_name
 
         url = f"{self.BASE_URL}{self.ENDPOINTS['WITHDRAW_HISTORY']}"
-        headers = {"X-MBX-APIKEY": self.api_key}
 
-        params = {
-            "coin": coin,
+        def api_call():
+            params = {
+                "coin": coin,
             } if coin else {}
 
-        # TODO: FIX: Now if withdrawOrderId is provided, returns an empty list
-        if withdraw_order_id:
-            params['withdrawOrderId'] = str(withdraw_order_id)
+            # TODO: FIX: Now if withdrawOrderId is provided, returns an empty list
+            if withdraw_order_id:
+                params['withdrawOrderId'] = str(withdraw_order_id)
 
-        params['timestamp'] = int(time.time() * 1000)
-        params = self._sign_request(params)
-        try:
+            params['timestamp'] = int(time.time() * 1000)
+            params = self._sign_request(params)
+            headers = {"X-MBX-APIKEY": self.api_key}
             response = requests.get(url, headers=headers, params=params)
+            return response
+
+        try:
             # Use the standard response handler to handle errors and responses
-            response = handle_api_response(response)
+            response = handle_api_response(api_call)
             for withdraw in response:
                 status = withdraw['status']
                 state = encoders.binance_withdrawal_states.get(status)
                 withdraw['state'] = state
             return response
         except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
             logger.error(f"{current_method_name} - Error fetching withdrawal history from Binance: {e}")
+            raise
+
+    def get_market_info(self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Retrieve the market information of the market f'{base_currency.upper()}{quote_currency.upper()}'.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'USDC').
+        :return: A dictionary containing the market information.
+        """
+
+        def api_call():
+            symbol = base_currency.upper() + quote_currency.upper()
+
+            # Make the API request
+            url = f"{self.BASE_URL_PUBLIC}{self.ENDPOINTS['MARKET'].format(symbol)}"
+            response = requests.get(url)
+
+            return response
+
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(api_call)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching market info  from Binance: {e}")
             raise
 
     def get_deposit_history(self, coin: Optional[str] = None) -> List[Dict]:
@@ -185,30 +218,55 @@ class BinanceProxy(BaseHighLiquidityExchange):
         :return: Deposit history
         """
         url = f"{self.BASE_URL}{self.ENDPOINTS['DEPOSIT_HISTORY']}"
-        headers = {"X-MBX-APIKEY": self.api_key}
 
-        params = {
-            "includeSource": True,
-            "timestamp": int(time.time() * 1000),
+        def api_call():
+            params = {
+                "includeSource": True,
+                "timestamp": int(time.time() * 1000),
             }
 
-        if coin:
-            params['coin'] = coin
+            if coin:
+                params['coin'] = coin
 
-        params = self._sign_request(params)
-
-        current_method_name = inspect.currentframe().f_code.co_name
-        try:
+            params = self._sign_request(params)
+            headers = {"X-MBX-APIKEY": self.api_key}
             response = requests.get(url, headers=headers, params=params)
+            return response
+
+        try:
             # Use the standard response handler to handle errors and responses
-            response = handle_api_response(response)
+            response = handle_api_response(api_call)
             for deposit in response:
                 status = deposit['status']
                 state = encoders.binance_deposit_states.get(status)
                 deposit['state'] = state
             return response
         except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
             logger.error(f"{current_method_name} - Error fetching deposit history from Binance: {e}")
+            raise
+
+    def get_price(self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Retrieve the price of an asset in a specified market.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'USD').
+        :return: A dictionary containing the price information.
+        :raises Exception: If the API request fails.
+        """
+
+        def api_call():
+            symbol = base_currency.upper() + quote_currency.upper()
+            url = f"{self.BASE_URL_PUBLIC}{self.ENDPOINTS['PRICE'].format(symbol)}"
+            response = requests.get(url)
+            return response
+        try:
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(api_call)
+        except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
+            logger.error(f"{current_method_name} - Error fetching asset price from Binance: {e}")
             raise
 
     def create_deposit_address(
@@ -226,36 +284,219 @@ class BinanceProxy(BaseHighLiquidityExchange):
         :raises Exception: If the request fails or the response contains an error.
         """
         network = network.upper() if network else network
-
-        params = {
-            "coin": coin,
-            "timestamp": int(time.time() * 1000),
-        }
-
-        if network:
-            params["network"] = network
-        if amount and network and network == "LIGHTNING":
-            params["amount"] = amount
-
-        # Sign the request
-        signed_params = self._sign_request(params)
-
         # Make the API request
         url = f"{self.BASE_URL}{self.ENDPOINTS['DEPOSIT_ADDRESS']}"
-        headers = {"X-MBX-APIKEY": self.api_key}
 
-        current_method_name = inspect.currentframe().f_code.co_name
-        try:
+        def api_call():
+            params = {
+                "coin": coin,
+                "timestamp": int(time.time() * 1000),
+            }
+
+            if network:
+                params["network"] = network
+            if amount and network and network == "LIGHTNING":
+                params["amount"] = amount
+
+            # Sign the request
+            signed_params = self._sign_request(params)
+            headers = {"X-MBX-APIKEY": self.api_key}
             response = requests.get(url, headers=headers, params=signed_params)
+            return response
+
+        try:
             # Use the standard response handler to handle errors and responses
-            response = handle_api_response(response)
+            response = handle_api_response(api_call)
             if self._validate_deposit_availability(coin, network_name=network):
                 return response
             else:
                 logger.error(f"Deposit address is not available, got this response:")
                 raise Exception(f"Error for deposit address {response.status_code}: {response.text}")
         except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
             logger.error(f"{current_method_name} - Error fetching deposit address from Binance: {e}")
+            raise
+
+    def create_withdraw_request(self, coin: str, address: str, amount: float,
+                                network: Optional[str] = "LIGHTNING", wallet_type: Optional[int] = 0, **kwargs) -> Dict:
+        """
+        Submit a withdrawal request to Binance.
+
+        :param coin: The symbol of the cryptocurrency to withdraw (e.g., 'BTC').
+        :param address: The destination address for the withdrawal.
+        :param amount: The amount of cryptocurrency to withdraw.
+        :param network: Optional, the network to use for withdrawal.
+        :param wallet_type: The wallet type for withdraw，0-spot wallet ，1-funding wallet.
+        :param kwargs: Additional optional parameters (e.g., withdrawOrderId, addressTag, transactionFeeFlag, name).
+        :return: A dictionary containing the withdrawal request ID.
+        :raises Exception: If the request fails or the response contains an error.
+        """
+
+        if coin.upper() == "BTC":
+            fee = 0.000001  # From coins_info
+            amount += fee
+
+        # Make the API request
+        url = f"{self.BASE_URL}{self.ENDPOINTS['WITHDRAW_REQUEST']}"
+
+        def api_call():
+            params = {
+                "coin": coin,
+                "address": address,
+                "amount": amount,
+                "timestamp": int(time.time() * 1000),
+                "walletType": wallet_type
+            }
+
+            if network:
+                params["network"] = network
+
+            # Add additional optional parameters from kwargs
+            optional_fields = ["withdrawOrderId", "addressTag", "transactionFeeFlag", "name", "recvWindow"]
+            for field in optional_fields:
+                if field in kwargs:
+                    params[field] = kwargs[field]
+
+            # Sign the request
+            signed_params = self._sign_request(params)
+            headers = {"X-MBX-APIKEY": self.api_key}
+            response = requests.post(url, headers=headers, params=signed_params)
+            return response
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(api_call)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching withdrawal request from Binance: {e}")
+            raise
+
+    def new_order(self, base_currency: str, quote_currency: str, side: str, order_type: str,
+                  timestamp: Optional[int] = None,
+                  quantity: Optional[float] = None,
+                  price: Optional[float] = None,
+                  time_in_force: Optional[str] = None,
+                  stop_price: Optional[float] = None,
+                  iceberg_qty: Optional[float] = None,
+                  quote_order_qty: Optional[float] = None,
+                  new_client_order_id: Optional[str] = None,
+                  strategy_id: Optional[int] = None,
+                  strategy_type: Optional[int] = None,
+                  trailing_delta: Optional[int] = None,
+                  new_order_resp_type: Optional[str] = None,
+                  self_trade_prevention_mode: Optional[str] = None,
+                  recv_window: Optional[int] = None) -> Dict:
+        """
+        Create a new order on Binance using the specified parameters.
+
+        :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
+        :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
+        :param side: The side of the order (BUY or SELL).
+        :param order_type: The type of the order (LIMIT, MARKET, STOP_LOSS, etc.).
+        :param quantity: The quantity to buy or sell. (Optional, depends on order type).
+        :param price: The price for LIMIT orders. (Optional, depends on order type).
+        :param time_in_force: The time-in-force for LIMIT orders. (Optional, depends on order type).
+        :param stop_price: The stop price for stop-loss or take-profit orders. (Optional).
+        :param iceberg_qty: The quantity for iceberg orders. (Optional).
+        :param quote_order_qty: The quote asset quantity for MARKET orders. (Optional).
+        :param new_client_order_id: A unique client order ID. (Optional).
+        :param strategy_id: The strategy ID if applicable. (Optional).
+        :param strategy_type: The strategy type ID if applicable. (Optional).
+        :param trailing_delta: The trailing delta for stop loss and take profit. (Optional).
+        :param new_order_resp_type: The response type (ACK, RESULT, or FULL). (Optional).
+        :param self_trade_prevention_mode: Self trade prevention mode. (Optional).
+        :param recv_window: The receiving window for the request. (Optional).
+        :param timestamp: The timestamp for the request. (Required).
+        :return: The response from the exchange API as a dictionary.
+        """
+        timestamp = int(time.time() * 1000)
+
+        # Make the API request
+        url = f"{self.BASE_URL}{self.ENDPOINTS['NEW_ORDER']}"
+
+        def api_call():
+            symbol = base_currency.upper() + quote_currency.upper()
+            # Construct the query parameters
+            params = {
+                'symbol': symbol,
+                'side': side,
+                'type': order_type,
+                'timestamp': timestamp,
+            }
+
+            if quantity is not None:
+                params['quantity'] = quantity
+            if price is not None:
+                params['price'] = price
+            if time_in_force is not None:
+                params['timeInForce'] = time_in_force
+            if stop_price is not None:
+                params['stopPrice'] = stop_price
+            if iceberg_qty is not None:
+                params['icebergQty'] = iceberg_qty
+            if quote_order_qty is not None:
+                params['quoteOrderQty'] = quote_order_qty
+            if new_client_order_id is not None:
+                params['newClientOrderId'] = new_client_order_id
+            if strategy_id is not None:
+                params['strategyId'] = strategy_id
+            if strategy_type is not None:
+                params['strategyType'] = strategy_type
+            if trailing_delta is not None:
+                params['trailingDelta'] = trailing_delta
+            if new_order_resp_type is not None:
+                params['newOrderRespType'] = new_order_resp_type
+            if self_trade_prevention_mode is not None:
+                params['selfTradePreventionMode'] = self_trade_prevention_mode
+            if recv_window is not None:
+                params['recvWindow'] = recv_window
+
+            # Sign the request
+            signed_params = self._sign_request(params)
+            headers = {"X-MBX-APIKEY": self.api_key}
+            response = requests.post(url, headers=headers, params=signed_params)
+            return response
+        try:
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(api_call)
+        except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
+            logger.error(f"{current_method_name} - Error fetching new order request from Binance: {e}")
+            raise
+
+    def cancel_order(self, base_currency: str, quote_currency: str, order_id: int) -> Dict:
+        """
+        Cancel an order given its id.
+
+        :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
+        :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
+        :param order_id: identification of the order to cancel.
+
+        :return: The response from the exchange API as a dictionary.
+        """
+
+        url = f"{self.BASE_URL}{self.ENDPOINTS['NEW_ORDER']}"
+
+        def api_call():
+            symbol = base_currency.upper() + quote_currency.upper()
+            # Construct the query parameters
+            params = {
+                'symbol': symbol,
+                'orderId': order_id,
+            }
+
+            # Sign the request
+            signed_params = self._sign_request(params)
+            # Sign the request
+            headers = {"X-MBX-APIKEY": self.api_key}
+            response = requests.delete(url, headers=headers, params=signed_params)
+            return response
+
+        try:
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(api_call)
+        except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
+            logger.error(f"{current_method_name} - Error fetching cancel order request from Binance: {e}")
             raise
 
     def _validate_deposit_availability(self, coin: str, network_name: str) -> bool:
@@ -316,58 +557,6 @@ class BinanceProxy(BaseHighLiquidityExchange):
             logging.error("Error while creating LN invoice in BINANCE")
             return False
 
-    def create_withdraw_request(self, coin: str, address: str, amount: float,
-                                network: Optional[str] = "LIGHTNING", wallet_type: Optional[int] = 0, **kwargs) -> Dict:
-        """
-        Submit a withdrawal request to Binance.
-
-        :param coin: The symbol of the cryptocurrency to withdraw (e.g., 'BTC').
-        :param address: The destination address for the withdrawal.
-        :param amount: The amount of cryptocurrency to withdraw.
-        :param network: Optional, the network to use for withdrawal.
-        :param wallet_type: The wallet type for withdraw，0-spot wallet ，1-funding wallet.
-        :param kwargs: Additional optional parameters (e.g., withdrawOrderId, addressTag, transactionFeeFlag, name).
-        :return: A dictionary containing the withdrawal request ID.
-        :raises Exception: If the request fails or the response contains an error.
-        """
-
-        if coin.upper() == "BTC":
-            fee = 0.000001  # From coins_info
-            amount += fee
-
-        params = {
-            "coin": coin,
-            "address": address,
-            "amount": amount,
-            "timestamp": int(time.time() * 1000),
-            "walletType": wallet_type
-        }
-
-        if network:
-            params["network"] = network
-
-        # Add additional optional parameters from kwargs
-        optional_fields = ["withdrawOrderId", "addressTag", "transactionFeeFlag", "name", "recvWindow"]
-        for field in optional_fields:
-            if field in kwargs:
-                params[field] = kwargs[field]
-
-        # Sign the request
-        signed_params = self._sign_request(params)
-
-        # Make the API request
-        url = f"{self.BASE_URL}{self.ENDPOINTS['WITHDRAW_REQUEST']}"
-        headers = {"X-MBX-APIKEY": self.api_key}
-
-        current_method_name = inspect.currentframe().f_code.co_name
-        try:
-            response = requests.post(url, headers=headers, params=signed_params)
-            # Use the standard response handler to handle errors and responses
-            return handle_api_response(response)
-        except Exception as e:
-            logger.error(f"{current_method_name} - Error fetching withdrawal request from Binance: {e}")
-            raise
-
     def pay_ln_invoice(self, ln_invoice: str, amount: float,
                        wallet_type: Optional[int] = 0, **kwargs) -> Dict:
         """
@@ -388,171 +577,3 @@ class BinanceProxy(BaseHighLiquidityExchange):
                                             wallet_type=wallet_type,
                                             network=network)
 
-    def new_order(self, base_currency: str, quote_currency: str, side: str, order_type: str,
-                  timestamp: Optional[int] = None,
-                  quantity: Optional[float] = None,
-                  price: Optional[float] = None,
-                  time_in_force: Optional[str] = None,
-                  stop_price: Optional[float] = None,
-                  iceberg_qty: Optional[float] = None,
-                  quote_order_qty: Optional[float] = None,
-                  new_client_order_id: Optional[str] = None,
-                  strategy_id: Optional[int] = None,
-                  strategy_type: Optional[int] = None,
-                  trailing_delta: Optional[int] = None,
-                  new_order_resp_type: Optional[str] = None,
-                  self_trade_prevention_mode: Optional[str] = None,
-                  recv_window: Optional[int] = None) -> Dict:
-        """
-        Create a new order on Binance using the specified parameters.
-
-        :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
-        :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
-        :param side: The side of the order (BUY or SELL).
-        :param order_type: The type of the order (LIMIT, MARKET, STOP_LOSS, etc.).
-        :param quantity: The quantity to buy or sell. (Optional, depends on order type).
-        :param price: The price for LIMIT orders. (Optional, depends on order type).
-        :param time_in_force: The time-in-force for LIMIT orders. (Optional, depends on order type).
-        :param stop_price: The stop price for stop-loss or take-profit orders. (Optional).
-        :param iceberg_qty: The quantity for iceberg orders. (Optional).
-        :param quote_order_qty: The quote asset quantity for MARKET orders. (Optional).
-        :param new_client_order_id: A unique client order ID. (Optional).
-        :param strategy_id: The strategy ID if applicable. (Optional).
-        :param strategy_type: The strategy type ID if applicable. (Optional).
-        :param trailing_delta: The trailing delta for stop loss and take profit. (Optional).
-        :param new_order_resp_type: The response type (ACK, RESULT, or FULL). (Optional).
-        :param self_trade_prevention_mode: Self trade prevention mode. (Optional).
-        :param recv_window: The receiving window for the request. (Optional).
-        :param timestamp: The timestamp for the request. (Required).
-        :return: The response from the exchange API as a dictionary.
-        """
-        timestamp = int(time.time() * 1000)
-        symbol = base_currency.upper() + quote_currency.upper()
-        # Construct the query parameters
-        params = {
-            'symbol': symbol,
-            'side': side,
-            'type': order_type,
-            'timestamp': timestamp,
-        }
-
-        if quantity is not None:
-            params['quantity'] = quantity
-        if price is not None:
-            params['price'] = price
-        if time_in_force is not None:
-            params['timeInForce'] = time_in_force
-        if stop_price is not None:
-            params['stopPrice'] = stop_price
-        if iceberg_qty is not None:
-            params['icebergQty'] = iceberg_qty
-        if quote_order_qty is not None:
-            params['quoteOrderQty'] = quote_order_qty
-        if new_client_order_id is not None:
-            params['newClientOrderId'] = new_client_order_id
-        if strategy_id is not None:
-            params['strategyId'] = strategy_id
-        if strategy_type is not None:
-            params['strategyType'] = strategy_type
-        if trailing_delta is not None:
-            params['trailingDelta'] = trailing_delta
-        if new_order_resp_type is not None:
-            params['newOrderRespType'] = new_order_resp_type
-        if self_trade_prevention_mode is not None:
-            params['selfTradePreventionMode'] = self_trade_prevention_mode
-        if recv_window is not None:
-            params['recvWindow'] = recv_window
-
-        # Sign the request
-        signed_params = self._sign_request(params)
-
-        # Make the API request
-        url = f"{self.BASE_URL}{self.ENDPOINTS['NEW_ORDER']}"
-        headers = {"X-MBX-APIKEY": self.api_key}
-
-        try:
-            response = requests.post(url, headers=headers, params=signed_params)
-            # Use the standard response handler to handle errors and responses
-            return handle_api_response(response)
-        except Exception as e:
-            current_method_name = inspect.currentframe().f_code.co_name
-            logger.error(f"{current_method_name} - Error fetching new order request from Binance: {e}")
-            raise
-
-    def cancel_order(self, base_currency: str, quote_currency: str, order_id: int) -> Dict:
-        """
-        Cancel an order given its id.
-
-        :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
-        :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
-        :param order_id: identification of the order to cancel.
-
-        :return: The response from the exchange API as a dictionary.
-        """
-
-        symbol = base_currency.upper() + quote_currency.upper()
-        # Construct the query parameters
-        params = {
-            'symbol': symbol,
-            'orderId': order_id,
-        }
-
-        # Sign the request
-        signed_params = self._sign_request(params)
-
-        # Make the API request
-        url = f"{self.BASE_URL}{self.ENDPOINTS['NEW_ORDER']}"
-        headers = {"X-MBX-APIKEY": self.api_key}
-        current_method_name = inspect.currentframe().f_code.co_name
-        try:
-            response = requests.delete(url, headers=headers, params=signed_params)
-            # Use the standard response handler to handle errors and responses
-            return handle_api_response(response)
-        except Exception as e:
-            logger.error(f"{current_method_name} - Error fetching cancel order request from Binance: {e}")
-            raise
-
-    def get_price(self, base_currency: str, quote_currency: str) -> Dict:
-        """
-        Retrieve the price of an asset in a specified market.
-
-        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
-        :param quote_currency: The quote currency of the trading pair (e.g., 'USD').
-        :return: A dictionary containing the price information.
-        :raises Exception: If the API request fails.
-        """
-        symbol = base_currency.upper() + quote_currency.upper()
-
-        # Make the API request
-        url = f"{self.BASE_URL_PUBLIC}{self.ENDPOINTS['PRICE'].format(symbol)}"
-
-        current_method_name = inspect.currentframe().f_code.co_name
-        try:
-            response = requests.get(url)
-            # Use the standard response handler to handle errors and responses
-            return handle_api_response(response)
-        except Exception as e:
-            logger.error(f"{current_method_name} - Error fetching asset price from Binance: {e}")
-            raise
-
-    def get_market_info(self, base_currency: str, quote_currency: str) -> Dict:
-        """
-        Retrieve the market information of the market f'{base_currency.upper()}{quote_currency.upper()}'.
-
-        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
-        :param quote_currency: The quote currency of the trading pair (e.g., 'USDC').
-        :return: A dictionary containing the market information.
-        """
-        symbol = base_currency.upper() + quote_currency.upper()
-
-        # Make the API request
-        url = f"{self.BASE_URL_PUBLIC}{self.ENDPOINTS['MARKET'].format(symbol)}"
-
-        current_method_name = inspect.currentframe().f_code.co_name
-        try:
-            response = requests.get(url)
-            # Use the standard response handler to handle errors and responses
-            return handle_api_response(response)
-        except Exception as e:
-            logger.error(f"{current_method_name} - Error fetching market info  from Binance: {e}")
-            raise

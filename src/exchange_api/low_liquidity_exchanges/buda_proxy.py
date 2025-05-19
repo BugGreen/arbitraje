@@ -316,7 +316,7 @@ class BudaProxy(BaseLowLiquidityExchange):
             return response
 
         try:
-            return handle_api_response(api_call)
+            return self._translate_batch_response(handle_api_response(api_call))
         except Exception as e:
             current_method_name = inspect.currentframe().f_code.co_name
             logger.error(f"{current_method_name} - Error for BATCH CREATION request from Buda: {e}")

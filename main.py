@@ -28,20 +28,19 @@ def main() -> None:
 
     try:
 
-        # welcome_menu()
-        bot = ArbitrageBot(
-            exchange_high_liquidity='binance',
-            exchange_low_liquidity='buda',
-            price_diff_threshold=0.4,
-            mode='conservative',
-            base_currency='BTC',
-            quote_currency='USDC',
-        )
-        bot.exchange_low_liquidity.get_order_book("btc", "usdc")
+        welcome_menu()
+        # bot = ArbitrageBot(
+        #     exchange_high_liquidity='binance',
+        #     exchange_low_liquidity='buda',
+        #     price_diff_threshold=0.4,
+        #     mode='conservative',
+        #     base_currency='BTC',
+        #     quote_currency='USDC',
+        # )
         # arb_order = ArbitrageOrder(
         #     base_currency="BTC",
         #     quote_currency="USDC",
-        #     original_amount=2000,
+        #     original_amount=20,
         #     currency_of_interest=CurrencyOfInterest.QUOTE,
         #     order_type=OrderType.SELL_LIMIT
         # )

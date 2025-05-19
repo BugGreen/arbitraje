@@ -8,7 +8,7 @@ import os
 logger = logging.getLogger(__name__)
 
 
-def retry_with_exponential_backoff(func: Callable, max_retries=3, base_delay=2, max_delay=10) -> Dict[str, Any]:
+def retry_with_exponential_backoff(func: Callable, max_retries=4, base_delay=10, max_delay=240) -> Dict[str, Any]:
     """
     Retries a function call with exponential backoff.
 
@@ -66,8 +66,7 @@ def handle_api_response(func: Callable, retry_attempts: int = 3, backoff_base_de
             raise e  # Re-raise for retrying
 
     # Retry logic with exponential backoff
-    return retry_with_exponential_backoff(api_call, max_retries=retry_attempts, base_delay=backoff_base_delay)
-
+    return retry_with_exponential_backoff(api_call)
 
 
 def load_api_keys(exchange_name: str) -> Tuple[str, str]:

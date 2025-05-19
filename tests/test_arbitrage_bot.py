@@ -181,9 +181,8 @@ class TestArbitrageBot(unittest.TestCase):
         mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
 
         result = self.bot.split_order_into_suborders([arb_order, mock_order])
-        self.assertIsInstance(result, list)
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].get("code"), "ERROR_BELOW_MIN_TOTAL")  # First order is below min
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result.get("code"), "ERROR_BELOW_MIN_TOTAL")  # First order is below min
 
     def test_split_order_multiple(self):
         # Test multiple orders processing
