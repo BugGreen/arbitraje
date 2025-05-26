@@ -1151,6 +1151,7 @@ class ArbitrageBot:
         """
         logger.info("Waiting for %d sub-orders to transition out of 'received'...", len(received_orders))
         start_time = time.time()
+        stuck_in_received_state: bool = False  # Track if any order is stuck in 'received' state after max_wait_seconds
 
         if not isinstance(arb_orders, list):
             arb_orders = [arb_orders]
@@ -1160,20 +1161,25 @@ class ArbitrageBot:
         if not received_ids:
             return
 
+        iteration: int = 0
         while True:
             elapsed = time.time() - start_time
             if elapsed > max_wait_seconds:
+                iteration += 1
                 logger.warning(
-                    "Some sub-orders remained 'received' after %d seconds: %s",
-                    max_wait_seconds, received_ids
+                    """
+                    Some sub-orders remained could not be processed after %d seconds: %s.
+                    Iteration: %d.""",
+                    max_wait_seconds, received_ids, iteration
                 )
+                stuck_in_received_state = True
                 # break SE QUEDA EN UN LOOP INFINITO
 
             # Sleep briefly
             time.sleep(0.2)
 
             # 1. Retrieve updated states from the exchange
-            if not self.websocket_mode:
+            if not self.websocket_mode and not stuck_in_received_state:
                 states_response = self.exchange_low_liquidity.get_order_states(
                     arb_orders[0].base_currency,
                     arb_orders[0].quote_currency
@@ -1186,6 +1192,15 @@ class ArbitrageBot:
             for st in all_states:
                 st_id = st.get("id")
                 st_state = st.get("state")
+                if stuck_in_received_state and st_state not in ("traded", "canceled_and_traded", "pending", "canceled"):
+                    logger.error(
+                        """
+                        Sub-order %s is still in '%s' state after %d seconds. 
+                        _wait_for_orders_to_leave_received will keep polling.
+                        Full order info: %s
+                        """,
+                        st_id, st_state, max_wait_seconds, st
+                    )
 
                 if st_id in received_ids and st_state != "received":
                     # The sub-order has transitioned out of 'received'
@@ -1250,7 +1265,7 @@ class ArbitrageBot:
         """
 
         traded_amount = traded_quote_amount  # The traded amount is expressed in quote_currency, bcs usually it is FIAT
-        if new_state in ("traded", "canceled_and_traded", "pending", 'canceled') and traded_amount > 0:
+        if new_state in ("traded", "canceled_and_traded", "pending", "canceled") and traded_amount > 0:
             logger.info(
                 "Sub-order %s changed state to %s with traded_amount=%.4f. Updating ArbitrageOrder.",
                 sub_order_dict.get("id"), new_state, traded_amount

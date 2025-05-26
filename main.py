@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 file_handler = logging.FileHandler('arbitrage_log.txt')  # Log file path
 file_handler.setLevel(logging.DEBUG)  # Capture DEBUG level and above logs
 
-bot: ArbitrageBot = ArbitrageBot("binance", "buda", 0.1, "BTC", "COP")
-# response_cration= bot.exchange_low_liquidity.batch_creation([
+#bot: ArbitrageBot = ArbitrageBot("binance", "buda", 0.1, "BTC", "COP")
+# response_creation= bot.exchange_low_liquidity.batch_creation([
 #             {
 #                 "mode": "place",
 #                 "order": {
@@ -32,8 +32,9 @@ bot: ArbitrageBot = ArbitrageBot("binance", "buda", 0.1, "BTC", "COP")
 #                 }
 #             }
 #         ])
-deposit_address: str = "bc1qjcqxrx358434ewvyd3vg0cnz2nzps2f5z83wfe"
-bot.exchange_low_liquidity.create_withdraw_request("BTC_S", deposit_address, 0.0005550)
+# deposit_address: str = "bc1qjcqxrx358434ewvyd3vg0cnz2nzps2f5z83wfe"
+# bot.exchange_low_liquidity.create_withdraw_request("BTC_S", deposit_address, 0.0005550)
+
 
 def main() -> None:
     """
