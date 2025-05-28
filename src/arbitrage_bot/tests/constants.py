@@ -136,6 +136,191 @@ placed_sub_orders_to_execute_in_binance = [
             }
         ]
 
+placed_sub_orders_to_execute_in_binance_quote_profit = [
+            {
+                "id": 130000,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.2",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "5.0",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "200.0",
+                    "USDC"
+                ]
+            },
+            {
+                "id": 130001,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.8",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "0.0",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "0.0",
+                    "USDC"
+                ]
+            }
+        ]
+
+placed_sub_orders_to_execute_in_binance_buy_limit = [
+            {
+                "id": 130000,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.2",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "5.0",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "200.0",
+                    "USDC"
+                ]
+            },
+            {
+                "id": 130001,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.8",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "0.0",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "0.0",
+                    "USDC"
+                ]
+            }
+        ]
+
+placed_sub_orders_to_execute_in_binance_quote_no_profit = [
+            {
+                "id": 130000,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.2",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "5.0",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "200.0",
+                    "USDC"
+                ]
+            },
+            {
+                "id": 130001,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.8",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "0.0",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "0.0",
+                    "USDC"
+                ]
+            }
+        ]
+
+placed_sub_orders_to_execute_in_binance_quote_multiple_profit = [
+            {
+                "id": 130000,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.2",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "5.0",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "200.0",
+                    "USDC"
+                ]
+            },
+            {
+                "id": 130001,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.8",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "0.0",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "0.0",
+                    "USDC"
+                ]
+            }
+        ]
+
+placed_sub_orders_to_execute_in_binance_base_profit = [
+            {
+                "id": 130000,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.2",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "5.0",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "200.0",
+                    "USDC"
+                ]
+            },
+            {
+                "id": 130001,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.8",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "0.0",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "0.0",
+                    "USDC"
+                ]
+            }
+        ]
+
 placed_sub_orders_to_execute_in_binance_multiple_profit = [
             {
                 "id": 130000,

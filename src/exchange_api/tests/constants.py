@@ -75,6 +75,7 @@ expected_successful_batch_order_response = [
             }
         ]
 
+
 successful_batch_order_mock_response = {"orders_diff": [
                 {
                   "mode": "place",
@@ -257,6 +258,180 @@ successful_batch_order_states = {
   ]
 }
 
+successful_batch_order_states_pending = {
+  "orders": [
+    {
+      "id": 1306565374,
+      "uuid": "ab74839f-231a-4755-b69e-5c3c6033924e",
+      "market_id": "ETH-COP",
+      "account_id": 143870,
+      "type": "Bid",
+      "state": "pending",
+      "created_at": "2024-12-27T19:01:35.154Z",
+      "fee_currency": "ETH",
+      "price_type": "limit",
+      "source": "null",
+      "client_id": "null",
+      "message": "null",
+      "order_type": "gtc",
+      "expire_at": 0,
+      "limit": [
+        "10000000.0",
+        "COP"
+      ],
+      "amount": [
+        "0.0012",
+        "ETH"
+      ],
+      "original_amount": [
+        "0.0012",
+        "ETH"
+      ],
+      "traded_amount": [
+        "0.0",
+        "ETH"
+      ],
+      "total_exchanged": [
+        "12000.0",
+        "COP"
+      ],
+      "paid_fee": [
+        "0.0",
+        "ETH"
+      ],
+      "stop_price": "null"
+    },
+    {
+          "id": 1306565375,
+          "uuid": "ab74839f-231a-4755-b69e-5c3c6033924e",
+          "market_id": "ETH-COP",
+          "account_id": 143870,
+          "type": "Bid",
+          "state": "pending",
+          "created_at": "2024-12-27T19:01:35.154Z",
+          "fee_currency": "ETH",
+          "price_type": "limit",
+          "source": "null",
+          "client_id": "null",
+          "message": "null",
+          "order_type": "gtc",
+          "expire_at": 0,
+          "limit": [
+              "10000000.0",
+              "COP"
+          ],
+          "amount": [
+              "0.0012",
+              "ETH"
+          ],
+          "original_amount": [
+              "0.0012",
+              "ETH"
+          ],
+          "traded_amount": [
+              "0.0",
+              "ETH"
+          ],
+          "total_exchanged": [
+              "0.0",
+              "COP"
+          ],
+          "paid_fee": [
+              "0.0",
+              "ETH"
+          ],
+          "stop_price": "null"
+      }
+  ]
+}
+
+successful_batch_order_states_sub_orders_traded = {
+  "orders": [
+    {
+      "id": 1306565374,
+      "uuid": "ab74839f-231a-4755-b69e-5c3c6033924e",
+      "market_id": "ETH-COP",
+      "account_id": 143870,
+      "type": "Bid",
+      "state": "pending",
+      "created_at": "2024-12-27T19:01:35.154Z",
+      "fee_currency": "ETH",
+      "price_type": "limit",
+      "source": "null",
+      "client_id": "null",
+      "message": "null",
+      "order_type": "gtc",
+      "expire_at": 0,
+      "limit": [
+        "10000000.0",
+        "COP"
+      ],
+      "amount": [
+        "0.0012",
+        "ETH"
+      ],
+      "original_amount": [
+        "0.0012",
+        "ETH"
+      ],
+      "traded_amount": [
+        "0.0",
+        "ETH"
+      ],
+      "total_exchanged": [
+        "12000.0",
+        "COP"
+      ],
+      "paid_fee": [
+        "0.0",
+        "ETH"
+      ],
+      "stop_price": "null"
+    },
+    {
+          "id": 1306565375,
+          "uuid": "ab74839f-231a-4755-b69e-5c3c6033924e",
+          "market_id": "ETH-COP",
+          "account_id": 143870,
+          "type": "Bid",
+          "state": "pending",
+          "created_at": "2024-12-27T19:01:35.154Z",
+          "fee_currency": "ETH",
+          "price_type": "limit",
+          "source": "null",
+          "client_id": "null",
+          "message": "null",
+          "order_type": "gtc",
+          "expire_at": 0,
+          "limit": [
+              "10000000.0",
+              "COP"
+          ],
+          "amount": [
+              "0.0012",
+              "ETH"
+          ],
+          "original_amount": [
+              "0.0012",
+              "ETH"
+          ],
+          "traded_amount": [
+              "0.0",
+              "ETH"
+          ],
+          "total_exchanged": [
+              "0.0",
+              "COP"
+          ],
+          "paid_fee": [
+              "0.0",
+              "ETH"
+          ],
+          "stop_price": "null"
+      }
+  ]
+}
+
 partial_successful_batch_order = [
             {
                 "mode": "place",
@@ -334,6 +509,36 @@ partial_successful_batch_order_mock_response = {
                 }
             ]
         }
+
+partial_successful_batch_order_mock_response_pending = {
+            "orders_diff": [
+                {
+                    "mode": "place",
+                    "order": {
+                        "order": {
+                            "id": None,
+                            "state": "pending",
+                            "message": "insolvent",
+                            "amount": [
+                                "1.001000001",
+                                "ETH"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "mode": "place",
+                    "order": {
+                        "order": {
+                            "id": 1306566197,
+                            "state": "pending",
+                            "message": None
+                        }
+                    }
+                }
+            ]
+        }
+
 
 amount_less_than_minimum_order = [
             {
@@ -1344,7 +1549,7 @@ binance_withdrawal_usdc_response = {
     'id': '7b32ca91132c45ca929ded6cdcf8ac74'
 }
 
-buda_withdrawal_usdc_response = {
+buda_withdrawal_usdc_response: Dict = {
     'id': 'bgRpYj',
     'uuid': '31f9dccc-fc0a-41d7-80a1-47e634b91825',
     'state': 'executing',

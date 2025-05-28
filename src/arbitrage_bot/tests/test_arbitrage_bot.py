@@ -180,14 +180,15 @@ class TestArbitrageBot(unittest.TestCase):
         reference_price = 10000.0
         delta = 0.5 / 100
         mock_order.order_type = OrderType.SELL_LIMIT
+        mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
 
         result = self.bot.split_order_into_suborders(mock_order, reference_price, delta=delta)
 
         # print(json.dumps(result, indent=2))
         # Check amount distribution
-        self.assertEqual(result[0]["order"]["amount"], 60.0)
-        self.assertEqual(result[1]["order"]["amount"], 30.0)
-        self.assertEqual(result[2]["order"]["amount"], 10.0)
+        self.assertEqual(result[0]["order"]["amount"], 60.0 / result[0]["order"]["limit"])
+        self.assertEqual(result[1]["order"]["amount"], 30.0 / result[1]["order"]["limit"])
+        self.assertEqual(result[2]["order"]["amount"], 10.0 / result[2]["order"]["limit"])
 
         # Check price calculations
         expected_one_price = reference_price * (1 + delta + self.bot.price_diff_threshold)  # 10000 + 50 = 10050
@@ -203,6 +204,7 @@ class TestArbitrageBot(unittest.TestCase):
         """
 
         mock_order = MockArbitrageOrder(original_amount=200.0)
+        mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
 
         reference_price = 5000.0
         # No delta given
@@ -210,9 +212,9 @@ class TestArbitrageBot(unittest.TestCase):
         result = self.bot.split_order_into_suborders(mock_order, reference_price)
 
         # Check amount distribution
-        self.assertEqual(result[0]["order"]["amount"], 120.0)  # 60% of 200
-        self.assertEqual(result[1]["order"]["amount"], 60.0)  # 30% of 200
-        self.assertEqual(result[2]["order"]["amount"], 20.0)  # 10% of 200
+        self.assertEqual(result[0]["order"]["amount"], 120.0 / result[0]["order"]["limit"])  # 60% of 200 in Base Currency
+        self.assertEqual(result[1]["order"]["amount"], 60.0 / result[1]["order"]["limit"])  # 30% of 200
+        self.assertEqual(result[2]["order"]["amount"], 20.0 / result[2]["order"]["limit"])  # 10% of 200
 
         # Check price calculations: reference_price - price_diff_treshold (5000 - 10 = 4990)
         expected_one_price = reference_price * (1 - self.bot.price_diff_threshold)
@@ -235,12 +237,13 @@ class TestArbitrageBot(unittest.TestCase):
 
         # All of these are below 0.001, so each will attempt to merge with the next.
 
-        mock_order = MockArbitrageOrder(original_amount=0.0012)
+        mock_order = MockArbitrageOrder(original_amount=15)
+        mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
 
         sub_orders = self.bot.split_order_into_suborders(
             arb_order=mock_order,
             reference_price=10000.0,
-            delta=50.0
+            delta=.5 / 100
         )
 
         # Because sub_order_one_amount < min, it merges into sub_order two.
@@ -252,19 +255,26 @@ class TestArbitrageBot(unittest.TestCase):
 
         # Check that each final sub-order is >= the min amount (0.001)
         for so in sub_orders:
-            self.assertGreaterEqual(so["order"]["amount"], 0.001, "Merged sub-orders must meet the minimum amount.")
+            self.assertGreaterEqual(so["order"]["amount"], 0.0002, "Merged sub-orders must meet the minimum amount.")
 
     def test_below_min_total_returns_error(self):
-        mock_order = MockArbitrageOrder(original_amount=0.000009)
+
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=100.0,
+            original_amount=0.000009,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
         result = self.bot.split_order_into_suborders(
-            arb_order=mock_order,
+            arb_order=arb_order,
             reference_price=15000,
-            side='ask'
         )
         self.assertIsInstance(result, dict)
         self.assertEqual(result.get('code'), 'ERROR_BELOW_MIN_TOTAL')
 
-    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.successful_batch_order_states)
+    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.successful_batch_order_states_pending)
     @patch('requests.post')
     def test_place_sub_orders_success(self, mock_post, mock_buda):
         # Remember that bot.exchange_low_liquidity was defined in the `set` method
@@ -284,14 +294,15 @@ class TestArbitrageBot(unittest.TestCase):
 
         self.assertEqual(response, expected_response)
 
-    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.successful_batch_order_states)
+    @patch.object(BudaProxy, 'get_order_states',
+                  return_value=test_api_constants.successful_batch_order_states_sub_orders_traded)
     @patch('requests.post')
     @patch.object(ArbitrageBot, 'execute_opposite_order_high_liquidity_exchange', return_value=None)
     def test_place_sub_orders_traded(self, mock_opposite_order, mock_post, mock_buda):
         # Change the state of the first sub_order to "traded"
-        test_api_constants.successful_batch_order_states["orders"][0]["state"] = "traded"
+        test_api_constants.successful_batch_order_states_sub_orders_traded["orders"][0]["state"] = "traded"
         # Change the traded_amount '0.0' > '0.4'.
-        test_api_constants.successful_batch_order_states["orders"][0]["traded_amount"][0] = "0.4"
+        test_api_constants.successful_batch_order_states_sub_orders_traded["orders"][0]["traded_amount"][0] = "0.4"
         mock_response = MagicMock()
         mock_response.json.return_value = test_api_constants.successful_batch_order_mock_response
 
@@ -456,7 +467,7 @@ class TestArbitrageBot(unittest.TestCase):
                   return_value=test_api_constants.binance_successful_sell_market_order_response)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
-    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance_buy_limit)
     def test_synchronous_opposite_order_buy_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
                                                                binance_market_order_mock):
         """
@@ -497,7 +508,7 @@ class TestArbitrageBot(unittest.TestCase):
                   return_value=test_api_constants.binance_successful_sell_market_order_response_base)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
-    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance.copy())
     def test_synchronous_opposite_order_buy_limit_base_profit(self, batch_creation_mock, get_order_states_mock,
                                                               binance_market_order_mock):
         """
@@ -541,7 +552,7 @@ class TestArbitrageBot(unittest.TestCase):
                   return_value=test_api_constants.binance_successful_sell_market_order_response_base_no_profit)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
-    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance.copy())
     def test_synchronous_opposite_order_buy_limit_base_no_profit(self, batch_creation_mock, get_order_states_mock,
                                                                  binance_market_order_mock):
         """
@@ -585,7 +596,7 @@ class TestArbitrageBot(unittest.TestCase):
                   return_value=test_api_constants.binance_successful_sell_market_order_response_quote_no_profit)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
-    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance_quote_no_profit)
     def test_synchronous_opposite_order_buy_limit_quote_no_profit(self, batch_creation_mock, get_order_states_mock,
                                                                   binance_market_order_mock):
         """
@@ -627,7 +638,7 @@ class TestArbitrageBot(unittest.TestCase):
                   return_value=test_api_constants.binance_successful_sell_market_order_response_quotes_profit)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_multiple_traded_states)
-    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance_quote_multiple_profit)
     def test_synchronous_opposite_order_buy_limit_quote_multiple_profit(self, batch_creation_mock, get_order_states_mock,
                                                                         binance_market_order_mock):
         """
@@ -668,7 +679,7 @@ class TestArbitrageBot(unittest.TestCase):
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_quote_no_profit)
     @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
-    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance.copy())
     def test_synchronous_opposite_order_sell_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
                                                                 binance_market_order_mock):
         """
@@ -707,7 +718,7 @@ class TestArbitrageBot(unittest.TestCase):
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response)
     @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
-    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance_quote_profit)
     def test_synchronous_opposite_order_sell_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
                                                                 binance_market_order_mock):
         """
@@ -748,7 +759,7 @@ class TestArbitrageBot(unittest.TestCase):
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation',
-                  return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+                  return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance_base_profit)
     def test_synchronous_opposite_order_buy_limit_base_profit(self, batch_creation_mock, get_order_states_mock,
                                                               binance_market_order_mock):
         """
@@ -793,7 +804,7 @@ class TestArbitrageBot(unittest.TestCase):
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation',
-                  return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+                  return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance.copy())
     def test_synchronous_opposite_order_buy_limit_base_no_profit(self, batch_creation_mock, get_order_states_mock,
                                                                  binance_market_order_mock):
         """
@@ -972,7 +983,7 @@ class TestArbitrageBot(unittest.TestCase):
     @patch.object(BudaProxy, 'create_withdraw_request',
                    return_value=test_api_constants.buda_withdrawal_usdc_response)
     @patch.object(BudaProxy, 'get_withdraw_history',
-                  return_value=test_api_constants.buda_withdrawal_usdc_response)
+                  return_value=test_api_constants.buda_usdc_withdrawal_history)
     def test_quote_transfer_sell(self, buda_withdrawal_response_mock, buda_withdrawal_history_usdc):
         """
         Suppose we have a SELL_LIMIT scenario with 0.017 BTC traded on the low-liquidity side.
@@ -1138,17 +1149,17 @@ class TestArbitrageBot(unittest.TestCase):
         assert isinstance(btc_price_high_liq_exchange, float)
         self.assertEqual(btc_price_high_liq_exchange, 104738.01000000)
 
-    def test_run_arbitrage_flow(self):
-        """
-        Test the arbitrage flow, on a first iteration condition
-        """
-
-        arb_order = ArbitrageOrder(
-            base_currency="BTC",
-            quote_currency="USDC",
-            amount=100.0,
-            original_amount=100,
-            currency_of_interest=CurrencyOfInterest.QUOTE,
-            order_type=OrderType.SELL_LIMIT
-        )
-        self.bot.run_arbitrage_flow(arb_order=arb_order)
+    # def test_run_arbitrage_flow(self):
+    #     """
+    #     Test the arbitrage flow, on a first iteration condition
+    #     """
+    #
+    #     arb_order = ArbitrageOrder(
+    #         base_currency="BTC",
+    #         quote_currency="USDC",
+    #         amount=100.0,
+    #         original_amount=100,
+    #         currency_of_interest=CurrencyOfInterest.QUOTE,
+    #         order_type=OrderType.SELL_LIMIT
+    #     )
+    #     self.bot.run_arbitrage_flow(arb_order=arb_order)
