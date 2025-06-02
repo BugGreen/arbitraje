@@ -34,6 +34,8 @@ class ArbitrageOrder(Order):
         # High-liquidity side
         self.traded_amount_base_high_liquidity: float = 0.0
         self.traded_amount_quote_high_liquidity: float = 0.0
+        self.paid_fee_quote_currency_high_liquidity: float = 0.0
+
 
         # This accumulates how much has actually been executed on the high-liquidity side
 
@@ -104,22 +106,31 @@ class ArbitrageOrder(Order):
             self.pending_amount_low_liquidity = self.original_amount  # Initially the entire original amount is pending
             self.traded_base_amount_low_liquidity: float = 0.0
             self.traded_quote_amount_low_liquidity: float = 0.0
+            self.paid_fee_quote_currency_low_liquidity: float = 0.0
             # This is how much has actually been traded (sub-orders filled) on the low-liquidity exchange
 
             # High-liquidity side
             self.traded_amount_base_high_liquidity: float = 0.0
             self.traded_amount_quote_high_liquidity: float = 0.0
+            self.paid_fee_quote_currency_high_liquidity: float = 0.0
 
             if self.currency_of_interest == CurrencyOfInterest.QUOTE:
                 self.profit = Profit(0, self.quote_currency)
             if self.currency_of_interest == CurrencyOfInterest.BASE:
                 self.profit = Profit(0, self.base_currency)
 
-    def fulfill_high_liquidity(self, traded_quote_delta: float, traded_base_delta: float) -> None:
+    def fulfill_high_liquidity(self,
+                               traded_quote_delta: float,
+                               traded_base_delta: float,
+                               paid_fee: float) -> None:
         """
         Called after the high-liquidity side is traded. We reduce the pending amounts (expressed in quote and base
         currencies) by 'traded_quote_delta' and "traded_base_delta'.
         Then increase self.traded_amount_high_liquidity by the same.
+
+        :param traded_base_delta: The traded amount expressed in the base currency
+        :param traded_quote_delta: The traded amount expressed in the quote currency
+        :param paid_fee: The paid fee expressed in the quote currency
         """
         # Suppose we do not allow partial pending to remain.
         # But if partial is possible, you'd do a min operation
@@ -128,6 +139,7 @@ class ArbitrageOrder(Order):
 
         self.traded_amount_base_high_liquidity += traded_base_delta
         self.traded_amount_quote_high_liquidity += traded_quote_delta
+        self.paid_fee_quote_currency_high_liquidity += paid_fee
 
     def update_profit(self) -> None:
         """

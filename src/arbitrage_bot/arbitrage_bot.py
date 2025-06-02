@@ -495,13 +495,14 @@ class ArbitrageBot:
                 st_state = st.get("state")
                 base_currency_traded_amount = float(st.get("traded_amount", 0.0)[0])
                 quote_currency_traded_amount = float(st.get("total_exchanged", 0.0)[0])
-                paid_fee_info = float(st.get("paid_fee", 0.0)[0])
+                paid_fee = self._calculate_paid_fee_low_liquidity(so, arb_order)
 
                 self._update_arbitrage_order_on_fill(
                     sub_order_dict=so,
                     new_state=st_state,
                     traded_base_amount=base_currency_traded_amount,
                     traded_quote_amount=quote_currency_traded_amount,
+                    paid_fee=paid_fee,
                     arb_order=arb_order
                 )
 
@@ -518,7 +519,7 @@ class ArbitrageBot:
         return standardized_cancel_responses
 
     @staticmethod
-    def _calculate_paid_fee(order_state: Dict[str, str], arb_order: ArbitrageOrder) -> float:
+    def _calculate_paid_fee_low_liquidity(order_state: Dict[str, str], arb_order: ArbitrageOrder) -> float:
         """
         Uses the information of `order_state` and returns the paid fee expressed in the quote currency of
         `ArbitrageOrder`.
@@ -679,12 +680,14 @@ class ArbitrageBot:
                             # We'll fetch that and update `arb_order`.
                             base_currency_traded_amount = float(st.get("traded_amount", 0.0)[0])
                             quote_currency_traded_amount = float(st.get("total_exchanged", 0.0)[0])
+                            paid_fee = self._calculate_paid_fee_low_liquidity(st, arb_order)
 
                             self._update_arbitrage_order_on_fill(
                                 sub_order_dict=ro,
                                 new_state=st_state,
                                 traded_base_amount=base_currency_traded_amount,
                                 traded_quote_amount=quote_currency_traded_amount,
+                                paid_fee=paid_fee,
                                 arb_order=arb_order
                             )
 
@@ -695,8 +698,12 @@ class ArbitrageBot:
                 logger.info("All 'received' sub-orders transitioned to another state.")
                 break
 
-    def _update_arbitrage_order_on_fill(self, sub_order_dict: Dict[str, Any], new_state: str,
-                                        traded_base_amount: float, traded_quote_amount: float,
+    def _update_arbitrage_order_on_fill(self,
+                                        sub_order_dict: Dict[str, Any],
+                                        new_state: str,
+                                        traded_base_amount: float,
+                                        traded_quote_amount: float,
+                                        paid_fee: float,
                                         arb_order: 'ArbitrageOrder') -> None:
         """
         Update the ArbitrageOrder's dynamic attributes (e.g. traded_amount_low_liquidity,
@@ -708,6 +715,7 @@ class ArbitrageBot:
         of the base currency.
         :param traded_quote_amount: The float indicating how much was actually traded on the low-liquidity side
         of the qupte currency.
+        :param paid_fee: The paid fee expressed in the quote currency
         :param arb_order: The ArbitrageOrder object to update.
         """
 
@@ -721,7 +729,8 @@ class ArbitrageBot:
             # Recompute pending_amount_low_liquidity = original_amount - traded_amount_low_liquidity
             # Update the pending amount to trade in the high liquidity exchange
             arb_order.update_low_liquidity_traded(traded_quote_delta=traded_quote_amount,
-                                                  traded_base_delta=traded_base_amount)
+                                                  traded_base_delta=traded_base_amount,
+                                                  paid_fee=paid_fee)
             # If partial, we keep trying. If fully filled, we might see if pending_amount is close to zero.
             self.execute_opposite_order_high_liquidity_exchange(arb_order)
 
@@ -778,7 +787,8 @@ class ArbitrageBot:
             executed_base_qty = float(order_resp.get("executedQty", 0.0))
             execution_price = float(order_resp.get("fills", [0.0])[0].get("price", 0.0))
             executed_quote_qty = round(executed_base_qty * execution_price, 5)  # Turn it back to quote currency
-            arb_order.fulfill_high_liquidity(executed_quote_qty, executed_base_qty)
+            paid_fee = self._calculate_paid_fee_high_liquidity(order_resp, arb_order)
+            arb_order.fulfill_high_liquidity(executed_quote_qty, executed_base_qty, paid_fee)
             arb_order.update_profit()  # TODO: se puede hacer metodo privado y encapsularlo en fulfull_high_liquidity
 
             return order_resp
@@ -786,6 +796,33 @@ class ArbitrageBot:
         except Exception as e:
             logger.error("Error placing order on high-liquidity exchange: %s", e, exc_info=True)
             return {"code": -9999, "msg": str(e)}
+
+    @staticmethod
+    def _calculate_paid_fee_high_liquidity(order_state: Dict[str, str], arb_order: ArbitrageOrder) -> float:
+        """
+        Uses the information of `order_state` and returns the paid fee in the high liquidity exchange expressed in the
+         quote currency of `ArbitrageOrder`.
+        WARNING: Currently only works for BINANCE responses.
+
+        :param order_state: state of a traded order.
+        :param arb_order: An ArbitrageOrder object with the quote currency information
+        :return: Float representing the paid fee expressed in quote currency
+        """
+        quote_currency = arb_order.quote_currency
+        trade_info: Dict[str, Any] = order_state.get('fills', [{}])[0]
+
+        paid_fee: float = float(trade_info.get("commission", 0))
+        paid_fee_currency: str = trade_info.get("commissionAsset", "")
+
+        if paid_fee_currency.upper() == quote_currency:
+            return paid_fee
+        elif paid_fee_currency.upper() == arb_order.base_currency:
+            limit_price = float(trade_info.get("price", 0))
+            return limit_price * paid_fee
+        else:
+            logger.error("paid_fee_currency does not belong to base or quote currency of ArbitrageBot, "
+                         "instead: {}".format(paid_fee_currency))
+            return 0
 
     def funds_transfer(self, arb_order: 'ArbitrageOrder') -> bool:
         """

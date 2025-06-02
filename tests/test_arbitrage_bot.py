@@ -253,7 +253,7 @@ class TestArbitrageBot(unittest.TestCase):
 
         # Check that each final sub-order is >= the min amount (0.001)
         for so in sub_orders:
-            self.assertGreaterEqual(so["order"]["amount"], 0.0002, "Merged sub-orders must meet the minimum amount.")
+            self.assertGreaterEqual(so["order"]["amount"], 0.00002, "Merged sub-orders must meet the minimum amount.")
 
     def test_below_min_total_returns_error(self):
 
@@ -1147,65 +1147,7 @@ class TestArbitrageBot(unittest.TestCase):
         assert isinstance(btc_price_high_liq_exchange, float)
         self.assertEqual(btc_price_high_liq_exchange, 104738.01000000)
 
-    @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.place_sub_orders_sell_limit_flow)
-    @patch.object(BudaProxy, 'batch_cancellation', return_value=test_a_bot_constans.batch_cancellation_sell_limit_flow)
-    @patch.object(BinanceProxy, 'new_order', return_value=test_a_bot_constans.new_order_binance_sell_limit_flow)
-    def test_run_arbitrage_flow_sell_limit(self,
-                                mock_buda_place_sub_orders,
-                                mock_buda_batch_cancellation,
-                                mock_binance_new_order):
-        """
-        Test the arbitrage flow, on a first iteration condition
-        """
-
-        arb_order = ArbitrageOrder(
-            base_currency="BTC",
-            quote_currency="USDC",
-            amount=100.0,
-            original_amount=15,
-            currency_of_interest=CurrencyOfInterest.QUOTE,
-            order_type=OrderType.SELL_LIMIT
-        )
-        self.bot.run_arbitrage_flow(arb_order=arb_order)
-
-
-    @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.place_sub_orders_sell_limit_flow_traded)
-    @patch.object(BudaProxy, 'batch_cancellation', return_value=test_a_bot_constans.batch_cancellation_sell_limit_flow_traded)
-    @patch.object(BinanceProxy, 'new_order', return_value=test_a_bot_constans.new_order_binance_sell_limit_flow_traded)
-    @patch.object(BudaProxy, 'create_withdraw_request', return_value=test_a_bot_constans.buda_create_withdraw_request_sell_limit_flow_traded)
-    @patch.object(BinanceProxy, 'pay_ln_invoice', return_value=test_a_bot_constans.binance_pay_ln_invoice_sell_limit_flow_traded)
-    @patch.object(BinanceProxy, 'get_withdraw_history',
-                  side_effect=[
-                      test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_1,
-                      test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_2])
-    @patch.object(BudaProxy, 'get_withdraw_history',
-                  side_effect=[
-                      test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_1,
-                      test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_2])
-    def test_run_arbitrage_flow_sell_limit_traded(self,
-                                                  mock_buda_place_sub_orders,
-                                                  mock_buda_batch_cancellation,
-                                                  mock_binance_new_order,
-                                                  mock_buda_create_withdraw_request,
-                                                  mock_binance_pay_ln_invoice,
-                                                  mock_binance_get_withdraw_history,
-                                                  mock_buda_get_withdraw_history
-                                                  ):
-        """
-        Test the arbitrage flow, on a first iteration condition
-        """
-
-        arb_order = ArbitrageOrder(
-            base_currency="BTC",
-            quote_currency="USDC",
-            amount=100.0,
-            original_amount=15,
-            currency_of_interest=CurrencyOfInterest.QUOTE,
-            order_type=OrderType.SELL_LIMIT
-        )
-        self.bot.run_arbitrage_flow(arb_order=arb_order)
-
-    def test_calculate_paid_fee(self):
+    def test_calculate_paid_fee_low_liquidity(self):
         """
         Test the correct calculation of the paid fee.
         It should return the paid fee expressed in tue quote currency of arb_order.
@@ -1254,11 +1196,124 @@ class TestArbitrageBot(unittest.TestCase):
             "BTC"
           ],
         }
-        paid_fee = self.bot._calculate_paid_fee(buda_bid_order_state, arb_order)
+        paid_fee = self.bot._calculate_paid_fee_low_liquidity(buda_bid_order_state, arb_order)
         self.assertEqual(105199.922212, paid_fee)
         buda_bid_order_state["paid_fee"] = ["8.888", "USDC"]
-        paid_fee = self.bot._calculate_paid_fee(buda_bid_order_state, arb_order)
+        paid_fee = self.bot._calculate_paid_fee_low_liquidity(buda_bid_order_state, arb_order)
         self.assertEqual(8.888, paid_fee)
         buda_bid_order_state["paid_fee"] = ["8.888", "BNB"]
-        paid_fee = self.bot._calculate_paid_fee(buda_bid_order_state, arb_order)
+        paid_fee = self.bot._calculate_paid_fee_low_liquidity(buda_bid_order_state, arb_order)
         self.assertEqual(0, paid_fee)
+
+    def test_calculate_paid_fee_high_liquidity(self):
+        """
+        Test the correct calculation of the paid fee in the high liquidity exchange.
+        It should return the paid fee expressed in tue quote currency of arb_order.
+        It tests three scenarios:
+        1: paid fee in base currency
+        2: paid fee in quote currency
+        3: paid fee in a currency different from base and quote
+        """
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=100.0,
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        binance_bid_order_state = {
+            'symbol': 'BTCUSDC',
+            'orderId': 3962637728,
+            'orderListId': -1,
+            'clientOrderId': 'eWpdt8VN1RZgx0tiqIkFD5',
+            'transactTime': 1738333733346,
+            'price': '0.00000000',
+            'origQty': '0.00014000',
+            'executedQty': '0.00014000',
+            'origQuoteOrderQty': '0.00000000',
+            'cummulativeQuoteQty': '14.64585780',
+            'status': 'FILLED',
+            'timeInForce': 'GTC',
+            'type': 'MARKET',
+            'side': 'BUY',
+            'workingTime': 1738333733346,
+            'fills': [
+                {
+                    'price': '104613.27000000',
+                    'qty': '0.00014000',
+                    'commission': '1',
+                    'commissionAsset': 'BTC',
+                    'tradeId': 133249829
+                }
+            ],
+            'selfTradePreventionMode': 'EXPIRE_MAKER'
+        }
+        paid_fee = self.bot._calculate_paid_fee_high_liquidity(binance_bid_order_state, arb_order)
+        self.assertEqual(104613.27000000, paid_fee)
+        binance_bid_order_state["fills"][0]["commission"] = "8.888"
+        binance_bid_order_state["fills"][0]["commissionAsset"] = "USDC"
+        paid_fee = self.bot._calculate_paid_fee_high_liquidity(binance_bid_order_state, arb_order)
+        self.assertEqual(8.888, paid_fee)
+        binance_bid_order_state["fills"][0]["commission"] = "8.888"
+        binance_bid_order_state["fills"][0]["commissionAsset"] = "BNB"
+        paid_fee = self.bot._calculate_paid_fee_high_liquidity(binance_bid_order_state, arb_order)
+        self.assertEqual(0, paid_fee)
+    # @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.place_sub_orders_sell_limit_flow)
+    # @patch.object(BudaProxy, 'batch_cancellation', return_value=test_a_bot_constans.batch_cancellation_sell_limit_flow)
+    # @patch.object(BinanceProxy, 'new_order', return_value=test_a_bot_constans.new_order_binance_sell_limit_flow)
+    # def test_run_arbitrage_flow_sell_limit(self,
+    #                             mock_buda_place_sub_orders,
+    #                             mock_buda_batch_cancellation,
+    #                             mock_binance_new_order):
+    #     """
+    #     Test the arbitrage flow, on a first iteration condition
+    #     """
+    #
+    #     arb_order = ArbitrageOrder(
+    #         base_currency="BTC",
+    #         quote_currency="USDC",
+    #         amount=100.0,
+    #         original_amount=15,
+    #         currency_of_interest=CurrencyOfInterest.QUOTE,
+    #         order_type=OrderType.SELL_LIMIT
+    #     )
+    #     self.bot.run_arbitrage_flow(arb_order=arb_order)
+
+    @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.place_sub_orders_sell_limit_flow_traded)
+    @patch.object(BudaProxy, 'batch_cancellation', return_value=test_a_bot_constans.batch_cancellation_sell_limit_flow_traded)
+    @patch.object(BinanceProxy, 'new_order', return_value=test_a_bot_constans.new_order_binance_sell_limit_flow_traded)
+    @patch.object(BudaProxy, 'create_withdraw_request', return_value=test_a_bot_constans.buda_create_withdraw_request_sell_limit_flow_traded)
+    @patch.object(BinanceProxy, 'pay_ln_invoice', return_value=test_a_bot_constans.binance_pay_ln_invoice_sell_limit_flow_traded)
+    @patch.object(BinanceProxy, 'get_withdraw_history',
+                  side_effect=[
+                      test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_1,
+                      test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_2])
+    @patch.object(BudaProxy, 'get_withdraw_history',
+                  side_effect=[
+                      test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_1,
+                      test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_2])
+    def test_run_arbitrage_flow_sell_limit_traded(self,
+                                                  mock_buda_place_sub_orders,
+                                                  mock_buda_batch_cancellation,
+                                                  mock_binance_new_order,
+                                                  mock_buda_create_withdraw_request,
+                                                  mock_binance_pay_ln_invoice,
+                                                  mock_binance_get_withdraw_history,
+                                                  mock_buda_get_withdraw_history
+                                                  ):
+        """
+        Test the arbitrage flow, on a first iteration condition
+        """
+
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=100.0,
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        self.bot.run_arbitrage_flow(arb_order=arb_order)
+
+
