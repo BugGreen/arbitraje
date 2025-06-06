@@ -593,33 +593,26 @@ class ArbitrageBot:
         return valid_sub_orders
 
     # TODO: HACER LA LOGICA MAS GENERAL CUANDO SE INCORPOREN MAS LOW LIQUIDITY EXCHANGES
-    def split_order_into_suborders(
-            self,
-            arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]],
-            delta: Optional[float] = None
-    ) -> Union[Any, List[Any]]:
+    def split_order_into_suborders(self, arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]],
+                                   delta: Optional[float] = None) -> Union[Any, List[Any]]:
         """
-        Split the given `ArbitrageOrder`(s) original_amount into multiple sub-orders,
-        taking `reference_price` as a base for setting limit prices.
+        Splits the given ArbitrageOrder's original amount into multiple sub-orders for one or more ArbitrageOrder instances.
 
-        :param arb_orders: An `ArbitrageOrder` instance or a list of them whose `original_amount` will be splitted.
+        :param arb_orders: A single ArbitrageOrder or a list of ArbitrageOrder instances.
         :param delta: Optional delta to adjust the price.
-        :return: A list of dicts with the structure:
-                 [
-                    {"mode": "place", "order": {...}},
-                    {"mode": "place", "order": {...}},
-                    {"mode": "place", "order": {...}}
-                 ] for each arbitrage order
+        :return: A list of sub-orders or an error dictionary if any of the orders have an amount below the minimum allowed.
         """
-        # Check if we're dealing with multiple orders
         if isinstance(arb_orders, list):
             results = []
             for arb_order in arb_orders:
-                results.append(self._split_order_for_single(arb_order, delta))
-            return results
+                result = self._split_order_for_single(arb_order, delta)
+                if isinstance(result, dict) and "code" in result and result["code"] == "ERROR_BELOW_MIN_TOTAL":
+                    logger.error("Order amount below minimum for %s: %s", arb_order, result)
+                    return [result]  # Return early on failure for any order in the list
+                results.append(result)
+            return results  # Return the list of sub-orders for all valid orders
 
-        # Handle the case for a single arbitrage order
-        return self._split_order_for_single(arb_orders, delta)
+        return self._split_order_for_single(arb_orders, delta)  # Handle single order
 
     def _split_order_for_single(
             self,

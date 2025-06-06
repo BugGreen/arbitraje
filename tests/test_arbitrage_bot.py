@@ -154,6 +154,26 @@ class TestArbitrageBot(unittest.TestCase):
             order_type=OrderType.BUY_LIMIT
         )
 
+    def test_split_order_below_minimum_multiple(self):
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        arb_order.price_reference = 10000.0
+        mock_order = MockArbitrageOrder(original_amount=100.0)
+        mock_order.pending_amount_low_liquidity: float = 0.000001
+        mock_order.price_reference = 10000.0
+        mock_order.order_type = OrderType.BUY_LIMIT
+        mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
+
+        result = self.bot.split_order_into_suborders([arb_order, mock_order])
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].get("code"), "ERROR_BELOW_MIN_TOTAL")  # First order is below min
+
     def test_split_order_multiple(self):
         # Test multiple orders processing
         arb_order = ArbitrageOrder(
@@ -166,7 +186,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order.price_reference = 10000.0
         mock_order = MockArbitrageOrder(original_amount=100.0)
         mock_order.price_reference = 10000.0
-        delta = 0.5 / 100
         mock_order.order_type = OrderType.BUY_LIMIT
         mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
 
@@ -271,6 +290,7 @@ class TestArbitrageBot(unittest.TestCase):
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
         )
+        arb_order.price_reference: float = 100
         result = self.bot.split_order_into_suborders(
             arb_orders=arb_order
         )
