@@ -281,3 +281,42 @@ def test_new_order_market(mock_post):
     assert response['order']['amount'][1] == 'BTC'
 
 
+@patch("requests.put")
+def test_cancel_order_success(mock_put):
+    # Mocking the response from the Buda API
+    expected_response = {
+        "amount": ["0.05", "BTC"],
+        "created_at": "2023-10-28T19:54:24.611Z",
+        "fee_currency": "BTC",
+        "id": 12345,
+        "client_id": "my-order-1",
+        "limit": ["1000000.0", "CLP"],
+        "market_id": "btc-clp",
+        "original_amount": ["0.05", "BTC"],
+        "paid_fee": ["0.0", "BTC"],
+        "price_type": "limit",
+        "order_type": "gtc",
+        "state": "canceling",  # This state indicates the order is being canceled
+        "total_exchanged": ["0.0", "CLP"],
+        "traded_amount": ["0.0", "BTC"],
+        "type": "Bid"
+    }
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = expected_response
+    mock_put.return_value = mock_response
+
+    # Instance of BudaProxy
+    buda = BudaProxy()
+    buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
+
+    # Call the cancel_order method
+    response = buda.cancel_order(base_currency="btc", quote_currency="clp", order_id=12345)
+
+    # Assert the response data
+    assert response['state'] == "canceling"
+    assert response['id'] == 12345
+    assert response['amount'] == ["0.05", "BTC"]
+    assert response['market_id'] == "btc-clp"
+    assert response['type'] == "Bid"

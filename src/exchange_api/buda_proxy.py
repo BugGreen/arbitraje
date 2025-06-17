@@ -26,7 +26,8 @@ class BudaProxy(BaseExchange):
     ENDPOINTS = {
         "LIGHTNING_INVOICE": "/api/v2/lightning_network_invoices",
         "LIGHTNING_WITHDRAWAL": "/api/v2/reserves/ln-btc/withdrawals",
-        "NEW_ORDER": "/api/v2/markets/{}/orders"
+        "NEW_ORDER": "/api/v2/markets/{}/orders",
+        "CANCEL_ORDER": "/api/v2/orders/{}",
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -210,4 +211,31 @@ class BudaProxy(BaseExchange):
         return response.json()
 
     def cancel_order(self, base_currency: str, quote_currency: str, order_id: int) -> Dict:
-        pass
+        """
+        Cancel an existing order on Buda exchange.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'btc' in 'btc-clp').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'clp' in 'btc-clp').
+        :param order_id: The ID of the order to be canceled.
+        :return: The response from the exchange API as a dictionary containing order details after cancellation.
+        """
+
+        market_id = "-".join([base_currency.lower(), quote_currency.lower()])
+
+        # Define the endpoint path for canceling the order
+        endpoint_path = self.ENDPOINTS["CANCEL_ORDER"].format(order_id)
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Prepare the request payload to cancel the order
+        payload = {
+            'state': 'canceling'  # Must indicate that the order is in the process of being canceled
+        }
+
+        # Sign the request
+        headers = self._sign_request(method="PUT", path=endpoint_path, body=payload)
+
+        # Make the API call to cancel the order
+        response = requests.put(url, headers=headers, json=payload)
+
+        # Return the response as a dictionary
+        return response.json()

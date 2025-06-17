@@ -30,6 +30,7 @@ def test_binance_get_coin_info():
         assert coin_info == expected_response
         mock_get.assert_called_once()
 
+
 def test_binance_supports_lightning_network():
     """
     Test the supports_lightning_network method of BinanceProxy.
