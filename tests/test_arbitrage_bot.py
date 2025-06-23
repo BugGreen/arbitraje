@@ -140,7 +140,6 @@ class TestArbitrageBot(unittest.TestCase):
             exchange_high_liquidity='binance',
             exchange_low_liquidity='buda',
             price_diff_threshold=0.4,
-            mode='conservative',
             base_currency='ETH',
             quote_currency='COP',
         )

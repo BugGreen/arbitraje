@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class ArbitrageBot:
     def __init__(self, exchange_high_liquidity: str, exchange_low_liquidity: str, price_diff_threshold: float,
-                 base_currency: str, quote_currency: str, mode: Optional[str] = 'conservative'):
+                 base_currency: str, quote_currency: str):
         """
         Initializes the arbitrage bot with the specified exchanges, price difference threshold,
         and mode for order execution.
@@ -39,7 +39,6 @@ class ArbitrageBot:
         self.exchange_high_liquidity: BaseHighLiquidityExchange = self._create_exchange(exchange_high_liquidity)
         self.exchange_low_liquidity: BaseLowLiquidityExchange = self._create_exchange(exchange_low_liquidity)
         self.price_diff_threshold: float = price_diff_threshold / 100
-        self.mode: str = mode
         self.base_currency: str = base_currency  # To deprecate
         self.quote_currency: str = quote_currency  # To deprecate
         self.currency_of_interest: CurrencyOfInterest = CurrencyOfInterest.QUOTE  # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)

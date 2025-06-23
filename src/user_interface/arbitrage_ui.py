@@ -219,44 +219,28 @@ def welcome_menu() -> None:
     """
     from src.arbitrage_bot.arbitrage_bot import ArbitrageBot
 
-    initialization_values = encoders.initialization_values
+    market_values: Dict[str, Any] = encoders.market_values
     console = Console()
 
     console.print("[bold cyan]Welcome to the Arbitrage Bot Setup[/bold cyan]", style="bold green")
-    display_initiation_values_table(initialization_values, console, default_values_mode=True)
+    # display_initiation_values_table(initialization_values, console, default_values_mode=True)
+    #
+    # default_values = Confirm.ask("Do you want to use the default values?")
 
-    default_values = Confirm.ask("Do you want to use the default values?")
+    arb_bot: ArbitrageBot = create_arb_bot_object(console, market_values)
+    order_side: str = market_values.get("Side", "")
+    market: str = market_values.get("Market", "BTC-USDC")
+    mode: str = market_values.get("Mode")
+    arb_orders: List[ArbitrageOrder] = create_arb_orders(console, mode=mode, side=order_side, market=market)
 
-    initialization_values = initialization_values if default_values \
-        else set_initialization_values(console, initialization_values)
-
-    # Create the ArbitrageBot with user inputs
-    bot = ArbitrageBot(
-        exchange_high_liquidity=initialization_values.get("E. High Liquidity"),
-        exchange_low_liquidity=initialization_values.get("E. Low Liquidity"),
-        price_diff_threshold=initialization_values.get("P. Difference"),
-        mode=initialization_values.get("Mode"),
-        base_currency=initialization_values.get("Base Currency"),
-        quote_currency=initialization_values.get("Quote Currency"),
-    )
-
-    # Create the ArbitrageOrder with user-defined parameters
-    arb_order = ArbitrageOrder(
-        base_currency=initialization_values.get("Base Currency"),
-        quote_currency=initialization_values.get("Quote Currency"),
-        original_amount=initialization_values.get("Amount"),
-        currency_of_interest=CurrencyOfInterest.QUOTE,
-        order_type=OrderType.SELL_LIMIT
-    )
-
-    frozen_amounts: bool = display_balances(bot, arb_order, console)
+    frozen_amounts: bool = display_balances(arb_bot, arb_orders[0], console)
 
     if frozen_amounts:
         cancel_orders = Confirm.ask("Do you want to cancel the frozen amounts?")
         if cancel_orders:
 
-            cancel_all_orders(bot, arb_order)
-            display_balances(bot, arb_order, console)
+            cancel_all_orders(arb_bot, arb_orders[0])
+            display_balances(arb_bot, arb_orders[0], console)
             continue_with_current_balance = Confirm.ask("This is your current Balance, do you want to continue?")
             if not continue_with_current_balance:
                 welcome_menu()
@@ -266,7 +250,100 @@ def welcome_menu() -> None:
             welcome_menu()
 
     # Start the arbitrage flow
-    bot.run_arbitrage_flow(arb_orders=arb_order)
+    arb_bot.run_arbitrage_flow(arb_orders=arb_orders)
+
+
+def set_market_initialization_values(console: Console, market_initiation_values: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Change the market initialization values via input
+
+    :param console: Console object from Rich
+    :param market_initiation_values: Dict containing the market initialization values
+    :return: Dict with the modified initialization values
+    """
+    console.print("Please define the following parameters to begin.")
+
+    # Market Symbol
+    market_symbol: str = Prompt.ask(
+        "Select the market",
+        choices=["BTC-USDC"],  # Example list, modify as needed.initialization_values'
+        default="BTC-USDC"
+    )
+    market_initiation_values["Market"] = market_symbol
+    display_initiation_values_table(market_initiation_values, console)
+
+    # High Liquidity Exchange
+    exchange_high = Prompt.ask(
+        "Select the high liquidity exchange",
+        choices=["binance"],  # Example list, modify as needed
+        default="binance"
+    )
+    market_initiation_values["E. High Liquidity"] = exchange_high
+    display_initiation_values_table(market_initiation_values, console)
+
+    # Low Liquidity Exchange
+    exchange_low = Prompt.ask(
+        "Select low liquidity exchange",
+        choices=["buda"],  # Example list, modify as needed
+        default="buda"
+    )
+    market_initiation_values["E. Low Liquidity"] = exchange_low
+    display_initiation_values_table(market_initiation_values, console)
+
+    # Price Difference Threshold
+    price_diff_threshold: float = float(Prompt.ask(
+        "Enter price difference threshold (e.g., 0.4)",
+        default=0.4)
+    )
+    market_initiation_values["P. Difference"] = price_diff_threshold
+    display_initiation_values_table(market_initiation_values, console)
+
+    # Mode
+    mode = Prompt.ask(
+        "Enter trading mode 0: 'ONE_SIDE' 1: 'BOTH_SIDES'",
+        choices=["0", "1"],
+        default="0"
+    )
+    if mode == "0":
+        market_initiation_values["Mode"] = "ONE_SIDE"
+        # SIDE
+        side = Prompt.ask(
+            "Enter the trading side 0: 'SELL_LIMIT' 1: 'BUY_LIMIT'",
+            choices=["0", "1"],
+            default="0"
+        )
+        market_initiation_values["Side"] = 'SELL_LIMIT' if side == "0" else "BUY_LIMIT"
+    else:
+        market_initiation_values["Mode"] = "BOTH_SIDES"
+        del market_initiation_values["Side"]
+
+    display_initiation_values_table(market_initiation_values, console)
+
+    return market_initiation_values
+
+
+def create_arb_bot_object(console: Console, market_initiation_values: [str, Any]) -> "ArbitrageBot":
+
+    from src.arbitrage_bot.arbitrage_bot import ArbitrageBot
+
+    display_initiation_values_table(market_initiation_values, console, default_values_mode=True)
+    default_values = Confirm.ask("Do you want to use the Market values?")
+    market_initiation_values: Dict[str, Any] = market_initiation_values if default_values \
+        else set_market_initialization_values(console, market_initiation_values)
+
+    market_symbol: List[str] = market_initiation_values.get("Market", "BTC-USDC").split("-")
+    base_currency: str = market_symbol[0]
+    quote_currency: str = market_symbol[1]
+
+    arb_bot: ArbitrageBot = ArbitrageBot(
+        exchange_high_liquidity=market_initiation_values.get("E. High Liquidity"),
+        exchange_low_liquidity=market_initiation_values.get("E. Low Liquidity"),
+        price_diff_threshold=market_initiation_values.get("P. Difference"),
+        base_currency=base_currency,
+        quote_currency=quote_currency,
+    )
+
+    return arb_bot
 
 
 def cancel_all_orders(bot: "ArbitrageBot", arb_order: ArbitrageOrder) -> None:
@@ -385,6 +462,127 @@ def append_initiation_values(initiation_values_table: Table, initiation_values: 
         if isinstance(value, (float, int)):
             value = f"{value:.2f}"
         initiation_values_table.add_row(attr, value)
+
+
+def one_side_order_creation(
+        console: Console,
+        market: str = "BTC-USDC"
+) -> ArbitrageOrder:
+
+    arb_order_one_side_default: Dict[str, Any] = encoders.arb_oder_sell_limit_values
+    display_initiation_values_table(arb_order_one_side_default, console, default_values_mode=True)
+    default_values = Confirm.ask(f"Do you want to use the default Arbitrage Order values?")
+
+    if default_values:
+
+        market_symbol: List[str] = market.split("-")
+        base_currency: str = market_symbol[0]
+        quote_currency: str = market_symbol[1]
+        currency_of_interest: CurrencyOfInterest = CurrencyOfInterest.QUOTE if \
+            arb_order_one_side_default.get("Quote Currency") == "QUOTE" else CurrencyOfInterest.BASE
+        order_type: OrderType = OrderType.SELL_LIMIT if \
+            arb_order_one_side_default.get("Order Type") == "SELL_LIMIT" else OrderType.BUY_LIMIT
+
+        arb_order: ArbitrageOrder = ArbitrageOrder(
+            base_currency=base_currency,
+            quote_currency=quote_currency,
+            original_amount=arb_order_one_side_default.get("Amount"),
+            currency_of_interest=currency_of_interest,
+            order_type=order_type
+        )
+    else:
+        order_type: str = Prompt.ask(
+            "Select the side 0: 'SELL_LIMIT' 1: 'BUY_LIMIT'",
+            choices=["0", "1"],  # Example list, modify as needed
+            default="0"
+        )
+        order_type: OrderType = OrderType.SELL_LIMIT if order_type == "0" else OrderType.BUY_LIMIT
+        arb_order_init_values: Dict[str, Any] = encoders.arb_oder_sell_limit_values if \
+            order_type is OrderType.SELL_LIMIT else encoders.arb_oder_buy_limit_values
+        arb_order: ArbitrageOrder = create_arb_order(console, arb_order_init_values, market)
+
+    return arb_order
+
+
+def create_arb_orders(console: Console, mode: str, side: str, market: str = "BTC-USDC") -> List[ArbitrageOrder]:
+    arb_orders: List[ArbitrageOrder] = []
+
+    ones_side_mode: bool = True if mode == "ONE_SIDE" else False
+    if ones_side_mode:
+        one_side_order: ArbitrageOrder = one_side_order_creation(console, market)
+        arb_orders.append(one_side_order)
+    else:
+        for order_type in encoders.arb_orders_values.values():
+            arb_order: ArbitrageOrder = create_arb_order(console, order_type, market)
+            arb_orders.append(arb_order)
+
+    return arb_orders
+
+
+def create_arb_order(
+        console: Console,
+        arb_order_initiation_values: Dict[str, Any],
+        market: str
+) -> ArbitrageOrder:
+
+    display_initiation_values_table(arb_order_initiation_values, console, default_values_mode=True)
+    order_type: str = arb_order_initiation_values.get("Order Type", "SELL_LIMIT")
+    default_values = Confirm.ask(f"Do you want to use the default Arbitrage Order values ({order_type})?")
+    arb_order_initiation_values: Dict[str, Any] = arb_order_initiation_values if default_values \
+        else set_arb_order_initialization_values(console, arb_order_initiation_values)
+
+    market_symbol: List[str] = market.split("-")
+    base_currency: str = market_symbol[0]
+    quote_currency: str = market_symbol[1]
+
+    currency_of_interest: CurrencyOfInterest = CurrencyOfInterest.QUOTE if \
+        arb_order_initiation_values.get("Quote Currency") == "QUOTE" else CurrencyOfInterest.BASE
+    order_type: OrderType = OrderType.SELL_LIMIT if \
+        arb_order_initiation_values.get("Order Type") == "SELL_LIMIT" else OrderType.BUY_LIMIT
+    # Create the ArbitrageOrder with user-defined parameters
+    arb_order: ArbitrageOrder = ArbitrageOrder(
+        base_currency=base_currency,
+        quote_currency=quote_currency,
+        original_amount=arb_order_initiation_values.get("Amount"),
+        currency_of_interest=currency_of_interest,
+        order_type=order_type
+    )
+
+    return arb_order
+
+
+def set_arb_order_initialization_values(console: Console, arb_order_values: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Change the Arbitrage Order initialization values via input
+
+    :param console: Console object from Rich
+    :param arb_order_values: Dict containing the Arbitrage Order initialization values
+    :return: Dict with the modified initialization values
+    """
+    order_type: str = arb_order_values.get("Order Type", "SELL_LIMIT")
+    console.print(f"Please define the Arbitrage Order [{order_type}] parameters:")
+
+    # Amount to be traded
+    original_amount = float(Prompt.ask(
+        "Enter the AMOUNT to be arbitraged",
+        default=2000
+    ))
+    arb_order_values["Amount"] = original_amount
+    display_initiation_values_table(arb_order_values, console)
+
+    # Currency to Accumulate
+    currency_of_interest: str = str(Prompt.ask(
+        "Select the currency to accumulate 0: 'QUOTE' 1: 'BASE'",
+        choices=["0", "1"],  # Example list, modify as needed
+        default="0"
+    ))
+
+    arb_order_values["Currency of Interest"] = currency_of_interest
+    display_initiation_values_table(arb_order_values, console)
+    currency_of_interest: str = "QUOTE" if currency_of_interest == "0" else "BASE"
+    arb_order_values["Currency of Interest"] = currency_of_interest
+
+    return arb_order_values
 
 
 def set_initialization_values(console: Console, initiation_values: Dict[str, Any]) -> Dict[str, Any]:

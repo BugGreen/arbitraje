@@ -67,41 +67,7 @@ def main() -> None:
         order_type = 'MARKET'
         order_id = 33188802974
 
-        #print(binance.get_price('btc', "usdc"))
-        # json_print(binance.get_market_info(base_currency, quote_currency))
 
-        #usdc_deposit_addres = binance.create_deposit_address(coin=coin, network='ETH')
-        #print(json.dumps(usdc_deposit_addres, indent=2))
-        # print(binance.get_withdraw_history('BTC'))
-        # print(binance.get_deposit_history())
-
-        # coin_info = binance.get_coin_info(base_currency)
-        # print(json.dumps(coin_info, indent=2))
-
-        # coin_info = binance.supports_lightning_network(coin)
-        #withdraw_request = binance.create_withdraw_request(coin=coin, address=ln_invoice, amount=sats_amount)
-        #print(json.dumps(withdraw_request, indent=2))
-        # new_order = binance.new_order(base_currency=base_currency,
-        #                               quote_currency=quote_currency,
-        #                               side=side,
-        #                               order_type=order_type,
-        #                               price=price,
-        #                               quantity=order_amount,
-        #                               time_in_force=time_in_force)
-        # print(json.dumps(new_order, indent=2))
-
-        # new_market_order = binance.new_order(base_currency=base_currency,
-        #                                      quote_currency=quote_currency,
-        #                                      side=side,
-        #                                      order_type=order_type,
-        #                                      quote_order_qty=fiat_amount_usdc)
-        # print(json.dumps(new_market_order, indent=2))
-        #cancel_order = binance.cancel_order(base_currency, quote_currency, order_id)
-        #print(json.dumps(cancel_order, indent=2))
-        #lightning_address = binance.create_lightning_invoice(.01)
-        # print(json.dumps(lightning_address, indent=2))
-        # binance.check_datetime_differences()
-        #print(json.dumps(coin_info, indent=2))
     except Exception as e:
         print(f"Error with Binance: {e}")
 
@@ -134,34 +100,6 @@ def main() -> None:
 
         ltc_address = "LeMNHpnvULWbh9wHqNPdPwnip3vnSsXATY"
 
-        #batch_response = buda.batch_creation(orders)
-        #print(json.dumps(batch_response, indent=2))
-
-        #batch_cancellation_response = buda.batch_cancellation(order_to_cancel)
-        # print(json.dumps(batch_cancellation_response, indent=2))
-
-
-        #new_order = buda.new_order(base_currency, quote_currency, side, order_type, order_amount, price=price)
-        binance_ln_invoice = 'lnbc20u1pn57w8spp5tte7449lywmexq0e5zrukh97d3r797t2h38hc7znnwfpmlpywjfqdqqcqzysxqrrsssp5nmydq5cy9vjlht5nuekrk9h2y52lyd5sfwn7kj3upq2euja3h9ks9qxpqysgqsdlf0c5dnq60ffu3n2kvyg9fwv4zq738l54efex5jxf949tr28vyy4y70tfv86ua7wtaazq4yd3uuhrz3rlfwz638s09sr0lqgyp6egqn5qcrs'
-        #withdrawal_request = buda.create_withdraw_request(coin=coin, address=binance_ln_invoice, amount=0.00002)
-        # lightning_invoice = buda.create_lightning_invoice(amount=0.01)
-        # print(json.dumps(lightning_invoice, indent=2))
-        # payment_response = buda.pay_ln_invoice(ln_invoice=binance_ln_invoice, amount=0.001, simulate=True)
-        # print(json.dumps(payment_response, indent=2))
-        # print(buda.get_withdraw_history("BTC"))
-        # print(buda.get_deposit_history("BTC"))
-        # print(json.dumps(buda.create_quote_currency_address('usdc')))
-        #order_canceled = buda.cancel_order(base_currency, quote_currency, order_id)
-        #print(json.dumps(order_canceled, indent=2))
-        # order_states = buda.get_order_states(base_currency, quote_currency)
-        # print(json.dumps(order_states, indent=2))
-        #ltc_withdrawal = buda.create_withdraw_request(coin='ltc', amount=0.00702, address=ltc_address, simulate=True)
-        #print(json.dumps(ltc_withdrawal, indent=2))
-        #order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')
-        #print(json.dumps(order_book, indent=2))
-        #print(buda.get_price('btc', "usdc"))
-        # market_info = buda.get_market_info(base_currency, quote_currency)
-        # print(json.dumps(market_info, indent=2))
     except Exception as e:
         print(f"Error with BUDA: {e}")
 
