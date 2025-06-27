@@ -204,7 +204,9 @@ class ArbitrageBot:
                 # 2.1) If it is not the first iteration, cancel orders placed in the previous iteration
                 if not first_iteration:
                     # Not completed => Cancel sub-orders
-                    time.sleep(sleep_interval)
+                    # time.sleep(sleep_interval)
+                    if debug_mode:
+                        start_cancellation_time = time.time()
 
                     cancellation_response: dict = self.place_sub_order_cancellations(sub_orders, arb_orders)
                     self.arbitrage_order_completion(arb_orders)
@@ -220,7 +222,8 @@ class ArbitrageBot:
                                 logger.warning("Funds transfer failed. Evaluate partial scenario.")
 
                     if debug_mode:
-                        start_cancellation_time = time.time()
+                        end_cancellation_time = time.time()
+
                 # ----------------------------- USER INTERFACE COMMANDS ---------------------------------
 
                 # Check the shared stop flag from UI
@@ -260,8 +263,6 @@ class ArbitrageBot:
                     if mode == "single_cycle":
                         break
                     continue
-                if debug_mode:
-                    end_cancellation_time = time.time()
 
                 # 5) Check completion
                 self.arbitrage_order_completion(arb_orders)
@@ -304,12 +305,11 @@ class ArbitrageBot:
 
             # 7) Otherwise, loop again
             logger.debug("Waiting %.1fs before next iteration...", sleep_interval)
-            time.sleep(sleep_interval)
+            # time.sleep(sleep_interval)
 
             if debug_mode:
                 end_time = time.time()  # End the timer for the current loop iteration
-                cancellation_time = end_cancellation_time - start_cancellation_time
-
+                cancellation_time = end_cancellation_time - start_cancellation_time if num_iterations > 0 else 0
                 loop_time = end_time - start_time  # Time for this iteration
                 # Update total time and iteration count
                 total_time += loop_time
@@ -892,17 +892,24 @@ class ArbitrageBot:
         took place during cancellation.
         :return: A list of sub-order dicts summarizing the cancellation operations (mode='cancel', order_id=...).
         """
+
+
         logger.info("Cancelling sub-orders on low-liquidity exchange: %s", sub_orders)
         if not isinstance(arb_orders, list):
             arb_orders = [arb_orders]
 
+        base_currency: str = arb_orders[0].base_currency
+        quote_currency: str = arb_orders[0].quote_currency
+
         # 1. Build 'cancel' instructions
-        cancel_requests = []
+        cancel_requests: List[Dict[str, Any]] = []
+        orders_to_cancel: List[int] = []
         for so in sub_orders:
             # Suppose each sub-order has an 'id'
             order_id = so.get("id")
             if order_id:
                 cancel_requests.append({"mode": "cancel", "order_id": order_id})
+                orders_to_cancel.append(order_id)
 
         if not cancel_requests:
             logger.info("No sub-orders to cancel.")
@@ -913,13 +920,21 @@ class ArbitrageBot:
         cancelled_orders_id = [order_id.get('order_id') for order_id in cancel_response['orders_diff']]
         logger.info("Exchange sub-order cancellation response: %s", cancel_response)
 
-        if not self.websocket_mode:
-            states_response = self.exchange_low_liquidity.get_order_states(
-                arb_orders[0].base_currency,
-                arb_orders[0].quote_currency)
-        else:
-            states_response: Dict[str, List[Dict[str, Any]]] = self.exchange_low_liquidity.get_current_order_states()
-        all_states = states_response.get("orders", [])
+        # if not self.websocket_mode:
+        #     states_response = self.exchange_low_liquidity.get_order_states(
+        #         base_currency,
+        #         quote_currency
+        #     )
+        # else:
+        #     states_response: Dict[str, List[Dict[str, Any]]] = self.exchange_low_liquidity.get_current_order_states()
+        # all_states = states_response.get("orders", [])
+
+        # 2.1. Ensure the cancellation of all orders and return the order state after it
+        all_states: List[Dict[str, Any]] = self.ensure_cancellation_state(
+            order_ids=orders_to_cancel,
+            base_currency=base_currency,
+            quote_currency=quote_currency
+        )
 
         # 3. If any sub-order is 'canceled_and_traded' or partial, update the ArbitrageOrder object
         #    using `_update_arbitrage_order_on_fill`
@@ -958,6 +973,61 @@ class ArbitrageBot:
                 standardized_cancel_responses.append(sub_order_cancelled)
 
         return standardized_cancel_responses
+
+    def ensure_cancellation_state(
+            self,
+            order_ids: List[int],
+            base_currency: str,
+            quote_currency: str,
+            max_retry_attempts: int = 5
+    ) -> Union[List[Dict[str, Any]], None]:
+        """
+        Ensures that the orders with the specified IDs are indeed canceled or traded. If an order is still
+        in the 'pending' state, it will be retried until its state changes or max retry attempts are reached.
+
+        :param order_ids: List of order IDs to ensure cancellation.
+        :param base_currency: The base currency for the order.
+        :param quote_currency: The quote currency for the order.
+        :param max_retry_attempts: Maximum retry attempts before giving up.
+        :return: A list of order states after the cancellation attempts, or None if successful.
+        """
+        retry_count = 0
+        while retry_count < max_retry_attempts:
+            # Fetch the latest states of the orders
+            time.sleep(.9)  # Wait before calling states
+            if not self.websocket_mode:
+                states_response: Dict[str, List[Dict[str, Any]]] = self.exchange_low_liquidity.get_order_states(
+                    base_currency,
+                    quote_currency
+                )
+            else:
+                states_response: Dict[str, List[Dict[str, Any]]] = self.exchange_low_liquidity.get_current_order_states()
+            all_states: List[Dict[str, Any]] = states_response.get("orders", [])
+
+            # Check if the state of each order is as expected
+            for st in all_states:
+                if st["id"] in order_ids:
+                    state = st["state"]
+                    if state in ["canceled", "canceled_and_traded", "traded"]:
+                        logger.info(f"Order {st['id']} has been successfully canceled or traded. State: {state}")
+                    elif state == "pending":
+                        logger.info(f"Order {st['id']} is still in pending state. Retrying cancellation...")
+                        self.exchange_low_liquidity.cancel_order(base_currency, quote_currency, st["id"])
+                    else:
+                        logger.error(f"Order {st['id']} is in an unexpected state: {state}. Aborting cancellation.")
+                        raise Exception(f"Unexpected state for order {st['id']}: {state}")
+
+            # Check if all orders have transitioned to the expected state
+            if all(st["state"] in ["canceled", "canceled_and_traded", "traded"] for st in all_states if
+                   st["id"] in order_ids):
+                return all_states
+
+            # Retry cancellation if necessary
+            retry_count += 1
+
+        # If we've reached the max retries, raise an error
+        logger.error(f"Failed to cancel orders after {max_retry_attempts} attempts.")
+        raise Exception("Failed to cancel orders after multiple attempts.")
 
     @staticmethod
     def _calculate_paid_fee_low_liquidity(order_state: Dict[str, str], arb_order: ArbitrageOrder) -> float:

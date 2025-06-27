@@ -471,6 +471,34 @@ class TestArbitrageBot(unittest.TestCase):
 
         self.assertEqual(amount_less_than_minimum_order_response, expected_response)
 
+    @patch.object(BudaProxy, 'get_current_order_states')
+    @patch.object(BudaProxy, 'cancel_order')
+    def test_ensure_cancellation_state_retry(self, mock_cancel_order, mock_get_order_states):
+        # Prepare mock data
+        order_ids = [1]
+        base_currency = 'BTC'
+        quote_currency = 'USDT'
+
+        # Mocking the return value of get_order_states
+        mock_get_order_states.return_value = {
+            "orders": [
+                {"id": 1, "state": "pending"}
+            ]
+        }
+
+        # Mock cancel order to succeed only after retrying
+        mock_cancel_order.return_value = None  # Mock no response
+        # Call the method
+        # Use assertRaises as a context manager to catch the exception
+        with self.assertRaises(Exception) as context:
+            self.bot.ensure_cancellation_state(order_ids, base_currency, quote_currency)
+
+        # Check the exception message
+        self.assertTrue('Failed to cancel orders after multiple attempts.' in str(context.exception))
+
+        # Check that the cancel_order method was called (retry logic)
+        mock_cancel_order.assert_called()
+
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_after_cancelaion_profit)
     @patch.object(BudaProxy, 'batch_cancellation', return_value=test_api_constants.sub_orders_canceled_response)
