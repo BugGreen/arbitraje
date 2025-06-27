@@ -148,6 +148,7 @@ class ArbitrageOrder(Order):
 
         self.traded_amount_base_high_liquidity += traded_base_delta
         self.traded_amount_quote_high_liquidity += traded_quote_delta
+
         self.paid_fee_base_currency_high_liquidity += paid_fee_base_currency
         self.paid_fee_quote_currency_high_liquidity += paid_fee_quote_currency
 

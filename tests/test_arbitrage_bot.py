@@ -1265,6 +1265,36 @@ class TestArbitrageBot(unittest.TestCase):
         binance_bid_order_state["fills"][0]["commissionAsset"] = "BNB"
         paid_fee_base_currency, paid_fee_quote_currency = self.bot._calculate_paid_fee_high_liquidity(binance_bid_order_state, arb_order)
         self.assertEqual(0, paid_fee_base_currency)
+
+    def test_calculate_real_price_diff(self):
+        """
+        Test the correct calculation of the real price difference.
+        It tests three scenarios:
+        1: price difference for a SELL_LIMIT order
+        2: price difference for a BUY_LIMIT order
+        3: price difference for a non valid order
+        """
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=100.0,
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        limit_low_liquidity = 1000
+        limit_high_liquidity = 1100
+        sell_limit_diff = self.bot._calculate_real_price_diff(arb_order, limit_low_liquidity, limit_high_liquidity)
+        self.assertEqual(round(sell_limit_diff, 5), -0.09091)
+
+        arb_order.order_type = OrderType.BUY_LIMIT
+        buy_limit_diff = self.bot._calculate_real_price_diff(arb_order, limit_low_liquidity, limit_high_liquidity)
+        self.assertEqual(buy_limit_diff, 0.1)
+
+        arb_order.order_type = 'Non_valid_order'
+        non_valid_limit_diff = self.bot._calculate_real_price_diff(arb_order, limit_low_liquidity, limit_high_liquidity)
+        self.assertEqual(non_valid_limit_diff, 0.0)
+
     # @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.place_sub_orders_sell_limit_flow)
     # @patch.object(BudaProxy, 'batch_cancellation', return_value=test_a_bot_constans.batch_cancellation_sell_limit_flow)
     # @patch.object(BinanceProxy, 'new_order', return_value=test_a_bot_constans.new_order_binance_sell_limit_flow)

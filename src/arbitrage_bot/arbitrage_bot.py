@@ -759,6 +759,8 @@ class ArbitrageBot:
         Synchronously place a MARKET order on the high-liquidity exchange for the
         arb_order.pending_amount_high_liquidity, then call arb_order.fulfill_high_liquidity(...)
         with the executed quantity.
+
+        :param arb_order: The ArbitrageOrder object to update.
         """
         symbol = arb_order.base_currency.upper() + arb_order.quote_currency.upper()
 
@@ -804,7 +806,8 @@ class ArbitrageBot:
             delta_amount_base_currency = to_trade_base_currency - executed_base_qty
             delta_amount_quote_currency = to_trade_quote_currency - executed_quote_qty
             # Turn it back to quote currency
-            paid_fee_base_currency, paid_fee_quote_currency = self._calculate_paid_fee_high_liquidity(order_resp, arb_order)
+            paid_fee_base_currency, paid_fee_quote_currency = \
+                self._calculate_paid_fee_high_liquidity(order_resp, arb_order)
             arb_order.fulfill_high_liquidity(
                 executed_quote_qty,
                 executed_base_qty,
@@ -818,6 +821,30 @@ class ArbitrageBot:
         except Exception as e:
             logger.error("Error placing order on high-liquidity exchange: %s", e, exc_info=True)
             return {"code": -9999, "msg": str(e)}
+
+    @staticmethod
+    def _calculate_real_price_diff(arb_order: ArbitrageOrder, limit_low_liquidity: float, limit_high_liquidity: float) \
+            -> float:
+        """
+        Calculate the real price difference of the executed orders in both exchanges.
+        Real price difference means the price difference calculated with the real execution limit prices.
+
+        :param arb_order: The `ArbitrageOrder` describing the operation type (BUY or SELL).
+        :param limit_low_liquidity: Limit price of trade execution in the low liquidity exchange.
+        :param limit_high_liquidity: Limit price of trade execution in the high liquidity exchange.
+        :return: Float representing the price difference
+        """
+
+        order_type = arb_order.order_type
+        if order_type in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
+            p_diff = (limit_high_liquidity - limit_low_liquidity) / limit_low_liquidity
+            return p_diff
+        elif order_type in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
+            p_diff = (limit_low_liquidity - limit_high_liquidity) / limit_high_liquidity
+            return p_diff
+        else:
+            logger.error("Wrong OrderType: {}".format(order_type))
+            return 0.0
 
     @staticmethod
     def _calculate_paid_fee_high_liquidity(order_state: Dict[str, str], arb_order: ArbitrageOrder) \
