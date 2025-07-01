@@ -38,6 +38,7 @@ class ArbitrageBot:
         self.base_currency = base_currency
         self.quote_currency = quote_currency
         self.currency_of_interest = CurrencyOfInterest.QUOTE  # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
+        self.low_liquidity_taker_fee = 0.8 / 100
         self.ui = ArbitrageUI()
 
     def run_arbitrage_flow(self, arb_order: ArbitrageOrder, mode: str = "infinite_loop", sleep_interval: float = 0.8) \
@@ -63,6 +64,7 @@ class ArbitrageBot:
         """
         logger.info("Starting arbitrage flow with REST-based price retrieval. mode=%s", mode)
         # Start the UI in a separate thread
+        self.low_liquidity_taker_fee = self.get_low_liquidity_taker_fee(arb_order)
         ui_thread = threading.Thread(target=self.ui.display_ui, args=(arb_order,))
         ui_thread.daemon = True  # Ensures it ends when the main program ends
         ui_thread.start()
@@ -143,6 +145,20 @@ class ArbitrageBot:
             time.sleep(sleep_interval)
 
         logger.info("Arbitrage flow ended. mode=%s", mode)
+
+    def get_low_liquidity_taker_fee(self, arb_order: ArbitrageOrder) -> float:
+        """
+        Get the taker fee in the low_liquidity exchange
+        :param arb_order: The ArbitrageOrder with the base and quote currency
+        :return: Float representing the taker fee in the low_liquidity exchange
+        """
+        market_info: Dict = \
+            self.exchange_low_liquidity.get_market_info(
+                arb_order.base_currency,
+                arb_order.quote_currency
+            ).get("market", {})
+
+        return float(market_info.get("taker_fee", 0.8)) / 100
 
     def register_trade_event(self, arb_order: ArbitrageOrder) -> None:
         """
@@ -232,7 +248,6 @@ class ArbitrageBot:
         :return: The price (as float) at which the cumulative volume threshold is met, or None if not found.
         """
         cumulative_volume = 0.0
-        taker_fee = 0.008  # TODO: Automatiazar la obtencion de este valor
         # Sort levels: ascending for asks, descending for bids.
         sorted_levels = sorted(levels, key=lambda x: float(x[0]), reverse=reverse)
         min_volume = arb_order.original_amount * min_volume / float(sorted_levels[0][0])
@@ -249,7 +264,7 @@ class ArbitrageBot:
 
             # Prevent the creation of non-profitable market orders
             if price_difference > self.price_diff_threshold:
-                if price_difference >= taker_fee + self.price_diff_threshold:
+                if price_difference >= self.low_liquidity_taker_fee + self.price_diff_threshold:
                     return price  # Creation of profitable market order
                 else:
                     if arb_order.order_type is OrderType.SELL_LIMIT:

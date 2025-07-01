@@ -39,7 +39,8 @@ class BudaProxy(BaseExchange):
         "WITHDRAW_HISTORY": "/api/v2/currencies/{}/{}",
         "ADDRESS_ID": "/api/v2/currencies/{}/receive_addresses",
         "DEPOSIT_ADDRESS": "/api/v2/currencies/{}/receive_addresses/{}",
-        "PRICE": "/api/v2/markets/{}/ticker"
+        "PRICE": "/api/v2/markets/{}/ticker",
+        "MARKETS": "/api/v2/markets/{}"
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -199,6 +200,33 @@ class BudaProxy(BaseExchange):
 
         # Define the endpoint path for retrieving the order book
         endpoint_path = self.ENDPOINTS["ORDER_BOOK"].format(market_id)
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Sign the request (assuming _sign_request can handle GET without body)
+        headers = self._sign_request(method="GET", path=endpoint_path)
+
+        # Make the API call to retrieve the order book
+        response = requests.get(url, headers=headers)
+
+        # Check for successful response
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception(f"Error {response.status_code}: {response.text}")
+
+    def get_market_info(self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Retrieve the market information of the market f'{base_currency}-{quote_currency}'.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'USDC').
+        :return: A dictionary containing the market information.
+        :raises Exception: If the API request fails.
+        """
+        market_id = "-".join([base_currency.lower(), quote_currency.lower()])
+
+        # Define the endpoint path for retrieving the order book
+        endpoint_path = self.ENDPOINTS["MARKETS"].format(market_id)
         url = f"{self.BASE_URL}{endpoint_path}"
 
         # Sign the request (assuming _sign_request can handle GET without body)

@@ -1438,6 +1438,19 @@ class TestArbitrageBot(unittest.TestCase):
         non_valid_limit_diff = self.bot._calculate_real_price_diff(arb_order, limit_low_liquidity, limit_high_liquidity)
         self.assertEqual(non_valid_limit_diff, 0.0)
 
+    def test_get_low_liquidity_taker_fee(self):
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        taker_fee = self.bot.get_low_liquidity_taker_fee(arb_order)
+        expected_fee = 0.7 / 100
+        self.assertEqual(taker_fee, expected_fee)
+
+
     # def test_run_arbitrage_flow_sell_limit(self):
     #     """
     #     Test the arbitrage flow, on a first iteration condition

@@ -79,10 +79,19 @@ def test_create_withdraw_request_ltc():
 
 
 def test_get_price():
-    binance = BudaProxy()
-    price_response = binance.get_price('btc', 'usdc')
+    buda = BudaProxy()
+    price_response = buda.get_price('btc', 'usdc')
     assert price_response.get('symbol') == 'BTCUSDC'
     assert price_response.get('price')
+
+
+def test_get_market_info():
+    buda = BudaProxy()
+    base_currency = "BTC"
+    quote_currency = "USDC"
+    market_info = buda.get_market_info(base_currency, quote_currency).get("market", {})
+    assert market_info
+    assert market_info.get("id") == f'{base_currency}-{quote_currency}'
 
 
 @patch("requests.post")

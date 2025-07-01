@@ -1,5 +1,6 @@
 import json
 from src.exchange_api.exchange_factory import ExchangeFactory
+from src.exchange_api.buda_proxy import BudaProxy
 import requests
 import logging
 from src.arbitrage_bot.arbitrage_bot import ArbitrageBot
@@ -21,7 +22,7 @@ def main() -> None:
     # Example usage with Binance
 
     try:
-        welcome_menu()
+        # welcome_menu()
         # bot = ArbitrageBot(
         #     exchange_high_liquidity='binance',
         #     exchange_low_liquidity='buda',
@@ -90,7 +91,7 @@ def main() -> None:
 
     # Example usage with BUDA
     try:
-        buda = ExchangeFactory.get_exchange("buda")
+        buda: BudaProxy = ExchangeFactory.get_exchange("buda")
         coin = "BTC"
         base_currency, quote_currency = 'BTC', 'USDC'
         side = 'bid'
@@ -142,7 +143,9 @@ def main() -> None:
         #print(json.dumps(ltc_withdrawal, indent=2))
         #order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')
         #print(json.dumps(order_book, indent=2))
-        print(buda.get_price('btc', "usdc"))
+        #print(buda.get_price('btc', "usdc"))
+        market_info = buda.get_market_info(base_currency, quote_currency)
+        print(json.dumps(market_info, indent=2))
     except Exception as e:
         print(f"Error with BUDA: {e}")
 
