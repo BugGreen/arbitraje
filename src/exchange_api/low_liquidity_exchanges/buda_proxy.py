@@ -34,6 +34,9 @@ class BudaProxy(BaseLowLiquidityExchange):
         self.quote_currency: str = None
         self.order_book_snapshot: dict = {"asks": {}, "bids": {}}  # Shared order book state (e.g., {'asks': {...}, 'bids': {...}})
         self.order_book_lock = Lock()  # Lock to protect order book updates
+        self.max_order_states_length: int = 25
+        self.order_states_snapshot = {"orders": []}  # Structure to hold order states
+        self.order_states_snapshot_lock = Lock()
 
     BASE_URL = "https://www.buda.com"
     ENDPOINTS = {
@@ -42,6 +45,7 @@ class BudaProxy(BaseLowLiquidityExchange):
         "NEW_ORDER": "/api/v2/markets/{}/orders",
         "CANCEL_ORDER": "/api/v2/orders/{}",
         "ORDER_STATES": "/api/v2/markets/{}/orders",
+        "ACCOUNT_INFO": "/api/v2/me",
         "BATCH_ORDERS": "/api/v2/orders",
         "CRYPTO_WITHDRAWAL": "/api/v2/currencies/{currency}/withdrawals",
         "ORDER_BOOK": "/api/v2/markets/{}/order_book",
@@ -52,6 +56,173 @@ class BudaProxy(BaseLowLiquidityExchange):
         "MARKETS": "/api/v2/markets/{}",
         "BALANCES": "/api/v2/balances/{}"
     }
+
+    def get_account_info(self) -> Dict:
+        """
+        Shows the account's personal information.
+
+        :return: A dictionary containing the account's personal information.
+        :raises Exception: If the API request fails.
+        """
+
+        # Define the endpoint path for retrieving the order book
+        endpoint_path = self.ENDPOINTS["ACCOUNT_INFO"]
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Define the API call to be retried
+        def api_call():
+            headers = self._sign_request(method="GET", path=endpoint_path)
+            response = requests.get(url, headers=headers)
+            return response
+
+        # Use handle_api_response to handle retries and responses
+        try:
+            return handle_api_response(api_call)
+        except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
+            logger.error(f"{current_method_name} - Error fetching account information request from Buda: {e}")
+            raise e
+
+    def on_message_order_state(self, ws, message):
+        """
+        Handles incoming messages for the order states from the WebSocket server.
+
+        :param ws: WebSocket instance.
+        :param message: Message received from WebSocket.
+        """
+        try:
+            data = json.loads(message)
+            if "ev" in data:
+                if data["ev"] == "order-created":
+                    self.process_order_state_created(data)
+                elif data["ev"] == "order-updated":
+                    self.process_order_state_updated(data)
+                else:
+                    logger.warning(f"Unknown event type: {data['ev']}")
+            else:
+                logger.warning(f"Invalid message format: {message}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode WebSocket message: {e}")
+
+    def process_order_state_created(self, data):
+        """
+        Processes the 'order-created' event, which indicates a new order has been created.
+
+        :param data: The message data from the 'order-created' event.
+        """
+        order_data = data.get("order", {})
+        order_id = order_data.get("id")
+
+        print("Create order: {}".format(order_id))
+        if order_id:
+            # Check if the order already exists in the snapshot
+            self.add_or_update_order_state(order_id, order_data)
+
+    def process_order_state_updated(self, data):
+        """
+        Processes the 'order-updated' event, which indicates an existing order has been updated.
+
+        :param data: The message data from the 'order-updated' event.
+        """
+        order_data = data.get("order", {})
+        order_id = order_data.get("id")
+
+        print("Update order: {}".format(order_id))
+
+        if order_id:
+            # Update the order in the snapshot
+            self.add_or_update_order_state(order_id, order_data)
+
+    def add_or_update_order_state(self, order_id: int, order_data: dict):
+        """
+        Adds a new order state or updates an existing one in the snapshot.
+
+        :param order_id: The unique identifier of the order.
+        :param order_data: The order data.
+        """
+        with self.order_states_snapshot_lock:
+            # Check if order exists in the snapshot
+            existing_order = next((order for order in self.order_states_snapshot["orders"]
+                                   if order["order"]["id"] == order_id), None)
+            if existing_order:
+                # Update the existing order's state
+                existing_order["order"] = order_data
+                logger.info(f"Updated order state: {order_id}")
+            else:
+                # Add the new order state
+                self.order_states_snapshot["orders"].append({"order": order_data})
+                logger.info(f"Added new order state: {order_id}")
+
+            # Keep the snapshot's length within the maximum limit
+            if len(self.order_states_snapshot["orders"]) > self.max_order_states_length:
+                self.order_states_snapshot["orders"].pop(0)  # Remove the oldest entry
+
+    def connect_to_order_states(self, initial_snapshot: dict = None):
+        """
+        Connects to the order state WebSocket channel for the specified market pair.
+        :param initial_snapshot: Optional initial snapshot from REST.
+        """
+        pubsub_key: str = self.get_account_info().get('user').get('pubsub_key')
+        socket_url = f"wss://realtime.buda.com/sub?channel=orders%40{pubsub_key}"
+
+        # Initialize snapshot if provided
+        if initial_snapshot is not None:
+            self.set_initial_order_states(initial_snapshot)
+
+        websocket.enableTrace(False)
+        self.ws = websocket.WebSocketApp(
+            socket_url,
+            on_message=self.on_message_order_state,
+            on_open=self.on_open_order_state,
+            on_error=self.on_error_order_state,
+            on_close=self.on_close_order_state
+        )
+
+        # Running the WebSocket connection in a separate thread
+        thread = Thread(target=self.ws.run_forever, kwargs={"ping_interval": 10})
+        thread.daemon = True
+        thread.start()
+
+    @staticmethod
+    def on_open_order_state(ws):
+        """
+        Called when the WebSocket connection is established for order states.
+
+        :param ws: WebSocket instance.
+        """
+        logger.info("WebSocket connected to order states.")
+
+    @staticmethod
+    def on_error_order_state(ws, error):
+        """
+        Called when there's an error with the WebSocket connection.
+
+        :param ws: WebSocket instance.
+        :param error: Error message.
+        """
+        logger.error(f"WebSocket error occurred: {error}")
+
+    @staticmethod
+    def on_close_order_state(ws, close_status_code, close_msg):
+        """
+        Called when the WebSocket connection is closed for order states.
+
+        :param ws: WebSocket instance.
+        :param close_status_code: Close status code.
+        :param close_msg: Close message.
+        """
+        logger.info(f"WebSocket closed with status code: {close_status_code} and message: {close_msg}")
+
+    def set_initial_order_states(self, snapshot: dict):
+        """
+        Sets the initial order states snapshot (from REST) in a thread-safe manner.
+
+        :param snapshot: The initial snapshot with structure:
+                         {'orders': List[Dict[str, Any]]}
+        """
+        with self.order_states_snapshot_lock:
+            self.order_states_snapshot = snapshot
+        logger.info("Initial order states snapshot set.")
 
     def set_initial_order_book(self, snapshot: dict) -> None:
         """
@@ -156,7 +327,7 @@ class BudaProxy(BaseLowLiquidityExchange):
         """
         Tries to reconnect to the order book WebSocket.
         """
-        logger.info("Attempting to reconnect to WebSocket...")
+        logger.info("[Order Book Channel] -- Attempting to reconnect to WebSocket...")
         time.sleep(0.1)  # Sleep before trying to reconnect
         self.connect_to_order_book(self.base_currency, self.quote_currency)
 

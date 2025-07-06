@@ -753,3 +753,33 @@ class TestBudaProxyOrderBook(unittest.TestCase):
         self.proxy.reconnect_to_order_book = MagicMock()
         self.proxy.on_close_order_book(mock_ws, 1000, "Normal closure")
         self.proxy.reconnect_to_order_book.assert_called_once_with()
+
+
+class TestOrderStateWebSocketClient(unittest.TestCase):
+
+    @patch('websocket.WebSocketApp')
+    def test_connect_to_order_states(self, MockWebSocketApp):
+        client: BudaProxy = BudaProxy()
+        mock_ws = MagicMock()
+        MockWebSocketApp.return_value = mock_ws
+
+        # Simulate successful connection
+        client.connect_to_order_states(initial_snapshot={"orders": []})
+        mock_ws.run_forever.assert_called_once()
+
+    def test_add_or_update_order_state(self):
+        client: BudaProxy = BudaProxy()
+        client.max_order_states_length: int = 2
+
+        # Simulate adding a new order
+        client.add_or_update_order_state(1, {"id": 1, "state": "pending"})
+        self.assertEqual(len(client.order_states_snapshot["orders"]), 1)
+
+        # Simulate updating the order
+        client.add_or_update_order_state(1, {"id": 1, "state": "completed"})
+        self.assertEqual(client.order_states_snapshot["orders"][0]["order"]["state"], "completed")
+
+        # Simulate adding a second order and exceeding the limit
+        client.add_or_update_order_state(2, {"id": 2, "state": "pending"})
+        client.add_or_update_order_state(3, {"id": 3, "state": "pending"})
+        self.assertEqual(len(client.order_states_snapshot["orders"]), 2)  # Should be capped at 2
