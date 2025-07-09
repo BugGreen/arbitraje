@@ -87,3 +87,21 @@ class BaseExchange(ABC):
 
         :return: The response from the exchange API as a dictionary.
         """
+
+    @abstractmethod
+    def batch_creation(self, orders: List[Dict]) -> Dict:
+        """
+        Create new orders in batch on the exchange.
+
+        :param orders: A list of orders to be created, where each order is a dictionary containing order details.
+        :return: The response from the exchange API indicating whether the batch creation was successful.
+        """
+
+    @abstractmethod
+    def batch_cancellation(self, orders: List[Dict]) -> Dict:
+        """
+        Cancel orders in batch on the exchange.
+
+        :param orders: A list of orders to be canceled, where each order is a dictionary containing 'order_id' or 'client_id'.
+        :return: The response from the exchange API indicating whether the batch cancelation was successful.
+        """

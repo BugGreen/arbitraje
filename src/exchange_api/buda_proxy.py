@@ -29,6 +29,7 @@ class BudaProxy(BaseExchange):
         "NEW_ORDER": "/api/v2/markets/{}/orders",
         "CANCEL_ORDER": "/api/v2/orders/{}",
         "ORDER_STATES": "/api/v2/markets/{}/orders",
+        "BATCH_ORDERS": "/api/v2/orders",
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -263,6 +264,76 @@ class BudaProxy(BaseExchange):
 
         # Make the API call to cancel the order
         response = requests.get(url, headers=headers)
+
+        # Return the response as a dictionary
+        return response.json()
+
+    def batch_creation(self, orders: List[Dict]) -> Dict:
+        """
+                Create new orders in batch on the Buda exchange.
+
+                :param orders: A list of orders to be created, where each order is a dictionary containing order details.
+                :return: The response from the exchange API indicating whether the batch creation was successful.
+                """
+
+        # Define the endpoint path
+        endpoint_path = self.ENDPOINTS["BATCH_ORDERS"]
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Prepare the request payload
+        payload = {'diff': []}
+
+        # Add 'place' orders to the payload
+        for order in orders:
+            if order.get("mode") == "place":
+                payload['diff'].append({
+                    'mode': 'place',
+                    'order': order.get('order')
+                })
+
+        # Sign the request
+        headers = self._sign_request(method="POST", path=endpoint_path, body=payload)
+
+        # Make the API call to create the batch orders
+        response = requests.post(url, headers=headers, json=payload)
+
+        # Return the response as a dictionary
+        return response.json()
+
+    def batch_cancellation(self, orders: List[Dict]) -> Dict:
+        """
+        Cancel orders in batch on the Buda exchange.
+
+        :param orders: A list of orders to be canceled, where each order is a dictionary containing 'order_id' or 'client_id'.
+        :return: The response from the exchange API indicating whether the batch cancelation was successful.
+        """
+
+        # Define the endpoint path
+        endpoint_path = self.ENDPOINTS["BATCH_ORDERS"]
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Prepare the request payload
+        payload = {'diff': []}
+
+        # Add 'cancel' orders to the payload
+        for order in orders:
+            if order.get("mode") == "cancel":
+                if 'order_id' in order:
+                    payload['diff'].append({
+                        'mode': 'cancel',
+                        'order_id': order.get('order_id')
+                    })
+                elif 'client_id' in order:
+                    payload['diff'].append({
+                        'mode': 'cancel',
+                        'client_id': order.get('client_id')
+                    })
+
+        # Sign the request
+        headers = self._sign_request(method="POST", path=endpoint_path, body=payload)
+
+        # Make the API call to cancel the batch orders
+        response = requests.post(url, headers=headers, json=payload)
 
         # Return the response as a dictionary
         return response.json()

@@ -382,3 +382,169 @@ def test_get_order_states(mock_get):
     assert isinstance(response['orders'], list)
     assert response['orders'][0]['market_id'] == "ETH-COP"
 
+
+@patch("requests.post")
+def test_batch_cancellation_success(mock_post):
+    # Mocking the response from the Buda API
+    expected_response = {
+      "orders_diff": [
+        {
+          "mode": "cancel",
+          "order_id": 1267969492
+        },
+        {
+          "mode": "cancel",
+          "order_id": 1267969493
+        }
+      ]
+    }
+
+    orders = [
+        {"mode": "cancel", "order_id": 1000},
+        {"mode": "cancel", "oder_id": 9999},
+    ]
+
+    # Setup mock to return a success response
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = expected_response
+    mock_post.return_value = mock_response
+
+    buda = BudaProxy()
+    buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
+
+    # Call the batch_cancelation method
+    response = buda.batch_cancellation(orders)
+
+    # Assert the response data
+    assert isinstance(response['orders_diff'], list)
+    assert response['orders_diff'][0]['mode'] == "cancel"
+    assert mock_post.called_once()
+
+
+@patch("requests.post")
+def test_batch_creation_success(mock_post):
+    # Mocking the response from the Buda API
+    expected_response = {
+      "orders_diff": [
+        {
+          "mode": "place",
+          "order": {
+            "order": {
+              "id": 1268015221,
+              "uuid": "2dc37e23-227f-4031-984f-1e738192ab53",
+              "market_id": "ETH-COP",
+              "account_id": 143870,
+              "type": "Bid",
+              "state": "received",
+              "created_at": "2024-12-03T16:05:34.487Z",
+              "fee_currency": "ETH",
+              "price_type": "limit",
+              "source": "null",
+              "client_id": "null",
+              "message": "null",
+              "order_type": "gtc",
+              "expire_at": 0,
+              "limit": [
+                "15000000.0",
+                "COP"
+              ],
+              "amount": [
+                "0.0012",
+                "ETH"
+              ],
+              "original_amount": [
+                "0.0012",
+                "ETH"
+              ],
+              "traded_amount": [
+                "0.0",
+                "ETH"
+              ],
+              "total_exchanged": [
+                "0.0",
+                "COP"
+              ],
+              "paid_fee": [
+                "0.0",
+                "ETH"
+              ],
+              "stop_price": "null"
+            }
+          }
+        },
+        {
+          "mode": "place",
+          "order": {
+            "order": {
+              "id": 1268015222,
+              "uuid": "53a369ec-6900-43f9-bad8-6b2077705e57",
+              "market_id": "ETH-COP",
+              "account_id": 143870,
+              "type": "Bid",
+              "state": "received",
+              "created_at": "2024-12-03T16:05:34.496Z",
+              "fee_currency": "ETH",
+              "price_type": "limit",
+              "source": "null",
+              "client_id": "null",
+              "message": "null",
+              "order_type": "gtc",
+              "expire_at": 0,
+              "limit": [
+                "15000000.0",
+                "COP"
+              ],
+              "amount": [
+                "0.0012",
+                "ETH"
+              ],
+              "original_amount": [
+                "0.0012",
+                "ETH"
+              ],
+              "traded_amount": [
+                "0.0",
+                "ETH"
+              ],
+              "total_exchanged": [
+                "0.0",
+                "COP"
+              ],
+              "paid_fee": [
+                "0.0",
+                "ETH"
+              ],
+              "stop_price": "null"
+            }
+          }
+        }
+      ]
+    }
+
+    orders = [
+        {"mode": "place",
+         "order": {"amount": 0.0012, "limit": 15000000, "market_name": "eth-cop", "price_type": "limit",
+                   "type": "Bid"}},
+        {"mode": "place",
+         "order": {"amount": 0.0012, "limit": 15000000, "market_name": "eth-cop", "price_type": "limit",
+                   "type": "Bid"}},
+    ]
+
+    # Setup mock to return a success response
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = expected_response
+    mock_post.return_value = mock_response
+
+    buda = BudaProxy()
+    buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
+
+    # Call the batch_cancelation method
+    response = buda.batch_cancellation(orders)
+
+    # Assert the response data
+    assert isinstance(response['orders_diff'], list)
+    for order in response['orders_diff']:
+        assert order['mode'] == 'place'
+    assert mock_post.called_once()

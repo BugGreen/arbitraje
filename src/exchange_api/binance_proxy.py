@@ -303,6 +303,14 @@ class BinanceProxy(BaseExchange):
         # Return the response as a dictionary
         return response.json()
 
-
     def get_order_states(self, base_currency: str, quote_currency: str) -> Dict:
+        # ToDo
+        pass
+
+    def batch_creation(self, orders: List[Dict]) -> Dict:
+        # ToDo
+        pass
+
+    def batch_cancellation(self, orders: List[Dict]) -> Dict:
+        # ToDo
         pass
