@@ -1450,7 +1450,6 @@ class TestArbitrageBot(unittest.TestCase):
         expected_fee = 0.7 / 100
         self.assertEqual(taker_fee, expected_fee)
 
-
     # def test_run_arbitrage_flow_sell_limit(self):
     #     """
     #     Test the arbitrage flow, on a first iteration condition
@@ -1503,4 +1502,25 @@ class TestArbitrageBot(unittest.TestCase):
     #     )
     #     self.bot.run_arbitrage_flow(arb_order=arb_order)
 
+    @patch("src.arbitrage_bot.arbitrage_bot.logger")
+    def test_run_arbitrage_flow_amount_below_min_total(self, mock_logger):
+        """
+        Test that if place_sub_orders returns an error indicating the order amount is below the minimum,
+        run_arbitrage_flow logs the error and exits the loop.
+        """
 
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=1,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        self.bot.run_arbitrage_flow(arb_order=arb_order, debug_mode=True)
+        found_error = False
+        for call in mock_logger.error.call_args_list:
+            args, kwargs = call
+            if "Order amount is below the minimum allowed by the exchange" in args[0]:
+                found_error = True
+                break
+        self.assertTrue(found_error, "Expected error message not found in logger.error calls.")

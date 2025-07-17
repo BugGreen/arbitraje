@@ -9,7 +9,7 @@ from typing import List, Dict, Optional
 from exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
 from src.exchange_api.utils import load_api_keys
 import logging
-from exchange_api.high_liquidity_exchanges import constants
+from exchange_api.high_liquidity_exchanges import encoders
 
 logger = logging.getLogger(__name__)
 

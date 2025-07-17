@@ -1,4 +1,4 @@
-from src.arbitrage_bot.constants import MIN_AMOUNT_REQUIREMENTS, MIN_AMOUNT_BINANCE_REQUIREMENTS, MIN_BTC_PER_INVOICE, \
+from src.arbitrage_bot.encoders import MIN_AMOUNT_REQUIREMENTS, MIN_AMOUNT_BINANCE_REQUIREMENTS, MIN_BTC_PER_INVOICE, \
     MAX_BTC_PER_INVOICE, MIN_WITHDRAWAL_AMOUNT_BINANCE
 from src.order_types.encoders import OrderType, CurrencyOfInterest
 from typing import Optional, Type, Dict, List, Any, Union, Tuple
@@ -40,8 +40,13 @@ class ArbitrageBot:
         self.low_liquidity_taker_fee = 0.8 / 100
         self.ui = ArbitrageUI()
 
-    def run_arbitrage_flow(self, arb_order: ArbitrageOrder, mode: str = "infinite_loop", sleep_interval: float = 0.8) \
-            -> None:
+    def run_arbitrage_flow(
+            self,
+            arb_order: ArbitrageOrder,
+            mode: str = "infinite_loop",
+            debug_mode: bool = False,
+            sleep_interval: float = 0.8
+    ) -> None:
         """
         Execute the arbitrage flow using REST calls to fetch the high-liquidity price.
         The flow is:
@@ -58,15 +63,17 @@ class ArbitrageBot:
 
         :param arb_order: The ArbitrageOrder describing order_type, amounts, etc.
         :param mode: 'infinite_loop' or 'single_cycle'. If 'single_cycle', we do one iteration then exit.
+        :param debug_mode: Bolean to specify if we are in debug mode, turn on/off the ui feature.
         :param sleep_interval: Seconds to sleep if no price or after each iteration.
         :return: None. Blocks or loops until user stops or single cycle completes.
         """
         logger.info("Starting arbitrage flow with REST-based price retrieval. mode=%s", mode)
         # Start the UI in a separate thread
-        self.low_liquidity_taker_fee = self.get_low_liquidity_taker_fee(arb_order)
-        ui_thread = threading.Thread(target=self.ui.display_ui, args=(arb_order,))
-        ui_thread.daemon = True  # Ensures it ends when the main program ends
-        ui_thread.start()
+        if not debug_mode:
+            self.low_liquidity_taker_fee = self.get_low_liquidity_taker_fee(arb_order)
+            ui_thread = threading.Thread(target=self.ui.display_ui, args=(arb_order,))
+            ui_thread.daemon = True  # Ensures it ends when the main program ends
+            ui_thread.start()
 
         while True:
             # Check the shared stop flag from UI
@@ -100,10 +107,21 @@ class ArbitrageBot:
             # 3) Split sub-orders
             sub_orders = self.split_order_into_suborders(arb_order, reference_price)
 
+            if isinstance(sub_orders, dict) and "code" in sub_orders:
+                logger.error("place_sub_orders failed: %s", sub_orders)
+                # If the overall order amount is below the minimum, exit the arbitrage flow.
+                if sub_orders.get("code") == "ERROR_BELOW_MIN_TOTAL":
+                    logger.error("Order amount is below the minimum allowed by the exchange. Exiting arbitrage flow.")
+                    break
+                if mode == "single_cycle":
+                    break
+                time.sleep(sleep_interval)
+                continue
+
             # 4) Place sub-orders
-            place_result = self.place_sub_orders(sub_orders, arb_order)
-            if isinstance(place_result, dict) and "error_code" in place_result:
-                logger.error("place_sub_orders failed: %s", place_result)
+            sub_orders = self.place_sub_orders(sub_orders, arb_order)
+            if isinstance(sub_orders, dict) and "error_code" in sub_orders:
+                logger.error("place_sub_orders failed: %s", sub_orders)
                 # Depending on logic, continue or break
                 if mode == "single_cycle":
                     break
@@ -124,7 +142,7 @@ class ArbitrageBot:
                 # Not completed => Cancel sub-orders
                 time.sleep(sleep_interval)
 
-                cancel_response = self.place_sub_order_cancellations(place_result, arb_order)
+                cancel_response = self.place_sub_order_cancellations(sub_orders, arb_order)
                 order_completion = self.arbitrage_order_completion(arb_order)
                 if order_completion:
                     # If fully done => funds_transfer
