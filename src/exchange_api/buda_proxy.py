@@ -25,7 +25,8 @@ class BudaProxy(BaseExchange):
     BASE_URL = "https://www.buda.com"
     ENDPOINTS = {
         "LIGHTNING_INVOICE": "/api/v2/lightning_network_invoices",
-        "LIGHTNING_WITHDRAWAL": "/api/v2/reserves/ln-btc/withdrawals"
+        "LIGHTNING_WITHDRAWAL": "/api/v2/reserves/ln-btc/withdrawals",
+        "NEW_ORDER": "/api/v2/markets/{}/orders"
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -158,20 +159,52 @@ class BudaProxy(BaseExchange):
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
 
-    def new_order(self, symbol: str, side: str, order_type: str,
-                  timestamp: Optional[int],
-                  quantity: Optional[float] = None,
+    def new_order(self, base_currency: str, quote_currency: str, side: str, order_type: str, amount: float,
                   price: Optional[float] = None,
-                  time_in_force: Optional[str] = None,
                   stop_price: Optional[float] = None,
-                  iceberg_qty: Optional[float] = None,
-                  quote_order_qty: Optional[float] = None,
-                  new_client_order_id: Optional[str] = None,
-                  strategy_id: Optional[int] = None,
-                  strategy_type: Optional[int] = None,
-                  trailing_delta: Optional[int] = None,
-                  new_order_resp_type: Optional[str] = None,
-                  self_trade_prevention_mode: Optional[str] = None,
-                  recv_window: Optional[int] = None) -> Dict:
-        # ToDo: Complete this
-        pass
+                  order_limit_type: Optional[str] = "gtc",
+                  stop_order_type: Optional[str] = None,
+                  client_id: Optional[str] = None) -> Dict:
+        """
+        Create a new order on Buda using the specified parameters.
+
+        :param base_currency: The base currency in of the trading pair (e.g., 'btc' in 'btc-clp').
+        :param quote_currency: The base currency in of the trading pair (e.g., 'clp' in 'btc-clp').
+        :param side: The side of the order (Bid or Ask).
+        :param order_type: The type of the order (limit or market).
+        :param amount: The amount of the asset to buy or sell.
+        :param price: The price for limit orders (optional).
+        :param stop_price: The stop price for stop orders (optional).
+        :param order_limit_type: The type of limit order (e.g., gtc, ioc, fok, post_only).
+        :param stop_order_type: The type of stop order (e.g., stop_loss, take_profit).
+        :param client_id: A unique client ID for the order (optional).
+        :return: The response from the exchange API as a dictionary.
+        """
+
+        market_id = "-".join([base_currency.lower(), quote_currency.lower()])
+        # Define the endpoint path
+        endpoint_path = f"{self.ENDPOINTS['NEW_ORDER'].format(market_id)}"
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Prepare the request payload
+        payload = {
+            'type': side.title(),  # 'Bid' or 'Ask'
+            'price_type': order_type.lower(),  # 'limit' or 'market'
+            'amount': float(amount),
+            'client_id': client_id if client_id else None  # Optional client ID
+        }
+
+        if order_type == 'limit':
+            payload['limit'] = {'price': price, 'type': order_limit_type}  # Limit price and order type (gtc, ioc, etc.)
+
+        if stop_price is not None:
+            payload['stop'] = {'stop_price': stop_price, 'type': stop_order_type}  # Stop order details
+
+        # Authenticate the request
+        headers = self._sign_request(method="POST", path=endpoint_path, body=payload)
+
+        # Make the API call
+        response = requests.post(url, headers=headers, json=payload)
+
+        # Return the response as a dictionary
+        return response.json()

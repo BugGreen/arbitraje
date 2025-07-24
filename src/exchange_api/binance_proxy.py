@@ -187,7 +187,7 @@ class BinanceProxy(BaseExchange):
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
 
-    def new_order(self, symbol: str, side: str, order_type: str,
+    def new_order(self, base_currency: str, quote_currency: str, side: str, order_type: str,
                   timestamp: Optional[int] = None,
                   quantity: Optional[float] = None,
                   price: Optional[float] = None,
@@ -205,7 +205,8 @@ class BinanceProxy(BaseExchange):
         """
         Create a new order on Binance using the specified parameters.
 
-        :param symbol: The trading pair symbol (e.g., 'BTCUSDT').
+        :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
+        :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
         :param side: The side of the order (BUY or SELL).
         :param order_type: The type of the order (LIMIT, MARKET, STOP_LOSS, etc.).
         :param quantity: The quantity to buy or sell. (Optional, depends on order type).
@@ -225,6 +226,7 @@ class BinanceProxy(BaseExchange):
         :return: The response from the exchange API as a dictionary.
         """
         timestamp = int(time.time() * 1000)
+        symbol = base_currency.upper() + quote_currency.upper()
         # Construct the query parameters
         params = {
             'symbol': symbol,

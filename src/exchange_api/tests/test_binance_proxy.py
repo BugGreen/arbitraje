@@ -137,7 +137,9 @@ def test_new_order_success(mock_post):
     binance.api_secret = "test_api_secret"
 
     # Sample order parameters
-    symbol = 'BTCUSDT'
+    base_currency = 'BTC'
+    quote_currency = 'USDT'
+    symbol = base_currency + quote_currency
     side = 'BUY'
     order_type = 'LIMIT'
     price = 90000
@@ -166,7 +168,8 @@ def test_new_order_success(mock_post):
 
     # Call the new_order function
     response = binance.new_order(
-        symbol=symbol,
+        base_currency=base_currency,
+        quote_currency=quote_currency,
         side=side,
         order_type=order_type,
         price=price,
@@ -201,12 +204,10 @@ def test_new_order_fail(mock_post):
     mock_response.json.return_value = mock_error_response
     mock_post.return_value = mock_response
 
-    mock_post.return_value.json.return_value = mock_error_response
-    mock_post.return_value.status_code = 400
-
     # Call the new_order function
     response = binance.new_order(
-        symbol='BTCUSDT',
+        base_currency='BTC',
+        quote_currency='USDT',
         side='SELL',
         order_type='LIMIT',
         price=95000,

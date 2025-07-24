@@ -216,3 +216,68 @@ def test_create_withdraw_request_api_error(mock_post):
         )
 
     mock_post.assert_called_once()
+
+
+@patch("requests.post")
+def test_new_order_limit(mock_post):
+    # Setup for the BudaProxy instance
+    buda = BudaProxy()
+    buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
+
+    expected_response = {"order": {"id": 1, "amount": ["0.05", "BTC"], "price_type": "limit"}}
+
+    # Mock the response from the API
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = expected_response
+    mock_post.return_value = mock_response
+
+    # Call the new_order method
+    response = buda.new_order(
+        base_currency='btc',
+        quote_currency='clp',
+        side='Bid',
+        order_type='limit',
+        amount=0.05,
+        price=1000000,
+        order_limit_type='gtc',
+        client_id='my-order-1'
+    )
+
+    # Check the response
+    assert response['order']['price_type'] == 'limit'
+    assert response['order']['id'] == 1
+    assert response['order']['amount'][0] == '0.05'
+    assert response['order']['amount'][1] == 'BTC'
+
+
+@patch("requests.post")
+def test_new_order_market(mock_post):
+    # Setup for the BudaProxy instance
+    buda = BudaProxy()
+    buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
+
+    expected_response = {"order": {"id": 2, "amount": ["0.05", "BTC"], "price_type": "market"}}
+    # Mock the response from the API
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = expected_response
+    mock_post.return_value = mock_response
+
+    # Call the new_order method with market order type
+    response = buda.new_order(
+        base_currency='btc',
+        quote_currency='clp',
+        side='Ask',
+        order_type='market',
+        amount=0.05,
+        client_id='my-order-2'
+    )
+
+    # Check the response
+    assert response['order']['price_type'] == 'market'
+    assert response['order']['id'] == 2
+    assert response['order']['amount'][0] == '0.05'
+    assert response['order']['amount'][1] == 'BTC'
+
+

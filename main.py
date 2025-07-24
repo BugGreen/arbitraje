@@ -36,11 +36,17 @@ def main() -> None:
     try:
         buda = ExchangeFactory.get_exchange("buda")
         coin = "BTC"
+        base_currency, quote_currency = 'eth', 'cop'
+        side = 'bid'
+        order_type = 'limit'
+        order_amount = 0.0012
+        price = 15000000
+        new_order = buda.new_order(base_currency, quote_currency, side, order_type, order_amount, price=price)
         #binance_ln_invoice = 'lnbc20u1pn5swdvpp573v84cg3440zgzp9c3wzg0xef62ql4wxgyw2peq4lkpfclqp79gsdqqcqzysxqrrsssp58736wslm5tw8r9eep0fmysj60mf705e5dkk24nxyhpvnp5naaasq9qxpqysgqdfrr8ry3lvrpekepjj9dxualwea305v2craa5c8qy6ww9809tyeksg8s7tue5h3g48xdldc8y3hlfcvx952dk44wl60uprznqx4ehnqpaxjxfv'
         #withdrawal_request = buda.create_withdraw_request(coin=coin, address=binance_ln_invoice, amount=0.00002)
         #lightning_invoice = buda.create_deposit_address(amount_satoshis=5000, memo="test")
         #print(json.dumps(lightning_invoice, indent=2))
-        #print(json.dumps(withdrawal_request, indent=2))
+        print(json.dumps(new_order, indent=2))
 
     except Exception as e:
         print(f"Error with BUDA: {e}")

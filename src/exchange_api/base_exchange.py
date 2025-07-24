@@ -52,27 +52,13 @@ class BaseExchange(ABC):
         """
         pass
 
-
     @abstractmethod
-    def new_order(self, symbol: str, side: str, order_type: str,
-                  timestamp: Optional[int],
-                  quantity: Optional[float] = None,
-                  price: Optional[float] = None,
-                  time_in_force: Optional[str] = None,
-                  stop_price: Optional[float] = None,
-                  iceberg_qty: Optional[float] = None,
-                  quote_order_qty: Optional[float] = None,
-                  new_client_order_id: Optional[str] = None,
-                  strategy_id: Optional[int] = None,
-                  strategy_type: Optional[int] = None,
-                  trailing_delta: Optional[int] = None,
-                  new_order_resp_type: Optional[str] = None,
-                  self_trade_prevention_mode: Optional[str] = None,
-                  recv_window: Optional[int] = None) -> Dict:
+    def new_order(self, base_currency: str, quote_currency: str, side: str, order_type: str) -> Dict:
         """
         Create a new order on the exchange.
 
-        :param symbol: The trading pair symbol (e.g., 'BTCUSDT').
+        :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
+        :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
         :param side: The side of the order (BUY or SELL), ENUMS varies from exchange to exchange.
         :param order_type: The type of the order (LIMIT, MARKET, STOP_LOSS, etc.).
         :param quantity: The quantity to buy or sell. (Optional, depends on order type).
