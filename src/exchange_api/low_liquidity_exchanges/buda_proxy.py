@@ -113,7 +113,7 @@ class BudaProxy(BaseLowLiquidityExchange):
         order_data = data.get("order", {})
         order_id = order_data.get("id")
 
-        print("Create order: {}".format(order_id))
+        # print("Create order: {}".format(order_id))
         if order_id:
             # Check if the order already exists in the snapshot
             self.add_or_update_order_state(order_id, order_data)
@@ -127,7 +127,7 @@ class BudaProxy(BaseLowLiquidityExchange):
         order_data = data.get("order", {})
         order_id = order_data.get("id")
 
-        print("Update order: {}".format(order_id))
+        # print("Update order: {}".format(order_id))
 
         if order_id:
             # Update the order in the snapshot
@@ -216,7 +216,7 @@ class BudaProxy(BaseLowLiquidityExchange):
         :param ws: WebSocket instance.
         :param error: Error message.
         """
-        logger.error(f"WebSocket error occurred: {error}")
+        logger.error(f"[ORDER STATES] -- WebSocket error occurred: {error}")
 
     @staticmethod
     def on_close_order_state(ws, close_status_code, close_msg):
@@ -325,7 +325,7 @@ class BudaProxy(BaseLowLiquidityExchange):
         :param ws: WebSocket instance.
         :param error: Error message.
         """
-        logger.error(f"WebSocket error occurred: {error}")
+        logger.error(f"[ORDER BOOK] -- WebSocket error occurred: {error}")
         self.reconnect_to_order_book()
 
     def on_close_order_book(self, ws, close_status_code, close_msg):
@@ -336,14 +336,14 @@ class BudaProxy(BaseLowLiquidityExchange):
         :param close_status_code: Close status code.
         :param close_msg: Close message.
         """
-        logger.info(f"WebSocket closed with status code: {close_status_code} and message: {close_msg}")
+        logger.info(f"[ORDER BOOK] -- WebSocket closed with status code: {close_status_code} and message: {close_msg}")
         self.reconnect_to_order_book()
 
     def reconnect_to_order_book(self):
         """
         Tries to reconnect to the order book WebSocket.
         """
-        logger.info("[Order Book Channel] -- Attempting to reconnect to WebSocket...")
+        logger.info("[ORDER BOOK] -- Attempting to reconnect to WebSocket...")
         time.sleep(0.1)  # Sleep before trying to reconnect
         self.connect_to_order_book(self.base_currency, self.quote_currency)
 
@@ -415,14 +415,11 @@ class BudaProxy(BaseLowLiquidityExchange):
                 if price_level in self.order_book_snapshot[side]:
                     del self.order_book_snapshot[side][price_level]
                     logger.info("Removed price level %s from %s (new amount: %f)", price_level, side, new_amount)
-                    # print("Removed price level %s from %s (new amount: %f)", price_level, side, new_amount)
                 else:
                     logger.info("Price level %s not found in %s for removal.", price_level, side)
-                    # print("Price level %s not found in %s for removal.", price_level, side)
             else:
                 self.order_book_snapshot[side][price_level] = f"{new_amount}"
                 logger.info("Updated %s at price %s to new amount: %f", side, price_level, new_amount)
-                # print("Updated %s at price %s to new amount: %f", side, price_level, new_amount)
 
     def update_order_book_snapshot(self, order_book: dict) -> None:
         """

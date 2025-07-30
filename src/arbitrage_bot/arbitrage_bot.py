@@ -1648,7 +1648,9 @@ class ArbitrageBot:
 
             # If the state is something else (e.g. 'rejected' or 'error'),
             # we can consider that a failure or log it
-            if state not in ("pending_confirmation", "confirmed", 'executing'):
+            if state == 'Awaiting Approval':
+                continue
+            elif state not in ("pending_confirmation", "confirmed", 'executing', ''):
                 logger.error(
                     "Withdrawal ID=%s entered unexpected state=%s. Stopping.",
                     withdraw_id, state
