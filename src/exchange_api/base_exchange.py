@@ -42,6 +42,8 @@ class BaseExchange(ABC):
                                 network: Optional[str] = None, **kwargs) -> Dict:
         """
         Abstract method for creating a withdrawal request.
+        Buda exchange: only for Lightning withdrawals
+        Binance exchange: For any kind of cripto
 
         :param coin: The symbol of the cryptocurrency to withdraw (e.g., 'BTC').
         :param address: The destination address for the withdrawal.

@@ -20,6 +20,7 @@ def main() -> None:
         time_in_force = 'GTC'
         order_type = 'LIMIT'
         order_id = 33188802974
+
         #coin_info = binance.supports_lightning_network(coin)
         #withdraw_request = binance.create_withdraw_request(coin=coin, address=ln_invoice, amount=sats_amount)
         #print(json.dumps(withdraw_request, indent=2))
@@ -57,11 +58,14 @@ def main() -> None:
             {"mode": "cancel", "order_id": 1267969492},
             {"mode": "cancel", "order_id": 1267969493},
         ]
+
+        ltc_address = "LeMNHpnvULWbh9wHqNPdPwnip3vnSsXATY"
+
         #batch_response = buda.batch_creation(orders)
         #print(json.dumps(batch_response, indent=2))
 
         #new_order = buda.new_order(base_currency, quote_currency, side, order_type, order_amount, price=price)
-        #binance_ln_invoice = 'lnbc20u1pn5swdvpp573v84cg3440zgzp9c3wzg0xef62ql4wxgyw2peq4lkpfclqp79gsdqqcqzysxqrrsssp58736wslm5tw8r9eep0fmysj60mf705e5dkk24nxyhpvnp5naaasq9qxpqysgqdfrr8ry3lvrpekepjj9dxualwea305v2craa5c8qy6ww9809tyeksg8s7tue5h3g48xdldc8y3hlfcvx952dk44wl60uprznqx4ehnqpaxjxfv'
+        binance_ln_invoice = 'lnbc20u1pn57w8spp5tte7449lywmexq0e5zrukh97d3r797t2h38hc7znnwfpmlpywjfqdqqcqzysxqrrsssp5nmydq5cy9vjlht5nuekrk9h2y52lyd5sfwn7kj3upq2euja3h9ks9qxpqysgqsdlf0c5dnq60ffu3n2kvyg9fwv4zq738l54efex5jxf949tr28vyy4y70tfv86ua7wtaazq4yd3uuhrz3rlfwz638s09sr0lqgyp6egqn5qcrs'
         #withdrawal_request = buda.create_withdraw_request(coin=coin, address=binance_ln_invoice, amount=0.00002)
         #lightning_invoice = buda.create_deposit_address(amount_satoshis=5000, memo="test")
         #print(json.dumps(lightning_invoice, indent=2))
@@ -70,6 +74,9 @@ def main() -> None:
         #print(json.dumps(order_canceled, indent=2))
         #order_states = buda.get_order_states(base_currency, quote_currency)
         #print(json.dumps(order_states, indent=2))
+        ltc_withdrawal = buda.create_withdraw_request(coin='ltc', amount=0.00702, address=ltc_address, simulate=True)
+        print(json.dumps(ltc_withdrawal, indent=2))
+
 
     except Exception as e:
         print(f"Error with BUDA: {e}")

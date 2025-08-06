@@ -30,6 +30,7 @@ class BudaProxy(BaseExchange):
         "CANCEL_ORDER": "/api/v2/orders/{}",
         "ORDER_STATES": "/api/v2/markets/{}/orders",
         "BATCH_ORDERS": "/api/v2/orders",
+        "CRYPTO_WITHDRAWAL": "/api/v2/currencies/{currency}/withdrawals"
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -123,34 +124,43 @@ class BudaProxy(BaseExchange):
     def supports_lightning_network(self, coin: str) -> bool:
         pass
 
-    def create_withdraw_request(self, coin: str, address: str,
-                                amount: float, simulate: bool = False) -> Dict:
+    def create_withdraw_request(self, coin: str, address: str, amount: float, simulate: bool = False) -> Dict:
         """
-        Submit a withdrawal request for a Lightning Network payment.
+        Submit a withdrawal request for a selected cryptocurrency (BTC, ETH, USDC, BCH, LTC).
 
-        :param coin: The cryptocurrency symbol (e.g., 'BTC'). Must be 'BTC' for Lightning Network.
-        :param address: The Lightning Network invoice received from the receiver.
-        :param amount: The withdrawal amount in BTC.
+        :param coin: The cryptocurrency symbol (e.g., 'BTC', 'ETH', 'USDC', 'BCH', 'LTC').
+        :param address: The target address (for crypto transfers) or payment request (for Lightning Network).
+        :param amount: The withdrawal amount.
         :param simulate: Optional flag to simulate the payment request without executing it.
         :return: A dictionary containing the details of the withdrawal request.
-        :raises ValueError: If the coin is not 'BTC'.
+        :raises ValueError: If the coin is unsupported or if incorrect parameters are provided.
         :raises Exception: If the request fails or the response contains an error.
         """
-        if coin.upper() != "BTC":
-            raise ValueError("This method only supports Lightning Network withdrawals for BTC.")
 
-        # Define the endpoint path
-        endpoint_path = self.ENDPOINTS["LIGHTNING_WITHDRAWAL"]
-        url = f"{self.BASE_URL}{endpoint_path}"
+        # Handling Lightning Network withdrawal for BTC
+        if coin.upper() == "BTC":
+            # Define the endpoint path for Lightning Network
+            endpoint_path = self.ENDPOINTS["LIGHTNING_WITHDRAWAL"]
+            url = f"{self.BASE_URL}{endpoint_path}"
+            withdrawal_data = {"payment_request": address}
+
+        # Handling traditional crypto withdrawals (ETH, USDC, BCH, LTC)
+        elif coin.upper() in ['ETH', 'USDC', 'BCH', 'LTC']:
+            # Define the endpoint path for traditional crypto withdrawals
+            endpoint_path = self.ENDPOINTS["CRYPTO_WITHDRAWAL"].format(currency=coin.lower())
+            url = f"{self.BASE_URL}{endpoint_path}"
+            withdrawal_data = {"target_address": address}
+
+        else:
+            # Raise an error if the coin is unsupported
+            raise ValueError(f"Withdrawal not supported for the cryptocurrency {coin.upper()}.")
 
         payload = {
             "amount": amount,
-            "withdrawal_data": {
-                "payment_request": address
-            }
+            "withdrawal_data": withdrawal_data,
+            "simulate": simulate
         }
-
-        # Authenticate the request
+        # Sign the request
         headers = self._sign_request(method="POST", path=endpoint_path, body=payload)
 
         # Make the API call
@@ -337,3 +347,4 @@ class BudaProxy(BaseExchange):
 
         # Return the response as a dictionary
         return response.json()
+
