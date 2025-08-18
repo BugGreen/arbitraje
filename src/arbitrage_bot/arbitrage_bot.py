@@ -230,10 +230,12 @@ class ArbitrageBot:
         if order_type_name in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
             # p_diff = (high_liquidity_price - lowest_exchange_lowest_ask) / lowest_exchange_lowest_ask
             price_reference = min([lowest_ask, high_liquidity_price])
+            low_liquidity_price = lowest_ask
             p_diff = (high_liquidity_price - lowest_ask) / lowest_ask
         elif order_type_name in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
             # p_diff = (lowest_exchange_highest_bid - high_liquidity_price) / high_liquidity_price
             price_reference = max([highest_bid, high_liquidity_price])
+            low_liquidity_price = highest_bid
             p_diff = (highest_bid - high_liquidity_price) / high_liquidity_price
         else:
             logger.error("Unrecognized order type for price diff: %s", order_type_name)
@@ -246,7 +248,7 @@ class ArbitrageBot:
 
         arb_order.update_market_data(
             price_diff=p_diff,
-            low_liquidity_price=price_reference,
+            low_liquidity_price=low_liquidity_price,
             high_liquidity_price=high_liquidity_price
         )
         return p_diff, price_reference

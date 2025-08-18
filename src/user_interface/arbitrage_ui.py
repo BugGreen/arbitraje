@@ -14,44 +14,56 @@ logger = logging.getLogger(__name__)
 
 class ArbitrageUI:
     """
-    Handles the terminal-based UI for the arbitrage bot, including a dynamic table and progress visualization.
-    Also listens for user commands (stop/pause/continue) to control the arbitrage flow.
+    Handles the terminal-based UI for the arbitrage bot.
+
+    The UI is divided into two main sections:
+      1. Market Data Panel: Updates every second with live market data.
+      2. Trade History Table: Appends a new row every time a trade is executed,
+         maintaining a history of trades.
+
+    It also incorporates a command listener to allow the user to pause, continue, or stop the bot.
     """
 
     def __init__(self):
         self.console = Console()
-        self.table = Table(title="Arbitrage Order Status")
+
+        # Trade History Table (initially empty)
+        self.trade_history_table = Table(title="Trade History")
+        self.trade_history_table.add_column("Timestamp", justify="right", style="cyan")
+        self.trade_history_table.add_column("Order Type", justify="center", style="green")
+        self.trade_history_table.add_column("Price Diff (%)", justify="center", style="magenta")
+        self.trade_history_table.add_column("Profit", justify="center", style="bold yellow")
+        self.trade_history_table.add_column("Traded (Low Liquidity)", justify="center", style="blue")
+        self.trade_history_table.add_column("Traded (High Liquidity)", justify="center", style="blue")
+        self.trade_history_table.add_column("Low Liquidity Price", justify="center", style="cyan")
+        self.trade_history_table.add_column("High Liquidity Price", justify="center", style="cyan")
+
+        # Market Data Panel (will be updated every second)
+        self.market_data_panel = Panel("")
+
+        # Progress bar for arbitrage order progress
         self.progress = Progress(
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            transient=True
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%")
         )
         self.progress_task = self.progress.add_task("Order Progress", total=100)
+
+        # Flags for controlling UI and flow
         self._stop_requested: bool = False
         self._pause_requested: bool = False
         self.lock = threading.Lock()
-        # We'll hold a reference to the latest arbitrage order for UI updates
-        self.arb_order: Optional[ArbitrageOrder] = None
 
-        # Setup table columns
-        self.table.add_column("Timestamp", justify="right", style="cyan")
-        self.table.add_column("Order Type", justify="center", style="green")
-        self.table.add_column("Price Difference", justify="center", style="magenta")
-        self.table.add_column("Profit", justify="center", style="bold yellow")
-        self.table.add_column("Traded (Low Liquidity)", justify="center", style="blue")
-        self.table.add_column("Traded (High Liquidity)", justify="center", style="blue")
-        self.table.add_column("Low Liquidity Price", justify="center", style="cyan")
-        self.table.add_column("High Liquidity Price", justify="center", style="cyan")
-        self.table.add_column("Pending (High Liquidity)", justify="center", style="red")
+        # Shared arbitrage order for UI updates (set by main flow)
+        self.arb_order: Optional["ArbitrageOrder"] = None
 
     def listen_for_commands(self) -> None:
         """
-        Listens for user commands to control the arbitrage process:
-            - 's' or 'stop' to stop the bot.
-            - 'p' or 'pause' to pause the bot.
-            - 'c' or 'continue' to resume if paused.
-        This method blocks and should run in a separate thread.
+        Listen for user commands to control the arbitrage process:
+          - 's' or 'stop': Stop the bot.
+          - 'p' or 'pause': Pause the bot.
+          - 'c' or 'continue': Resume the bot if paused.
+        This function runs in its own thread and updates internal flags.
         """
         self.console.print(
             "[bold yellow]Command Listener:[/bold yellow] Type 's' (stop), 'p' (pause), or 'c' (continue).")
@@ -72,26 +84,52 @@ class ArbitrageUI:
                     self.console.print(
                         "[bold red]Unrecognized command.[/bold red] Valid commands: s (stop), p (pause), c (continue).")
 
-    def update_table(self, arb_order: ArbitrageOrder) -> None:
+    def update_market_data(self, arb_order: "ArbitrageOrder") -> None:
+        """
+        Update the market data panel with the latest market information.
+
+        :param arb_order: The current ArbitrageOrder containing market data attributes.
+        """
+        # Build a simple table for market data (we're not preserving history here)
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Price Diff (%)", justify="center")
+        table.add_column("Low Liquidity Price", justify="center")
+        table.add_column("High Liquidity Price", justify="center")
+        table.add_column("Progress (%)", justify="center")
+
+        # Calculate progress as the percentage of (original - pending_low) / original.
+        progress = \
+            ((arb_order.original_amount - arb_order.pending_amount_low_liquidity) / arb_order.original_amount) \
+            * 100 if arb_order.original_amount > 0 else 0.0
+
+        table.add_row(
+            f"{arb_order.price_difference * 100:.2f}%",
+            f"{arb_order.low_liquidity_price:.2f}",
+            f"{arb_order.high_liquidity_price:.2f}",
+            f"{progress:.2f}%"
+        )
+        self.market_data_panel = Panel(table, title="Market Data")
+        # Display the market data panel
+        self.console.print(self.market_data_panel)
+
+    def update_table(self, arb_order: ArbitrageOrder, update_history: bool = False) -> None:
         """
         Updates the UI table with the latest information from the ArbitrageOrder.
 
         :param arb_order: The current ArbitrageOrder containing updated order status and trading data.
         """
-        # Clear and rebuild the table for each update
-        self.table = Table(title="Arbitrage Order Status")
-        self.table.add_column("Timestamp", justify="right", style="cyan")
-        self.table.add_column("Order Type", justify="center", style="green")
-        self.table.add_column("Price Difference", justify="center", style="magenta")
-        self.table.add_column("Profit", justify="center", style="bold yellow")
-        self.table.add_column("Traded (Low Liquidity)", justify="center", style="blue")
-        self.table.add_column("Traded (High Liquidity)", justify="center", style="blue")
-        self.table.add_column("Low Liquidity Price", justify="center", style="cyan")
-        self.table.add_column("High Liquidity Price", justify="center", style="cyan")
-        self.table.add_column("Pending (High Liquidity)", justify="center", style="red")
+        if update_history:
+            self.append_trade_record(arb_order)
+        self.console.print(self.trade_history_table)
 
+    def append_trade_record(self, arb_order: "ArbitrageOrder") -> None:
+        """
+        Appends a new trade record to the trade history table.
+
+        :param arb_order: The current ArbitrageOrder.
+        """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.table.add_row(
+        self.trade_history_table.add_row(
             timestamp,
             str(arb_order.order_type),
             f"{arb_order.price_difference * 100:.2f}%",
@@ -100,10 +138,10 @@ class ArbitrageUI:
             f"{arb_order.traded_amount_base_high_liquidity:.2f} {arb_order.base_currency}",
             f"{arb_order.low_liquidity_price:.2f}",
             f"{arb_order.high_liquidity_price:.2f}",
-            f"{(arb_order._pending_quote_amount_high_liquidity + arb_order._pending_base_amount_high_liquidity):.2f}"
+            f"{arb_order.get_pending_quote_amount_high_liquidity:.2f}"
         )
-        self.console.clear()
-        self.console.print(self.table)
+        # Redraw the trade history table
+        # self.console.print(self.trade_history_table)
 
     def update_progress(self, arb_order: ArbitrageOrder) -> None:
         """
@@ -118,41 +156,39 @@ class ArbitrageUI:
         progress_percentage = (completed / total) * 100 if total > 0 else 0
         self.progress.update(self.progress_task, completed=progress_percentage)
         progress_info = Panel(
-            f"Progress: {completed:.2f} / {total:.2f} {arb_order.quote_currency} traded.",
+            f"Progress: {completed:.2f} / {total:.2f} {arb_order.quote_currency} traded. ",
             title="Arbitrage Progress",
         )
         self.console.print(progress_info)
         self.console.print(self.progress)
 
-    def display_ui(self, arb_order: ArbitrageOrder) -> None:
+    def display_ui(self, arb_order: "ArbitrageOrder") -> None:
         """
-        Starts the UI display and command listener in a loop.
-        The UI is updated every second and reflects both the current arbitrage data and user commands.
+        Continuously updates the UI with market data and trade history, and listens for user commands.
+        Updates the market data every second, while trade history is only appended when a new trade occurs.
 
         :param arb_order: The current ArbitrageOrder instance.
         """
-        # Set the initial order for shared access
         with self.lock:
             self.arb_order = arb_order
 
-        # Start the command listener in a separate thread
+        # Start command listener in a separate thread.
         command_thread = threading.Thread(target=self.listen_for_commands, daemon=True)
         command_thread.start()
 
         while True:
-            time.sleep(1)  # Update every second
+            time.sleep(1)  # Update market data every second
             with self.lock:
-                # Check for stop request
                 if self._stop_requested:
                     self.console.print("[bold red]Stop command detected. Exiting UI...[/bold red]")
                     break
-
-                # Display updates only if not paused
                 if not self._pause_requested:
-                    self.update_table(arb_order)
+                    self.console.clear()
+                    self.update_market_data(arb_order)
+                    self.update_table(arb_order, False)
                     self.update_progress(arb_order)
+                    # The trade history table is updated only when append_trade_record is called by the arbitrage flow.
 
-        # Clear the arb_order reference when stopping UI
         with self.lock:
             self.arb_order = None
 
