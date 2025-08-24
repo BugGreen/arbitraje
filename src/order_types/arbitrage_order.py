@@ -26,11 +26,14 @@ class ArbitrageOrder(Order):
 
         # Dynamic attributes Low-liquidity side
         self.pending_amount_low_liquidity = self.original_amount  # Initially the entire original amount is pending
+        self.traded_base_amount_low_liquidity: float = 0.0
         self.traded_quote_amount_low_liquidity: float = 0.0
         # This is how much has actually been traded (sub-orders filled) on the low-liquidity exchange
 
         # High-liquidity side
-        self.traded_amount_high_liquidity: float = 0.0
+        self.traded_amount_base_high_liquidity: float = 0.0
+        self.traded_amount_quote_high_liquidity: float = 0.0
+
         # This accumulates how much has actually been executed on the high-liquidity side
 
         # This is the portion that is "ready to be offset" on the high-liquidity side
@@ -65,6 +68,7 @@ class ArbitrageOrder(Order):
         and set  traded_base_delta to `_pending_base_amount_high_liquidity`.
         meaning that exact portion is now ready to be offset on the high-liquidity side.
         """
+        self.traded_base_amount_low_liquidity += traded_base_delta
         self.traded_quote_amount_low_liquidity += traded_quote_delta
         self.pending_amount_low_liquidity -= traded_quote_delta
         # Move that same traded_delta to pending
@@ -91,7 +95,8 @@ class ArbitrageOrder(Order):
         self._pending_quote_amount_high_liquidity -= traded_quote_delta
         self._pending_base_amount_high_liquidity -= traded_base_delta
 
-        self.traded_amount_high_liquidity += traded_quote_delta
+        self.traded_amount_base_high_liquidity += traded_base_delta
+        self.traded_amount_quote_high_liquidity += traded_quote_delta
 
     def update_profit(self) -> None:
         """
@@ -129,7 +134,7 @@ class ArbitrageOrder(Order):
         """
         Same logic, for the high-liquidity side of the trade.
         """
-        self.traded_amount_high_liquidity += traded_delta
+        self.traded_amount_quote_high_liquidity += traded_delta
 
     def both_sides_traded_enough(self, threshold: float = 0.001) -> bool:
         """
@@ -138,7 +143,7 @@ class ArbitrageOrder(Order):
         """
         # Example criterion: each side is at least (original_amount - threshold)
         if (abs(self.traded_quote_amount_low_liquidity - self.original_amount) <= threshold and
-            abs(self.traded_amount_high_liquidity - self.original_amount) <= threshold):
+            abs(self.traded_amount_quote_high_liquidity - self.original_amount) <= threshold):
             return True
         return False
 
