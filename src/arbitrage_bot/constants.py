@@ -28,6 +28,7 @@ MIN_AMOUNT_BINANCE_REQUIREMENTS = {
     "BTCUSDC": 10,
 }
 
+# TODO: Rellenar esta lista de manera automatica
 MIN_WITHDRAWAL_AMOUNT_BINANCE = {
-    "USDC": 10
+    "USDC": 20
 }

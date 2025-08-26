@@ -506,6 +506,26 @@ place_sub_orders_sell_limit_flow_traded = [
     }
 ]
 
+states_sub_orders_sell_limit_flow = {"orders": [
+    {
+        'id': 1367813961, 'uuid': '3f5c4a2b-4ec8-434a-8e13-fc2b211e0017', 'market_id': 'BTC-USDC', 'account_id': 143870,
+        'type': 'Ask', 'state': 'traded', 'created_at': '2025-02-08T16:39:04.368Z', 'fee_currency': 'USDC',
+        'price_type': 'limit', 'source': None, 'client_id': None, 'message': None, 'order_type': 'gtc', 'expire_at': 0,
+        'limit': ['105277.9337', 'USDC'], 'amount': ['0.00004272', 'BTC'], 'original_amount': ['0.00004272', 'BTC'],
+        'traded_amount': ['0.00004272', 'BTC'], 'total_exchanged': ['4.5', 'USDC'], 'paid_fee': ['0.0', 'USDC'],
+        'stop_price': None
+    },
+    {
+        'id': 1367813959, 'uuid': '3f5c4a2b-4ec8-434a-8e13-fc2b211e0017', 'market_id': 'BTC-USDC', 'account_id': 143870,
+        'type': 'Ask', 'state': 'traded', 'created_at': '2025-02-08T16:39:04.368Z', 'fee_currency': 'USDC',
+        'price_type': 'limit', 'source': None, 'client_id': None, 'message': None, 'order_type': 'gtc', 'expire_at': 0,
+        'limit': ['105277.9337', 'USDC'], 'amount': ['0.00009976', 'BTC'], 'original_amount': ['0.00009976', 'BTC'],
+        'traded_amount': ['0.00009976', 'BTC'], 'total_exchanged': ['10.5', 'USDC'], 'paid_fee': ['0.0', 'USDC'],
+        'stop_price': None
+    }
+]
+}
+
 batch_cancellation_sell_limit_flow_traded = {
     'orders_diff': [{'mode': 'cancel', 'order_id': 1367813959}, {'mode': 'cancel', 'order_id': 1367813961}]
 }

@@ -1,17 +1,18 @@
-from typing import Optional, Type, Dict, List, Any, Union, Tuple
-from concurrent.futures import ThreadPoolExecutor
-from src.exchange_api.exchange_factory import ExchangeFactory
-from src.arbitrage_bot.order import Order
-from src.exchange_api.binance_proxy import BinanceProxy
-from src.exchange_api.buda_proxy import BudaProxy
 from src.arbitrage_bot.constants import MIN_AMOUNT_REQUIREMENTS, MIN_AMOUNT_BINANCE_REQUIREMENTS, MIN_BTC_PER_INVOICE, \
     MAX_BTC_PER_INVOICE, MIN_WITHDRAWAL_AMOUNT_BINANCE
-from src.order_types.arbitrage_order import ArbitrageOrder
 from src.order_types.encoders import OrderType, CurrencyOfInterest
+from typing import Optional, Type, Dict, List, Any, Union, Tuple
+from src.exchange_api.exchange_factory import ExchangeFactory
+from src.order_types.arbitrage_order import ArbitrageOrder
+from src.exchange_api.binance_proxy import BinanceProxy
+from src.user_interface.arbitrage_ui import ArbitrageUI
+from concurrent.futures import ThreadPoolExecutor
+from src.exchange_api.buda_proxy import BudaProxy
+from src.arbitrage_bot.order import Order
+from datetime import datetime
+import threading
 import logging
 import time
-from src.user_interface.arbitrage_ui import ArbitrageUI
-import threading
 
 logger = logging.getLogger(__name__)
 
@@ -98,12 +99,13 @@ class ArbitrageBot:
                 continue
 
             # 5) Check completion
-            if self.arbitrage_order_completion(arb_order):
+            order_completion = self.arbitrage_order_completion(arb_order)
+            if order_completion:
                 # If fully done => funds_transfer
                 success_transfer = self.funds_transfer(arb_order)
                 if success_transfer:
                     logger.info("Funds transferred successfully. Reset order or create a new one.")
-                    arb_order.reset()  # hypothetical method to reset or you can create a new one
+                    arb_order.reset_values(order_completion)
                 else:
                     logger.warning("Funds transfer failed. Evaluate partial scenario.")
             else:
@@ -115,7 +117,7 @@ class ArbitrageBot:
                     success_transfer = self.funds_transfer(arb_order)
                     if success_transfer:
                         logger.info("Funds transferred successfully. Reset order or create a new one.")
-                        arb_order.reset_values(order_completion) # hypothetical method to reset or you can create a new one
+                        arb_order.reset_values(order_completion)
                     else:
                         logger.warning("Funds transfer failed. Evaluate partial scenario.")
 
@@ -128,6 +130,26 @@ class ArbitrageBot:
             time.sleep(sleep_interval)
 
         logger.info("Arbitrage flow ended. mode=%s", mode)
+
+    def register_trade_event(self, arb_order: ArbitrageOrder) -> None:
+        """
+        Register a trade event.
+        Store it into UI's attribute `trade_events`, so it can be processed and displayed.
+
+        :param arb_order: The ArbitrageOrder describing order_type, amounts, etc.
+        """
+
+        trade_event = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "order_type": str(arb_order.order_type),
+            "price_difference": arb_order.price_difference,
+            "profit": arb_order.profit.amount,
+            "traded_low": arb_order.traded_base_amount_low_liquidity,
+            "traded_high": arb_order.traded_amount_base_high_liquidity,
+            "low_price": arb_order.low_liquidity_price,
+            "high_price": arb_order.high_liquidity_price
+        }
+        self.ui.trade_events.put(trade_event)
 
     @staticmethod
     def _create_exchange(exchange_name: str) -> Type[BinanceProxy or BudaProxy]:
@@ -276,7 +298,7 @@ class ArbitrageBot:
         if total_amount < min_required:
             logger.warning(
                 "Total order amount %.8f is below the minimum %.8f for market %s",
-                total_amount, min_required, f"{self.base_currency}-{self.quote_currency}"
+                total_amount, min_required, f"{arb_order.base_currency}-{arb_order.quote_currency}"
             )
             return {
                 "code": "ERROR_BELOW_MIN_TOTAL",
@@ -782,6 +804,9 @@ class ArbitrageBot:
         Synchronously place a MARKET order on the high-liquidity exchange for the
         arb_order.pending_amount_high_liquidity, then call arb_order.fulfill_high_liquidity(...)
         with the executed quantity.
+        When the order is successfully traded, it updates the ArbitrageOrder instance via its
+        `update_market_data` method and then pushes this information to the UI.
+
 
         :param arb_order: The ArbitrageOrder object to update.
         :param limit_price_low_liquidity: The limit price in the low liquidity exchange
@@ -841,8 +866,17 @@ class ArbitrageBot:
                 limit_low_liquidity=limit_price_low_liquidity,
                 limit_high_liquidity=limit_price_high_liquidity
             )
-            arb_order.update_profit(price_difference=price_difference)  # TODO: se puede hacer metodo privado y encapsularlo en fulfull_high_liquidity
 
+            # Update arb_order: `ArbitrageOrder`
+            arb_order.update_profit(price_difference=price_difference)  # TODO: se puede hacer metodo privado y encapsularlo en fulfull_high_liquidity
+            arb_order.update_market_data(
+                price_diff=price_difference,
+                low_liquidity_price=limit_price_low_liquidity,
+                high_liquidity_price=limit_price_high_liquidity
+            )
+
+            # Update the UI
+            self.register_trade_event(arb_order)
             return order_resp
 
         except Exception as e:
@@ -1099,10 +1133,11 @@ class ArbitrageBot:
         # 2. The total QUOTE currency to send
         # TODO: Esto deberia depender de arb_order.currency_of_interest ?
         total_quote_currency = arb_order.traded_quote_amount_low_liquidity
-        if total_quote_currency <= MIN_WITHDRAWAL_AMOUNT_BINANCE.get(arb_order.quote_currency):
-            logger.info("No =%s to transfer (traded_base_amount_low_liquidity=%.6f). Skipping.",
-                        arb_order.quote_currency, total_quote_currency)
-            return
+        if isinstance(sender, BinanceProxy):
+            if total_quote_currency <= MIN_WITHDRAWAL_AMOUNT_BINANCE.get(arb_order.quote_currency):
+                logger.info("No =%s to transfer (traded_base_amount_low_liquidity=%.6f). Skipping.",
+                            arb_order.quote_currency, total_quote_currency)
+                return
 
         # Track overall success
         all_success = True

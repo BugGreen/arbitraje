@@ -26,8 +26,8 @@ def main() -> None:
             exchange_low_liquidity='buda',
             price_diff_threshold=0.4,
             mode='conservative',
-            base_currency='ETH',
-            quote_currency='COP',
+            base_currency='BTC',
+            quote_currency='USDC',
             amount=0.05  # Example amount
         )
         arb_order = ArbitrageOrder(
