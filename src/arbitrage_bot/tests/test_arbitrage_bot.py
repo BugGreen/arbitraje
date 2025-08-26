@@ -1118,3 +1118,25 @@ class TestArbitrageBot(unittest.TestCase):
         p_diff = self.bot.get_price_difference(837000.0, arb_order)
         self.assertAlmostEqual(p_diff[0], 0.00055, places=5)
         self.assertEqual(p_diff[1], 837462.23)
+
+    def test_arbitrage_order_completion(self):
+        """
+        Tests different cases of ArbitrageOrder
+        """
+
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=1.0,
+            original_amount=24000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        arb_order.traded_quote_amount_low_liquidity = 24000.0
+        assert self.bot.arbitrage_order_completion(arb_order)
+
+        arb_order.traded_quote_amount_low_liquidity = 24000
+        assert self.bot.arbitrage_order_completion(arb_order)
+
+        arb_order.traded_quote_amount_low_liquidity = 2400
+        assert not self.bot.arbitrage_order_completion(arb_order)

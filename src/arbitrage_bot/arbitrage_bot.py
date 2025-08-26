@@ -695,6 +695,18 @@ class ArbitrageBot:
             logger.warning("Some transfer(s) failed. btc_success=%s, quote_success=%s", btc_success, quote_success)
             return False
 
+    @staticmethod
+    def arbitrage_order_completion(arb_order: ArbitrageOrder) -> bool:
+        """
+        Checks if an arbitrage order has been completed. This is True when the ArbitrageOrder attributes
+        `traded_quote_amount_low_liquidity` and `original_amount` are equal.
+
+        :param arb_order: The ArbitrageOrder to check.
+        :return: Boolean value defining the completion state of the order
+        """
+
+        return arb_order.original_amount == arb_order.traded_quote_amount_low_liquidity
+
     # TODO: Busacar la manera de paralelizar el proceso por cada chunk
     def btc_transfer(self, arb_order: ArbitrageOrder) -> bool:
         """
