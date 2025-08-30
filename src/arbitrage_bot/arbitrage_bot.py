@@ -3,7 +3,8 @@ from src.exchange_api.exchange_factory import ExchangeFactory
 from src.arbitrage_bot.order import Order
 from src.exchange_api.binance_proxy import BinanceProxy
 from src.exchange_api.buda_proxy import BudaProxy
-from src.arbitrage_bot.constants import MIN_AMOUNT_REQUIREMENTS, MIN_AMOUNT_BINANCE_REQUIREMENTS
+from src.arbitrage_bot.constants import MIN_AMOUNT_REQUIREMENTS, MIN_AMOUNT_BINANCE_REQUIREMENTS, MIN_BTC_PER_INVOICE, \
+    MAX_BTC_PER_INVOICE
 from src.order_types.arbitrage_order import ArbitrageOrder
 from src.order_types.encoders import OrderType, CurrencyOfInterest
 import logging
@@ -120,7 +121,6 @@ class ArbitrageBot:
                 "message": str(e)
             }
 
-    # TODO: Ajustar a la nueva firma de _update_arbitrage_order_on_fill
     def place_sub_order_cancellations(self, sub_orders: List[Dict[str, Any]], arb_order: 'ArbitrageOrder') -> \
             List[Dict[str, Any]]:
         """
@@ -344,7 +344,7 @@ class ArbitrageBot:
             arb_order.update_low_liquidity_traded(traded_quote_delta=traded_quote_amount,
                                                   traded_base_delta=traded_base_amount)
             # If partial, we keep trying. If fully filled, we might see if pending_amount is close to zero.
-            self.execute_opposite_order_high_liquidity_exchange(arb_order)  # TODO: El side se debe actualizar automaticamente
+            self.execute_opposite_order_high_liquidity_exchange(arb_order)
 
         else:
             logger.info(
@@ -749,3 +749,186 @@ class ArbitrageBot:
                     "status": "sub_orders_canceled"
                 }
 
+    # TODO: Busacar la manera de paralelizar el proceso por cada chunk
+    def btc_transfer(self, arb_order: 'ArbitrageOrder') -> bool:
+        """
+        Synchronously transfer BTC between exchanges based on the arbitrage order's type.
+        If order_type in [BUY_LIMIT, BUY_MARKET], we transfer from low-liquidity to high-liquidity.
+        If order_type in [SELL_LIMIT, SELL_MARKET], we transfer from high-liquidity to low-liquidity.
+
+        :param arb_order: The ArbitrageOrder containing traded_base_amount_low_liquidity.
+        :return: None (raises or logs if there's an issue).
+        """
+        # 1. Decide sender / receiver
+        if arb_order.order_type.name in ("BUY_LIMIT", "BUY_MARKET"):
+            sender = self.exchange_low_liquidity
+            receiver = self.exchange_high_liquidity
+        elif arb_order.order_type.name in ("SELL_LIMIT", "SELL_MARKET"):
+            sender = self.exchange_high_liquidity
+            receiver = self.exchange_low_liquidity
+        else:
+            logger.error("Unknown order_type: %s", arb_order.order_type)
+            return
+
+        # 2. The total BTC to send
+        # TODO: Esto deberia depender de arb_order.currency_of_interest ?
+        total_btc = arb_order.traded_base_amount_low_liquidity
+        if total_btc <= MIN_BTC_PER_INVOICE:
+            logger.info("No BTC to transfer (traded_base_amount_low_liquidity=%.6f). Skipping.", total_btc)
+            return
+
+        # 3. Split into smaller chunks
+        chunks = self._split_btc_amount(total_btc)
+        # Track overall success
+        all_success = True
+
+        # 4) For each chunk: create invoice, pay invoice, wait for confirm
+        for chunk in chunks:
+            if chunk < MIN_BTC_PER_INVOICE:
+                logger.warning(
+                    "Chunk=%.8f is below minimum invoice=%.8f. Skipping this chunk.",
+                    chunk, MIN_BTC_PER_INVOICE
+                )
+                continue
+
+            # 4a) Create LN invoice on receiver
+            invoice_data = receiver.create_lightning_invoice(amount=chunk)
+            # TODO: Revisar si es necesario usar el uuid en vez de el id en BUDA
+            ln_invoice = invoice_data.get("invoice")
+            if not ln_invoice:
+                logger.error(
+                    "Failed to create LN invoice for chunk=%.8f on %s. invoice_data=%s",
+                    chunk, receiver.__class__.__name__, invoice_data
+                )
+                all_success = False
+                continue
+
+            logger.info("Created LN invoice: %s for chunk=%.8f BTC", ln_invoice, chunk)
+
+            # 4b) pay_ln_invoice from sender
+            pay_response = sender.pay_ln_invoice(ln_invoice=ln_invoice, amount=chunk)
+            if ("code" in pay_response and pay_response.get("code", 0) < 0) or ("error" in pay_response):
+                logger.error("Invoice payment failed. pay_response=%s", pay_response)
+                all_success = False
+                continue
+
+            withdraw_id = str(pay_response.get("id", ""))
+            if not withdraw_id:
+                logger.error("No withdraw_id found in pay_response=%s", pay_response)
+                all_success = False
+                continue
+
+            logger.info("Withdrawal initiated ID=%s for chunk=%.8f BTC on %s",
+                        withdraw_id, chunk, sender.__class__.__name__)
+
+            # 4c) Wait for confirm
+            success = self._wait_for_btc_withdraw(sender, withdraw_id)
+            if not success:
+                logger.error(
+                    "Withdrawal ID=%s for chunk=%.8f BTC failed or timed out. Aborting this chunk.",
+                    withdraw_id, chunk
+                )
+                all_success = False
+            else:
+                logger.info(
+                    "Withdrawal ID=%s for chunk=%.8f BTC confirmed successfully.",
+                    withdraw_id, chunk
+                )
+
+        # Final result
+        if all_success:
+            logger.info("All BTC chunks transferred successfully!")
+        else:
+            logger.error("Some BTC chunks failed to transfer or confirm.")
+        return all_success
+
+    @staticmethod
+    def _split_btc_amount(total_btc: float) -> List[float]:
+        """
+        Split total_btc into chunks each between MIN_BTC_PER_INVOICE and MAX_BTC_PER_INVOICE.
+        For example, if we have 0.017 BTC, we might produce [0.009999, 0.007001].
+        """
+        chunks = []
+        remaining = total_btc
+        while remaining > 0:
+            if remaining <= MAX_BTC_PER_INVOICE:
+                # If what's left is within the max, take it
+                chunk = remaining
+            else:
+                chunk = MAX_BTC_PER_INVOICE
+
+            chunks.append(round(chunk, 6))
+            remaining -= chunk
+
+        return chunks
+
+    @staticmethod
+    def _wait_for_btc_withdraw(
+        sender: Any,
+        withdraw_id: str,
+        max_wait_seconds: int = 120
+    ) -> bool:
+        """
+        Wait for a BTC withdrawal to be confirmed by polling the sender's
+        withdraw history.
+
+        :param sender: The exchange proxy (BudaProxy or BinanceProxy) that initiated the withdrawal.
+        :param withdraw_id: The unique identifier for the withdrawal request (e.g., 'WBbWyN' in Buda).
+        :param max_wait_seconds: The maximum time in seconds to wait before giving up.
+        :return: True if the withdrawal transitions to 'confirmed', False otherwise.
+        """
+        logger.info(
+            "Waiting for BTC withdrawal ID=%s on sender=%s, up to %d seconds...",
+            withdraw_id, sender.__class__.__name__, max_wait_seconds
+        )
+        start_time = time.time()
+        coin = 'BTC'  # For clarity, we pass 'BTC' to get_withdraw_history
+
+        while True:
+            elapsed = time.time() - start_time
+            if elapsed > max_wait_seconds:
+                logger.warning(
+                    "Timed out waiting for BTC withdraw ID=%s to become 'confirmed'.",
+                    withdraw_id
+                )
+                return False
+
+            # Sleep briefly to avoid spamming the API
+            time.sleep(0.5)
+
+            # 1. Retrieve the withdraw history
+            withdraw_history = sender.get_withdraw_history(coin=coin)
+
+            # 2. Search for an entry matching 'id' == withdraw_id
+            matching_withdraw = next(
+                (w for w in withdraw_history if str(w.get('id')) == withdraw_id),
+                None
+            )
+
+            if not matching_withdraw:
+                logger.debug(
+                    "Withdraw ID=%s not found in sender's withdraw_history. Retrying...",
+                    withdraw_id
+                )
+                continue
+
+            # 3. Check its 'state'
+            state = matching_withdraw.get("state", "")
+            logger.debug("Found withdraw ID=%s with state=%s", withdraw_id, state)
+
+            # Normal flow: 'pending_confirmation' -> 'confirmed'
+            # If it becomes 'confirmed', success
+            if state == "confirmed":
+                logger.info(
+                    "Withdrawal ID=%s is now confirmed. Completed successfully.", withdraw_id
+                )
+                return True
+
+            # If the state is something else (e.g. 'rejected' or 'error'),
+            # we can consider that a failure or log it
+            if state not in ("pending_confirmation", "confirmed"):
+                logger.error(
+                    "Withdrawal ID=%s entered unexpected state=%s. Stopping.",
+                    withdraw_id, state
+                )
+                return False

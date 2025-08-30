@@ -1240,6 +1240,11 @@ buda_withdrawal_history: List[Dict] = [
         'amount': ['0.00002', 'BTC'],
         'fee': ['0.0', 'BTC'],
         'usd_amount': ['1.89', 'USD']
+    },
+    {
+        'id': 'VWBwmE',
+        'uuid': '9803d6c9-2aa1-459e-8b27-bec08c35709a',
+        'state': 'confirmed'
     }
 ]
 
@@ -1273,3 +1278,38 @@ buda_deposit_history: List[Dict] = [
         'amount': ['0.00005', 'BTC'],
         'fee': ['0.0', 'BTC']}
     ]
+
+
+buda_withdrawal_response = {
+    "withdrawal":
+        {
+            'id': 'VWBwmE',
+            'uuid': '9803d6c9-2aa1-459e-8b27-bec08c35709a',
+            'state': 'executing',
+            'currency': 'BTC',
+            'created_at': '2025-01-19T14:50:24.065Z',
+            'withdrawal_data':
+                {
+                    'type': 'lightning_network_withdrawal_data',
+                    'payment_request': 'lnbc100u1pnc6y8ypp5e072s204a899se3z4fky8z58sqlanejhmjadq4e564h4uxglg0eqdqqcqzysxqrrsssp52vhc2uuzgarshmw962fnnq2veash9rj7vcqyj5zjvqlv05fdzxss9qxpqysgq0fx5ajd5m5jy9jy6pjacmcsw3xlatpdqzt3chmm82t8v0ffphg7jfy59lm73twwc00w89msy5wgrkqzaffjvq4gkpw8qd0k5qw7kj8qqr8p6r6',
+                    'payment_error': None,
+                    'total_fees': None
+                },
+            'forced_reason': None,
+            'account_id': 143870,
+            'user_id': 143870,
+            'expected_execution_time': None,
+            'expected_arrival_time': None,
+            'hold_execution': False,
+            'reserve_name': 'LN BTC',
+            'reserve_code': 'ln-btc',
+            'rejection_reasons': [],
+            'amount': ['0.0001', 'BTC'],
+            'fee': ['0.0', 'BTC'],
+            'usd_amount': ['10.46', 'USD']
+        }
+    }
+
+binance_withdrawal_response = {
+    "id": "156e566fe1d04820a4b6b46d53a96570"
+}

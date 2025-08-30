@@ -47,18 +47,26 @@ def test_create_withdraw_request_btc():
     assert withdrawal_response["withdrawal_data"]['payment_request'] == expired_invoice
 
 
-def test_pay_ln_invoice():
+@patch("requests.post")
+def test_pay_ln_invoice(mock_post):
     """
     Test BTC Lightning Network withdrawal request.
     """
 
+    expected_response = constants.buda_withdrawal_response
+
+    mock_response = Mock()
+    mock_response.status_code = 201
+    mock_response.json.return_value = expected_response
+    mock_post.return_value = mock_response
+
     buda_proxy = ExchangeFactory.get_exchange('buda')
     expired_invoice = 'lnbc50u1pn5f8ljpp5dc6y936p79j9dfqs59vdkz6dfurxcgzvsren4mtahdrva9paqxhsdq8w3jhxaqcqzzsxqyz5vqsp5yp9j2fghxfw4dvxnkcu5lyldykew7ymuq27f8jpay8ms7q9kwe9s9qxpqysgqqczpcedj6ry8t8z5emqvz9mvjr263fsv7p64st6j5pyxfcdmm9hparffkgfsxv883kh6hkczfgpktlevn3rldcskqv392fk8n7ad3lcp6yx88t'
 
-    response = buda_proxy.pay_ln_invoice(ln_invoice=expired_invoice, amount=0.00002, simulate=True)
+    response = buda_proxy.pay_ln_invoice(ln_invoice=expired_invoice, amount=0.000095)
     withdrawal_id = response["id"]
 
-    assert not withdrawal_id
+    assert withdrawal_id == "VWBwmE"
 
 
 def test_create_withdraw_request_ltc():
@@ -160,6 +168,7 @@ def test_create_ln_invoice_success(mock_post):
             "currency": "BTC",
         }
     )
+
 
 @patch("requests.post")
 def test_create_deposit_address_invalid_coin(mock_post):

@@ -893,7 +893,16 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(round(arb_order.profit.amount, 1), 100.0)
         self.assertEqual(arb_order.profit.currency, 'USDC')
 
-    def test_btc_transfer_buy(self):
+    @patch.object(BinanceProxy, 'create_lightning_invoice',
+                  return_value=test_api_constants.binance_standardized_ln_invoice_00995)
+    @patch.object(BudaProxy, 'create_withdraw_request',
+                  return_value=test_api_constants.buda_withdrawal_response)
+    @patch.object(BudaProxy, 'get_withdraw_history',
+                  return_value=test_api_constants.buda_withdrawal_history)
+    def test_btc_transfer_buy(self,
+                              binance_invoice_creation_mock,
+                              buda_withdrawal_response_mock,
+                              buda_withdrawal_history_mock):
         """
         Suppose we have a BUY_LIMIT scenario with 0.017 BTC traded on the low-liquidity side.
         We expect it to be split into 2 chunks: 0.009999, 0.007001.
@@ -907,15 +916,25 @@ class TestArbitrageBot(unittest.TestCase):
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
         )
-        arb_order.traded_base_amount_low_liquidity = 0.017
+        arb_order.traded_base_amount_low_liquidity = 0.000095
 
-        self.bot.btc_transfer(arb_order)
+        transfer_completion = self.bot.btc_transfer(arb_order)
+        # Check that LN invoice was created once
+        binance_invoice_creation_mock.assert_called_once()
+        # Check that pay_ln_invoice was called once with correct parameters
+        buda_withdrawal_response_mock.assert_called_once()
+        assert transfer_completion
 
-        # We verify logs or calls:
-        # The mock exchange receiver's create_deposit_address is called for each chunk
-        # The mock exchange sender's create_withdraw_request is called for each chunk
-
-    def test_btc_transfer_sell(self):
+    @patch.object(BudaProxy, 'create_lightning_invoice',
+                  return_value=test_api_constants.buda_ln_invoice_001)
+    @patch.object(BinanceProxy, 'create_withdraw_request',
+                  return_value=test_api_constants.binance_withdrawal_response)
+    @patch.object(BinanceProxy, 'get_withdraw_history',
+                  return_value=test_api_constants.binance_withdrawal_history)
+    def test_btc_transfer_sell(self,
+                              buda_invoice_creation_mock,
+                              binance_withdrawal_response_mock,
+                              binance_withdrawal_history_mock):
         """
         Another scenario: SELL_LIMIT with 0.005 BTC, fits in single chunk, no splitting.
         """
@@ -926,9 +945,13 @@ class TestArbitrageBot(unittest.TestCase):
             amount=1.0,
             original_amount=24000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
-            order_type=OrderType.BUY_LIMIT
+            order_type=OrderType.SELL_LIMIT
         )
-        arb_order.traded_base_amount_low_liquidity = 0.005
+        arb_order.traded_base_amount_low_liquidity = 0.000095
 
-        self.bot.btc_transfer(arb_order)
-        # Expect a single chunk of 0.005, one deposit address creation, one withdraw request
+        transfer_completion = self.bot.btc_transfer(arb_order)
+        # Check that LN invoice was created once
+        buda_invoice_creation_mock.assert_called_once()
+        # Check that pay_ln_invoice was called once with correct parameters
+        binance_withdrawal_response_mock.assert_called_once()
+        assert transfer_completion

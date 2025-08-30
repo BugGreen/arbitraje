@@ -30,7 +30,7 @@ def main() -> None:
         order_type = 'MARKET'
         order_id = 33188802974
 
-        print(binance.get_withdraw_history())
+        print(binance.get_withdraw_history('BTC'))
         print(binance.get_deposit_history())
         #coin_info = binance.supports_lightning_network(coin)
         #withdraw_request = binance.create_withdraw_request(coin=coin, address=ln_invoice, amount=sats_amount)

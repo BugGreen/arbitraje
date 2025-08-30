@@ -121,12 +121,13 @@ class BinanceProxy(BaseExchange):
 
         params = {
             "coin": coin,
-            "timestamp": int(time.time() * 1000),
             } if coin else {}
 
+        # TODO: FIX: Now if withdrawOrderId is provided, returns an empty list
         if withdraw_order_id:
-            params['withdrawOrderId']
+            params['withdrawOrderId'] = str(withdraw_order_id)
 
+        params['timestamp'] = int(time.time() * 1000)
         params = self._sign_request(params)
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
@@ -137,12 +138,11 @@ class BinanceProxy(BaseExchange):
             withdraw['state'] = state
         return response
 
-    def get_deposit_history(self, coin: Optional[str] = None, withdraw_order_id: Optional[str] = None) -> List[Dict]:
+    def get_deposit_history(self, coin: Optional[str] = None) -> List[Dict]:
         """
         Get the deposit history of a given coin, or a given order.
 
         :param coin: Coin of interest
-        :param withdraw_order_id: id of a specific order
         :return: Deposit history
         """
         url = f"{self.BASE_URL}{self.ENDPOINTS['DEPOSIT_HISTORY']}"
@@ -155,8 +155,6 @@ class BinanceProxy(BaseExchange):
 
         if coin:
             params['coin'] = coin
-        if withdraw_order_id:
-            params['withdrawOrderId'] = coin
 
         params = self._sign_request(params)
         response = requests.get(url, headers=headers, params=params)
@@ -247,8 +245,7 @@ class BinanceProxy(BaseExchange):
 
         if coin.upper() == "BTC":
             fee = 0.000001  # From coins_info
-            sats_to_btc = amount / 100000000
-            amount = sats_to_btc + fee
+            amount += fee
 
         params = {
             "coin": coin,
