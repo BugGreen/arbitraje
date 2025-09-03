@@ -52,6 +52,9 @@ def main() -> None:
         #print(json.dumps(new_order, indent=2))
         order_canceled = buda.cancel_order(base_currency, quote_currency, order_id)
         print(json.dumps(order_canceled, indent=2))
+        order_states = buda.get_order_states(base_currency, quote_currency)
+        print(json.dumps(order_states, indent=2))
+
     except Exception as e:
         print(f"Error with BUDA: {e}")
 

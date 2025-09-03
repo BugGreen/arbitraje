@@ -28,6 +28,7 @@ class BudaProxy(BaseExchange):
         "LIGHTNING_WITHDRAWAL": "/api/v2/reserves/ln-btc/withdrawals",
         "NEW_ORDER": "/api/v2/markets/{}/orders",
         "CANCEL_ORDER": "/api/v2/orders/{}",
+        "ORDER_STATES": "/api/v2/markets/{}/orders",
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -46,10 +47,10 @@ class BudaProxy(BaseExchange):
         if body:
             # Convert body to JSON string and encode it in Base64
             base64_encoded_body = base64.b64encode(json.dumps(body).encode()).decode()
-        else:
-            base64_encoded_body = ""
+            string_to_sign = f"{method} {path} {base64_encoded_body} {nonce}"
 
-        string_to_sign = f"{method} {path} {base64_encoded_body} {nonce}"
+        else:
+            string_to_sign = f"{method} {path} {nonce}"
 
         # Generate HMAC-SHA384 signature
         signature = hmac.new(
@@ -236,6 +237,32 @@ class BudaProxy(BaseExchange):
 
         # Make the API call to cancel the order
         response = requests.put(url, headers=headers, json=payload)
+
+        # Return the response as a dictionary
+        return response.json()
+
+    def get_order_states(self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Get the states of orders in a given market.
+        Possible states are: received, pending, active, traded, canceled, canceled_and_traded, unprepared
+
+        :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
+        :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
+
+        :return: The response from the exchange API as a dictionary.
+        """
+
+        market_id = "-".join([base_currency.lower(), quote_currency.lower()])
+
+        # Define the endpoint path for canceling the order
+        endpoint_path = self.ENDPOINTS["ORDER_STATES"].format(market_id)
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Sign the request
+        headers = self._sign_request(method="GET", path=endpoint_path)
+
+        # Make the API call to cancel the order
+        response = requests.get(url, headers=headers)
 
         # Return the response as a dictionary
         return response.json()

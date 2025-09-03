@@ -65,7 +65,6 @@ class BaseExchange(ABC):
         """
         pass
 
-
     @abstractmethod
     def cancel_order(self, base_currency: str, quote_currency: str, order_id: int) -> Dict:
         """
@@ -74,6 +73,17 @@ class BaseExchange(ABC):
         :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
         :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
         :param order_id: identification of the order to cancel.
+
+        :return: The response from the exchange API as a dictionary.
+        """
+
+    @abstractmethod
+    def get_order_states(self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Get the states of orders in a given market.
+
+        :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
+        :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
 
         :return: The response from the exchange API as a dictionary.
         """

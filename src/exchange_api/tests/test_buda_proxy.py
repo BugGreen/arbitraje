@@ -320,3 +320,65 @@ def test_cancel_order_success(mock_put):
     assert response['amount'] == ["0.05", "BTC"]
     assert response['market_id'] == "btc-clp"
     assert response['type'] == "Bid"
+
+
+@patch("requests.get")
+def test_get_order_states(mock_get):
+    expected_response = {
+        "orders": [
+            {
+              "id": 1267767109,
+              "uuid": "48164fca-72c7-4a31-9720-0bf1d4d81d2a",
+              "market_id": "ETH-COP",
+              "account_id": 143870,
+              "type": "Bid",
+              "state": "canceled",
+              "created_at": "2024-12-03T12:48:42.549Z",
+              "fee_currency": "ETH",
+              "price_type": "limit",
+              "source": "null",
+              "client_id": "null",
+              "message": "null",
+              "order_type": "gtc",
+              "expire_at": 0,
+              "limit": [
+                "15000000.0",
+                "COP"
+              ],
+              "amount": [
+                "0.0012",
+                "ETH"
+              ],
+              "original_amount": [
+                "0.0012",
+                "ETH"
+              ],
+              "traded_amount": [
+                "0.0",
+                "ETH"
+              ],
+              "total_exchanged": [
+                "0.0",
+                "COP"
+              ],
+              "paid_fee": [
+                "0.0",
+                "ETH"
+              ],
+              "stop_price": "null"
+            }]}
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = expected_response
+    mock_get.return_value = mock_response
+
+    # Instance of BudaProxy
+    buda = BudaProxy()
+    buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
+
+    response = buda.get_order_states(base_currency='eth', quote_currency='cop')
+
+    assert isinstance(response['orders'], list)
+    assert response['orders'][0]['market_id'] == "ETH-COP"
+
