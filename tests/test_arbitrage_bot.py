@@ -174,6 +174,7 @@ class TestArbitrageBot(unittest.TestCase):
         )
         arb_order.price_reference = 10000.0
         mock_order = MockArbitrageOrder(original_amount=100.0)
+        mock_order.sub_orders_num: int = 3
         mock_order.pending_amount_low_liquidity: float = 0.000001
         mock_order.price_reference = 10000.0
         mock_order.order_type = OrderType.BUY_LIMIT
@@ -322,9 +323,10 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertIsInstance(result, dict)
         self.assertEqual(result.get('code'), 'ERROR_BELOW_MIN_TOTAL')
 
+    @patch.object(BudaProxy, 'get_current_order_states', return_value=test_api_constants.successful_batch_order_states_pending)
     @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.successful_batch_order_states_pending)
     @patch('requests.post')
-    def test_place_sub_orders_success(self, mock_post, mock_buda):
+    def test_place_sub_orders_success(self, mock_post, mock_buda, get_current_order_states_mock):
         # Remember that bot.exchange_low_liquidity was defined in the `set` method
 
         mock_response = MagicMock()
@@ -343,11 +345,13 @@ class TestArbitrageBot(unittest.TestCase):
 
         self.assertEqual(response, expected_response)
 
+    @patch.object(BudaProxy, 'get_current_order_states',
+                  return_value=test_api_constants.successful_batch_order_states_sub_orders_traded)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.successful_batch_order_states_sub_orders_traded)
     @patch('requests.post')
     @patch.object(ArbitrageBot, 'execute_opposite_order_high_liquidity_exchange', return_value=None)
-    def test_place_sub_orders_traded(self, mock_opposite_order, mock_post, mock_buda):
+    def test_place_sub_orders_traded(self, mock_opposite_order, mock_post, mock_buda, get_current_order_states_mock):
         # Change the state of the first sub_order to "traded"
         test_api_constants.successful_batch_order_states_sub_orders_traded["orders"][0]["state"] = "traded"
         # Change the traded_amount '0.0' > '0.4'.
@@ -380,7 +384,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertAlmostEqual(self.arb_order._pending_quote_amount_high_liquidity, 12000, places=4)
         self.assertAlmostEqual(self.arb_order._pending_base_amount_high_liquidity, 0.4, places=4)
 
-    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.successful_batch_order_states)
+    @patch.object(BudaProxy, 'get_current_order_states', return_value=test_api_constants.successful_batch_order_states)
     @patch('requests.post')
     @patch.object(ArbitrageBot, 'execute_opposite_order_high_liquidity_exchange', return_value=None)
     def test_place_sub_orders_canceled_and_traded(self, mock_opposite_order, mock_post, mock_buda):
@@ -533,7 +537,7 @@ class TestArbitrageBot(unittest.TestCase):
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response)
-    @patch.object(BudaProxy, 'get_order_states',
+    @patch.object(BudaProxy, 'get_current_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance_buy_limit)
     def test_synchronous_opposite_order_buy_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
@@ -594,7 +598,7 @@ class TestArbitrageBot(unittest.TestCase):
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_base)
-    @patch.object(BudaProxy, 'get_order_states',
+    @patch.object(BudaProxy, 'get_current_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance.copy())
     def test_synchronous_opposite_order_buy_limit_base_profit(self, batch_creation_mock, get_order_states_mock,
@@ -638,11 +642,14 @@ class TestArbitrageBot(unittest.TestCase):
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_base_no_profit)
+    @patch.object(BudaProxy, 'get_current_order_states',
+                  return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance.copy())
-    def test_synchronous_opposite_order_buy_limit_base_no_profit(self, batch_creation_mock, get_order_states_mock,
-                                                                 binance_market_order_mock):
+    def test_synchronous_opposite_order_buy_limit_base_no_profit(
+            self, batch_creation_mock, get_order_states_mock, get_c_order_states_mock, binance_market_order_mock
+    ):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` without profit
         i.e., high_liquidity_exchange_price < low_liquidity_exchange_price.
@@ -694,11 +701,13 @@ class TestArbitrageBot(unittest.TestCase):
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_quote_no_profit)
+    @patch.object(BudaProxy, 'get_current_order_states',
+                  return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance_quote_no_profit)
-    def test_synchronous_opposite_order_buy_limit_quote_no_profit(self, batch_creation_mock, get_order_states_mock,
-                                                                  binance_market_order_mock):
+    def test_synchronous_opposite_order_buy_limit_quote_no_profit(
+            self, batch_creation_mock, get_order_states_mock, get_current_order_states_mock, binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` without profit
         i.e., high_liquidity_exchange_price < low_liquidity_exchange_price.
@@ -748,11 +757,13 @@ class TestArbitrageBot(unittest.TestCase):
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_quotes_profit)
+    @patch.object(BudaProxy, 'get_current_order_states',
+                  return_value=test_api_constants.sub_orders_to_execute_in_binance_multiple_traded_states)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_multiple_traded_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance_quote_multiple_profit)
-    def test_synchronous_opposite_order_buy_limit_quote_multiple_profit(self, batch_creation_mock, get_order_states_mock,
-                                                                        binance_market_order_mock):
+    def test_synchronous_opposite_order_buy_limit_quote_multiple_profit(
+            self, batch_creation_mock, get_order_states_mock, get_current_order_states_mock, binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` without profit
         i.e., high_liquidity_exchange_price < low_liquidity_exchange_price.
@@ -812,9 +823,11 @@ class TestArbitrageBot(unittest.TestCase):
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_quote_no_profit)
+    @patch.object(BudaProxy, 'get_current_order_states', return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance.copy())
     def test_synchronous_opposite_order_sell_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
+                                                                get_current_order_states_mock,
                                                                 binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with profit
@@ -863,9 +876,11 @@ class TestArbitrageBot(unittest.TestCase):
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response)
+    @patch.object(BudaProxy, 'get_current_order_states', return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance_quote_profit)
     def test_synchronous_opposite_order_sell_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
+                                                                get_current_order_states_mock,
                                                                 binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with profit
@@ -915,11 +930,14 @@ class TestArbitrageBot(unittest.TestCase):
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_base_no_profit)
+    @patch.object(BudaProxy, 'get_current_order_states',
+                  return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation',
                   return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance_base_profit)
     def test_synchronous_opposite_order_buy_limit_base_profit(self, batch_creation_mock, get_order_states_mock,
+                                                              get_current_order_states_mock,
                                                               binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with actual profit
@@ -971,11 +989,14 @@ class TestArbitrageBot(unittest.TestCase):
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_base)
+    @patch.object(BudaProxy, 'get_current_order_states',
+                  return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation',
                   return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance.copy())
     def test_synchronous_opposite_order_buy_limit_base_no_profit(self, batch_creation_mock, get_order_states_mock,
+                                                                 get_current_order_states_mock,
                                                                  binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with actual profit
@@ -1039,6 +1060,8 @@ class TestArbitrageBot(unittest.TestCase):
                   side_effect=[
                       test_api_constants.binance_successful_sell_market_order_response_with_less_than_minimum_1,
                       test_api_constants.binance_successful_sell_market_order_response_with_less_than_minimum_2])
+    @patch.object(BudaProxy, 'get_current_order_states',
+                  return_value=test_api_constants.sub_orders_to_execute_in_binance_states_with_one_less_than_minimum)
     @patch.object(BudaProxy, 'get_order_states',
                   return_value=test_api_constants.sub_orders_to_execute_in_binance_states_with_one_less_than_minimum)
     @patch.object(BudaProxy, 'batch_creation',
@@ -1046,6 +1069,7 @@ class TestArbitrageBot(unittest.TestCase):
     def test_synchronous_opposite_order_buy_limit_quote_profit_with_less_than_minimum(self,
                                                                                       batch_creation_mock,
                                                                                       get_order_states_mock,
+                                                                                      get_current_order_states_mock,
                                                                                       binance_market_order_mock):
         """
         Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with profit

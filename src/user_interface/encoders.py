@@ -11,13 +11,15 @@ possible_sides: List[str] = ["ONE_SIDE", "BOTH_SIDES"]
 arb_oder_sell_limit_values: Dict[str, Any] = {
     "Amount": 20,
     "Currency of Interest": "QUOTE",
-    "Order Type": "SELL_LIMIT"
+    "Order Type": "SELL_LIMIT",
+    "Sub-orders amount": 2
 }
 
 arb_oder_buy_limit_values: Dict[str, Any] = {
     "Amount": 20,
     "Currency of Interest": "QUOTE",
-    "Order Type": "BUY_LIMIT"
+    "Order Type": "BUY_LIMIT",
+    "Sub-orders amount": 2
 }
 
 arb_orders_values: Dict[str, Dict[str, Any]] = {
@@ -31,7 +33,7 @@ market_values: Dict[str, Any] = {
     "E. Low Liquidity": 'buda',
     "P. Difference": 0.4,
     "Mode": possible_sides[0],
-    "Side": "SELL_LIMIT"
+    "Side": "SELL_LIMIT",
 }
 
 print(arb_oder_sell_limit_values)

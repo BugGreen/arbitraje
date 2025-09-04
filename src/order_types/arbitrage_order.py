@@ -15,14 +15,19 @@ class ArbitrageOrder(Order):
         order_type: OrderType,
         original_amount: float = 0.0,
         low_liquidity_exchange: str = "BUDA",
-        high_liquidity_exchange: str = "BINANCE"
-
+        high_liquidity_exchange: str = "BINANCE",
+        sub_orders_num: int = 3
     ):
         super().__init__(base_currency=base_currency, quote_currency=quote_currency, order_type=order_type)
-
+        # GLOBAL ATTRIBUTES ------------------------------------------
         # The original total amount we aim to arbitrage
         self.original_amount = original_amount
+        # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
+        self.currency_of_interest = currency_of_interest
+        self.order_type = order_type
+        self.sub_orders_num = sub_orders_num  # Number of sub-orders to create
 
+        # DYNAMIC ATTRIBUTES ------------------------------------------
         # Dynamic attributes Low-liquidity side
         self.pending_amount_low_liquidity = self.original_amount  # Initially the entire original amount is pending
         self.traded_base_amount_low_liquidity: float = 0.0
@@ -43,11 +48,6 @@ class ArbitrageOrder(Order):
         # after it was successfully traded on the low-liquidity side:
         self._pending_quote_amount_high_liquidity: float = 0.0
         self._pending_base_amount_high_liquidity: float = 0.0
-
-        # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
-        self.currency_of_interest = currency_of_interest
-
-        self.order_type = order_type
 
         if self.currency_of_interest == CurrencyOfInterest.QUOTE:
             self.profit = Profit(0, self.quote_currency)

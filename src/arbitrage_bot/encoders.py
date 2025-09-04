@@ -1,7 +1,9 @@
-MIN_BTC_PER_INVOICE = 0.000019
-MAX_BTC_PER_INVOICE = 0.00995
+from typing import Dict, List
 
-MIN_AMOUNT_REQUIREMENTS = {
+MIN_BTC_PER_INVOICE: str = 0.000019
+MAX_BTC_PER_INVOICE: str = 0.00995
+
+MIN_AMOUNT_REQUIREMENTS: Dict[str, float] = {
     "BTC-CLP": 0.00002,
     "BTC-COP": 0.00002,
     "ETH-CLP": 0.001,
@@ -24,11 +26,18 @@ MIN_AMOUNT_REQUIREMENTS = {
     "USDT-USDC": 0.01
 }
 
-MIN_AMOUNT_BINANCE_REQUIREMENTS = {
+MIN_AMOUNT_BINANCE_REQUIREMENTS: Dict[str, int] = {
     "BTCUSDC": 10,
 }
 
 # TODO: Rellenar esta lista de manera automatica
-MIN_WITHDRAWAL_AMOUNT_BINANCE = {
+MIN_WITHDRAWAL_AMOUNT_BINANCE: Dict[str, int] = {
     "USDC": 20
+}
+
+# The distributed amount according to the number of desired sub_orders
+AMOUNT_DISTRIBUTION_SUB_ORDERS: Dict[int, List[float]] = {
+    1: [1.0],
+    2: [0.8, 0.2],
+    3: [0.6, 0.3, 0.1]
 }

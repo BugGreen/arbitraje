@@ -500,17 +500,24 @@ def one_side_order_creation(
             quote_currency=quote_currency,
             original_amount=arb_order_one_side_default.get("Amount"),
             currency_of_interest=currency_of_interest,
-            order_type=order_type
+            order_type=order_type,
+            sub_orders_num=arb_order_one_side_default.get("Sub-orders amount", 1)
         )
     else:
         order_type: str = Prompt.ask(
             "Select the side 0: 'SELL_LIMIT' 1: 'BUY_LIMIT'",
-            choices=["0", "1"],  # Example list, modify as needed
+            choices=["0", "1"],
             default="0"
         )
+        sub_orders_amount: int = int(Prompt.ask(
+            "Select the number of sub orders to create (max 3):",
+            choices=["1", "2", "3"],  # Example list, modify as needed
+            default="2"
+        ))
         order_type: OrderType = OrderType.SELL_LIMIT if order_type == "0" else OrderType.BUY_LIMIT
         arb_order_init_values: Dict[str, Any] = encoders.arb_oder_sell_limit_values if \
             order_type is OrderType.SELL_LIMIT else encoders.arb_oder_buy_limit_values
+        arb_order_init_values["Sub-orders amount"] = sub_orders_amount
         arb_order: ArbitrageOrder = create_arb_order(console, arb_order_init_values, market)
 
     return arb_order
@@ -557,7 +564,8 @@ def create_arb_order(
         quote_currency=quote_currency,
         original_amount=arb_order_initiation_values.get("Amount"),
         currency_of_interest=currency_of_interest,
-        order_type=order_type
+        order_type=order_type,
+        sub_orders_num=arb_order_initiation_values.get("Sub-orders amount", 1)
     )
 
     return arb_order
@@ -589,10 +597,17 @@ def set_arb_order_initialization_values(console: Console, arb_order_values: Dict
         default="0"
     ))
 
+    sub_orders_amount: int = int(Prompt.ask(
+        "Select the number of sub orders to create (max 3):",
+        choices=["1", "2", "3"],  # Example list, modify as needed
+        default="2"
+    ))
+
     arb_order_values["Currency of Interest"] = currency_of_interest
     display_initiation_values_table(arb_order_values, console)
     currency_of_interest: str = "QUOTE" if currency_of_interest == "0" else "BASE"
     arb_order_values["Currency of Interest"] = currency_of_interest
+    arb_order_values["Sub-orders amount"] = sub_orders_amount
 
     return arb_order_values
 
