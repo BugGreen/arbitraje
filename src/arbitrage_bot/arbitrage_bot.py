@@ -158,6 +158,13 @@ class ArbitrageBot:
         logger.info("Starting arbitrage flow with REST-based price retrieval. mode=%s", mode)
         if not isinstance(arb_orders, list):
             arb_orders: List[ArbitrageOrder] = [arb_orders]
+
+        base_currency: str = arb_orders[0].base_currency
+        quote_currency: str = arb_orders[0].quote_currency
+        # WEBSOCKET Connections
+        #  Order Book:
+        initial_order_book_ss = self.exchange_low_liquidity.get_order_book(base_currency, quote_currency)
+        self.exchange_low_liquidity.connect_to_order_book(base_currency, quote_currency, initial_order_book_ss)
         # Set relevant attributes:
         self._set_fee_values(arb_orders[0])
 
@@ -414,7 +421,6 @@ class ArbitrageBot:
                 if price_difference >= self.low_liquidity_taker_fee + self.price_diff_threshold:
                     return price  # Creation of profitable market order
                 else:
-                    if cumulative_volume >= min_volume:
                         if arb_order.order_type is OrderType.SELL_LIMIT:
                             return price * ((1 + 0.001) / (1 + self.price_diff_threshold))
                         elif arb_order.order_type is OrderType.BUY_LIMIT:
@@ -477,7 +483,8 @@ class ArbitrageBot:
         )
         base_currency, quote_currency = arb_order.base_currency, arb_order.quote_currency
         # 1) Fetch the order book from the low-liquidity exchange
-        response_data: Dict[str, Any] = self.exchange_low_liquidity.get_order_book(base_currency, quote_currency)
+        # response_data: Dict[str, Any] = self.exchange_low_liquidity.get_order_book(base_currency, quote_currency)
+        response_data: Dict[str, Any] = self.exchange_low_liquidity.get_current_order_book()
         if "order_book" not in response_data or not response_data["order_book"]:
             raise RuntimeError("Missing 'order_book' in low-liquidity response.")
         order_book = response_data["order_book"]

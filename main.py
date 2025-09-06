@@ -28,7 +28,7 @@ def main() -> None:
 
     try:
 
-        #welcome_menu()
+        welcome_menu()
         buda_proxy = BudaProxy()
 
         # Connect to the WebSocket for BTC/USDT market

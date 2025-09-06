@@ -1336,7 +1336,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(arb_order.traded_quote_amount_low_liquidity, arb_order.traded_quote_amount_low_liquidity)
         self.assertEqual(arb_order.traded_amount_base_high_liquidity, arb_order.traded_amount_quote_high_liquidity)
 
-    @patch.object(BudaProxy, 'get_order_book',
+    @patch.object(BudaProxy, 'get_current_order_book',
                   return_value=test_api_constants.buda_order_book_response)
     def test_get_price_difference_buy_limit(self, buda_order_book_mock):
         # For a BUY, p_diff = (highest_bid - high_liquidity_price)/high_liquidity_price
@@ -1353,7 +1353,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertAlmostEqual(p_diff, -0.00055, places=5)
         self.assertEqual(reference_price, 837000.0)
 
-    @patch.object(BudaProxy, 'get_order_book',
+    @patch.object(BudaProxy, 'get_current_order_book',
                   return_value=test_api_constants.buda_order_book_response)
     def test_get_price_difference_sell_limit(self, buda_order_book_mock):
         # For a BUY, p_diff = (highest_bid - high_liquidity_price)/high_liquidity_price
@@ -1370,7 +1370,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertAlmostEqual(p_diff, 0.00071, places=5)
         self.assertEqual(reference_price, 837462.23)
 
-    @patch.object(BudaProxy, 'get_order_book',
+    @patch.object(BudaProxy, 'get_current_order_book',
                   return_value=test_api_constants.buda_order_book_response_to_filter)
     def test_get_price_difference_sell_limit_filtered_market(self, buda_order_book_mock):
         """
@@ -1390,7 +1390,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertAlmostEqual(p_diff, 0.04040, places=5)
         self.assertEqual(reference_price, 101)
 
-    @patch.object(BudaProxy, 'get_order_book',
+    @patch.object(BudaProxy, 'get_current_order_book',
                   return_value=test_api_constants.buda_order_book_response_to_filter)
     def test_get_price_difference_buy_limit_filtered_market(self, buda_order_book_mock):
         """
@@ -1411,7 +1411,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertAlmostEqual(p_diff, 0.03960, places=5)
         self.assertEqual(reference_price, 103)
 
-    @patch.object(BudaProxy, 'get_order_book',
+    @patch.object(BudaProxy, 'get_current_order_book',
                   return_value=test_api_constants.buda_order_book_response_to_filter)
     def test_get_price_difference_sell_limit_filtered(self, buda_order_book_mock):
         """
@@ -1459,7 +1459,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(p_diff, expected_p_diff)
         self.assertEqual(reference_price, expected_price)
 
-    @patch.object(BudaProxy, 'get_order_book',
+    @patch.object(BudaProxy, 'get_current_order_book',
                   return_value=test_api_constants.buda_order_book_response_to_filter)
     def test_get_price_difference_sell_limit_filtered_volume(self, buda_order_book_mock):
         """
@@ -1484,7 +1484,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(p_diff, expected_p_diff)
         self.assertEqual(reference_price, expected_price)
 
-    @patch.object(BudaProxy, 'get_order_book',
+    @patch.object(BudaProxy, 'get_current_order_book',
                   return_value=test_api_constants.buda_order_book_response_to_filter)
     def test_get_price_difference_buy_limit_filtered(self, buda_order_book_mock):
         """
@@ -1509,8 +1509,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(p_diff, expected_p_diff)
         self.assertEqual(arb_order.price_reference, expected_price)
 
-
-    @patch.object(BudaProxy, 'get_order_book',
+    @patch.object(BudaProxy, 'get_current_order_book',
                   return_value=test_api_constants.buda_order_book_response_to_filter)
     def test_get_price_reference_multiple_orders(self, buda_order_book_mock):
         arb_order = ArbitrageOrder(

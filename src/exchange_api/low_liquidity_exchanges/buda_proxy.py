@@ -15,6 +15,8 @@ import hmac
 
 
 logger = logging.getLogger(__name__)
+# Disable WebSocket debugging logs
+logging.getLogger('websocket-client').setLevel(logging.WARNING)
 
 
 class BudaProxy(BaseLowLiquidityExchange):
@@ -115,13 +117,13 @@ class BudaProxy(BaseLowLiquidityExchange):
         if initial_snapshot is not None:
             self.set_initial_order_book(initial_snapshot)
 
-        websocket.enableTrace(True)
+        websocket.enableTrace(False)
         self.ws = websocket.WebSocketApp(
             socket_url,
             on_message=self.on_message_order_book,
             on_open=self.on_open_order_book,
             on_error=self.on_error_order_book,
-            on_close=self.on_close_order_book
+            on_close=self.on_close_order_book,
         )
 
         # Running the WebSocket connection in a separate thread
@@ -226,14 +228,14 @@ class BudaProxy(BaseLowLiquidityExchange):
                 if price_level in self.order_book_snapshot[side]:
                     del self.order_book_snapshot[side][price_level]
                     logger.info("Removed price level %s from %s (new amount: %f)", price_level, side, new_amount)
-                    print("Removed price level %s from %s (new amount: %f)", price_level, side, new_amount)
+                    # print("Removed price level %s from %s (new amount: %f)", price_level, side, new_amount)
                 else:
                     logger.info("Price level %s not found in %s for removal.", price_level, side)
-                    print("Price level %s not found in %s for removal.", price_level, side)
+                    # print("Price level %s not found in %s for removal.", price_level, side)
             else:
                 self.order_book_snapshot[side][price_level] = f"{new_amount}"
                 logger.info("Updated %s at price %s to new amount: %f", side, price_level, new_amount)
-                print("Updated %s at price %s to new amount: %f", side, price_level, new_amount)
+                # print("Updated %s at price %s to new amount: %f", side, price_level, new_amount)
 
     def update_order_book_snapshot(self, order_book: dict) -> None:
         """
