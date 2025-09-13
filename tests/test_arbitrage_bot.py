@@ -154,6 +154,29 @@ class TestArbitrageBot(unittest.TestCase):
             order_type=OrderType.BUY_LIMIT
         )
 
+    def test_split_order_multiple(self):
+        # Test multiple orders processing
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        arb_order.price_reference = 10000.0
+        mock_order = MockArbitrageOrder(original_amount=100.0)
+        mock_order.price_reference = 10000.0
+        delta = 0.5 / 100
+        mock_order.order_type = OrderType.BUY_LIMIT
+        mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
+
+        result = self.bot.split_order_into_suborders([arb_order, mock_order])
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(len(result[0]), 3)  # Expecting 3 sub-orders for first order
+        self.assertEqual(len(result[1]), 3)  # Expecting 3 sub-orders for second order
+
+
     def test_split_order_into_suborders_ask_with_delta(self):
         """
         Test splitting an 'ask' order with a specified delta.
@@ -224,7 +247,7 @@ class TestArbitrageBot(unittest.TestCase):
         mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
         mock_order.price_reference = 10000.0
         sub_orders = self.bot.split_order_into_suborders(
-            arb_order=mock_order,
+            arb_orders=mock_order,
             delta=.5 / 100
         )
 
@@ -248,9 +271,8 @@ class TestArbitrageBot(unittest.TestCase):
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
         )
-        arb_order.price_reference = 15000
         result = self.bot.split_order_into_suborders(
-            arb_order=arb_order
+            arb_orders=arb_order
         )
         self.assertIsInstance(result, dict)
         self.assertEqual(result.get('code'), 'ERROR_BELOW_MIN_TOTAL')

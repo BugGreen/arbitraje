@@ -593,21 +593,46 @@ class ArbitrageBot:
         return valid_sub_orders
 
     # TODO: HACER LA LOGICA MAS GENERAL CUANDO SE INCORPOREN MAS LOW LIQUIDITY EXCHANGES
-    def split_order_into_suborders(self, arb_order: ArbitrageOrder,
-                                   delta: Optional[float] = None) \
-            -> Any:
+    def split_order_into_suborders(
+            self,
+            arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]],
+            delta: Optional[float] = None
+    ) -> Union[Any, List[Any]]:
         """
-        Split the given `ArbitrageOrder`'s original_amount into multiple sub-orders,
+        Split the given `ArbitrageOrder`(s) original_amount into multiple sub-orders,
         taking `reference_price` as a base for setting limit prices.
 
-        :param arb_order: An `ArbitrageOrder` instance whose `original_amount` will be splitted.
+        :param arb_orders: An `ArbitrageOrder` instance or a list of them whose `original_amount` will be splitted.
         :param delta: Optional delta to adjust the price.
         :return: A list of dicts with the structure:
                  [
                     {"mode": "place", "order": {...}},
                     {"mode": "place", "order": {...}},
                     {"mode": "place", "order": {...}}
-                 ]
+                 ] for each arbitrage order
+        """
+        # Check if we're dealing with multiple orders
+        if isinstance(arb_orders, list):
+            results = []
+            for arb_order in arb_orders:
+                results.append(self._split_order_for_single(arb_order, delta))
+            return results
+
+        # Handle the case for a single arbitrage order
+        return self._split_order_for_single(arb_orders, delta)
+
+    def _split_order_for_single(
+            self,
+            arb_order: ArbitrageOrder,
+            delta: Optional[float] = None
+    ) -> Any:
+        """
+        Split the given `ArbitrageOrder`'s original_amount into multiple sub-orders,
+        calculating prices based on `reference_price`.
+
+        :param arb_order: An `ArbitrageOrder` instance whose `original_amount` will be splitted.
+        :param delta: Optional delta to adjust the price.
+        :return: A list of sub-orders (dicts).
         """
         reference_price: float = arb_order.price_reference
         logger.info("Splitting order into sub-orders: order=%s, reference_price=%s, side=%s, delta=%s",
@@ -616,7 +641,6 @@ class ArbitrageBot:
         order_amount = arb_order.pending_amount_low_liquidity
         sub_orders_info = [{}, {}, {}]
         # Calculate base price depending on side and delta
-
         order_type_name = arb_order.order_type
         if order_type_name in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
             side = 'ask'
@@ -651,7 +675,6 @@ class ArbitrageBot:
         sub_orders_info[2]["amount"] = sub_order_three_amount / sub_order_three_price
 
         # Construct the orders structure
-        # Assuming a market_name pattern like "BASE-QUOTE", here we use the class attributes
         market_name = f"{arb_order.base_currency}-{arb_order.quote_currency}"
 
         def place_sub_order(sub_order_amount: float, sub_order_price: float, market: str, market_side: str) -> Dict:
@@ -674,11 +697,9 @@ class ArbitrageBot:
                     "type": market_side
                 }
             }
-
             return sub_order_template
 
         sub_orders = []
-
         for sub_order in sub_orders_info:
             sub_orders.append(place_sub_order(sub_order.get("amount"), sub_order.get("price"), market_name, side))
 
