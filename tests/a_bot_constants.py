@@ -537,7 +537,35 @@ new_order_binance_sell_limit_flow_traded = {
     'selfTradePreventionMode': 'EXPIRE_MAKER'
 }
 
-buda_create_withdraw_request_sell_limit_flow_traded = {'id': 'pGwNxJ', 'uuid': '6b250edc-9871-4223-b761-e9755ca185fe', 'state': 'executing', 'currency': 'USDC', 'created_at': '2025-01-31T15:38:52.355Z', 'withdrawal_data': {'type': 'usdc_withdrawal_data', 'target_address': '0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b', 'direct': False, 'tx_hash': None, 'direct_hash': None, 'carbon_footprint_donation_confirmed': False, 'carbon_footprint_donation': None}, 'forced_reason': None, 'account_id': 143870, 'user_id': 143870, 'expected_execution_time': None, 'expected_arrival_time': None, 'hold_execution': False, 'reserve_name': 'USDC', 'reserve_code': 'usdc', 'rejection_reasons': [], 'amount': ['14.996126', 'USDC'], 'fee': ['1.0', 'USDC'], 'usd_amount': ['15.02', 'USD']}
+buda_create_withdraw_request_sell_limit_flow_traded = {
+    'id': 'pGwNxJ',
+    'uuid': '6b250edc-9871-4223-b761-e9755ca185fe',
+    'state': 'executing',
+    'currency': 'USDC',
+    'created_at': '2025-01-31T15:38:52.355Z',
+    'withdrawal_data':
+        {
+            'type': 'usdc_withdrawal_data',
+            'target_address': '0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b',
+            'direct': False,
+            'tx_hash': None,
+            'direct_hash': None,
+            'carbon_footprint_donation_confirmed': False,
+            'carbon_footprint_donation': None
+        },
+    'forced_reason': None,
+    'account_id': 143870,
+    'user_id': 143870,
+    'expected_execution_time': None,
+    'expected_arrival_time': None,
+    'hold_execution': False,
+    'reserve_name': 'USDC',
+    'reserve_code': 'usdc',
+    'rejection_reasons': [],
+    'amount': ['14.996126', 'USDC'],
+    'fee': ['1.0', 'USDC'],
+    'usd_amount': ['15.02', 'USD']
+}
 
 binance_pay_ln_invoice_sell_limit_flow_traded = {'id': 'd8ea0779171a433f8f1e83a5e1892786'}
 

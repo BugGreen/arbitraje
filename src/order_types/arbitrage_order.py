@@ -28,6 +28,7 @@ class ArbitrageOrder(Order):
         self.pending_amount_low_liquidity = self.original_amount  # Initially the entire original amount is pending
         self.traded_base_amount_low_liquidity: float = 0.0
         self.traded_quote_amount_low_liquidity: float = 0.0
+        self.paid_fee_quote_currency_low_liquidity: float = 0.0
         # This is how much has actually been traded (sub-orders filled) on the low-liquidity exchange
 
         # High-liquidity side
@@ -55,7 +56,10 @@ class ArbitrageOrder(Order):
         # e.g. def on_pending_high_liquidity_update(arb_order, delta): ...
         self.on_pending_high_liquidity_updated: Optional[Callable[['ArbitrageOrder', float], None]] = None
 
-    def update_low_liquidity_traded(self, traded_quote_delta: float, traded_base_delta: float) -> None:
+    def update_low_liquidity_traded(self,
+                                    traded_quote_delta: float,
+                                    traded_base_delta: float,
+                                    paid_fee: float) -> None:
         """
         Called whenever a sub-order on the low-liquidity exchange is traded or partially traded.
 
@@ -63,10 +67,15 @@ class ArbitrageOrder(Order):
         and also set the same traded_quote_delta to `_pending_quote_amount_high_liquidity`,
         and set  traded_base_delta to `_pending_base_amount_high_liquidity`.
         meaning that exact portion is now ready to be offset on the high-liquidity side.
+
+        :param traded_base_delta: The traded amount expressed in the base currency
+        :param traded_quote_delta: The traded amount expressed in the quote currency
+        :param paid_fee: The paid fee expressed in the quote currency
         """
         self.traded_base_amount_low_liquidity += traded_base_delta
         self.traded_quote_amount_low_liquidity += traded_quote_delta
         self.pending_amount_low_liquidity -= traded_quote_delta
+        self.paid_fee_quote_currency_low_liquidity += paid_fee
         # Move that same traded_delta to pending
         self._pending_quote_amount_high_liquidity += traded_quote_delta
         self._pending_base_amount_high_liquidity += traded_base_delta

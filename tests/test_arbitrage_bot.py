@@ -1204,3 +1204,61 @@ class TestArbitrageBot(unittest.TestCase):
             order_type=OrderType.SELL_LIMIT
         )
         self.bot.run_arbitrage_flow(arb_order=arb_order)
+
+    def test_calculate_paid_fee(self):
+        """
+        Test the correct calculation of the paid fee.
+        It should return the paid fee expressed in tue quote currency of arb_order.
+        It tests three scenarios:
+        1: paid fee in base currency
+        2: paid fee in quote currency
+        3: paid fee in a currency different from base and quote
+        """
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=100.0,
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        buda_bid_order_state = {
+          "id": 1366305465,
+          "uuid": "12fe1429-ffd8-40c5-9e53-042565ba67f1",
+          "market_id": "BTC-USDC",
+          "type": "Bid",
+          "state": "canceled",
+          "fee_currency": "BTC",
+          "limit": [
+            "105199.922212",
+            "USDC"
+          ],
+          "amount": [
+            "0.00028517",
+            "BTC"
+          ],
+          "original_amount": [
+            "0.00028517",
+            "BTC"
+          ],
+          "traded_amount": [
+            "0.0",
+            "BTC"
+          ],
+          "total_exchanged": [
+            "0.0",
+            "USDC"
+          ],
+          "paid_fee": [
+            "1.0",
+            "BTC"
+          ],
+        }
+        paid_fee = self.bot._calculate_paid_fee(buda_bid_order_state, arb_order)
+        self.assertEqual(105199.922212, paid_fee)
+        buda_bid_order_state["paid_fee"] = ["8.888", "USDC"]
+        paid_fee = self.bot._calculate_paid_fee(buda_bid_order_state, arb_order)
+        self.assertEqual(8.888, paid_fee)
+        buda_bid_order_state["paid_fee"] = ["8.888", "BNB"]
+        paid_fee = self.bot._calculate_paid_fee(buda_bid_order_state, arb_order)
+        self.assertEqual(0, paid_fee)

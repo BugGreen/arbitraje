@@ -101,12 +101,13 @@ class ArbitrageBot:
             else:
                 # Not completed => Cancel sub-orders
                 cancel_response = self.place_sub_order_cancellations(place_result, arb_order)
-                if self.arbitrage_order_completion(arb_order):
+                order_completion = self.arbitrage_order_completion(arb_order)
+                if order_completion:
                     # If fully done => funds_transfer
                     success_transfer = self.funds_transfer(arb_order)
                     if success_transfer:
                         logger.info("Funds transferred successfully. Reset order or create a new one.")
-                        arb_order.reset_values() # hypothetical method to reset or you can create a new one
+                        arb_order.reset_values(order_completion) # hypothetical method to reset or you can create a new one
                     else:
                         logger.warning("Funds transfer failed. Evaluate partial scenario.")
 
@@ -494,6 +495,7 @@ class ArbitrageBot:
                 st_state = st.get("state")
                 base_currency_traded_amount = float(st.get("traded_amount", 0.0)[0])
                 quote_currency_traded_amount = float(st.get("total_exchanged", 0.0)[0])
+                paid_fee_info = float(st.get("paid_fee", 0.0)[0])
 
                 self._update_arbitrage_order_on_fill(
                     sub_order_dict=so,
@@ -514,6 +516,32 @@ class ArbitrageBot:
                 standardized_cancel_responses.append(sub_order_cancelled)
 
         return standardized_cancel_responses
+
+    @staticmethod
+    def _calculate_paid_fee(order_state: Dict[str, str], arb_order: ArbitrageOrder) -> float:
+        """
+        Uses the information of `order_state` and returns the paid fee expressed in the quote currency of
+        `ArbitrageOrder`.
+        WARNING: Currently only works for Buda responses.
+
+        :param order_state: state of a traded order.
+        :param arb_order: An ArbitrageOrder object with the quote currency information
+        :return: Float representing the paid fee expressed in quote currency
+        """
+        quote_currency = arb_order.quote_currency
+        paid_fee_info = order_state.get("paid_fee", [0, quote_currency])
+        paid_fee: float = float(paid_fee_info[0])
+        paid_fee_currency: str = paid_fee_info[1]
+
+        if paid_fee_currency.upper() == quote_currency:
+            return paid_fee
+        elif paid_fee_currency.upper() == arb_order.base_currency:
+            limit_price = float(order_state.get("limit", 0)[0])
+            return limit_price * paid_fee
+        else:
+            logger.error("paid_fee_currency does not belong to base or quote currency of ArbitrageBot, "
+                         "instead: {}".format(paid_fee_currency))
+            return 0
 
     @staticmethod
     def _handle_unprepared_or_minimum_amount_errors(sub_order_responses: Union[List[Dict[str, Any]], Dict[str, Any]]) \

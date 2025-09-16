@@ -69,7 +69,7 @@ def main() -> None:
     try:
         buda = ExchangeFactory.get_exchange("buda")
         coin = "BTC"
-        base_currency, quote_currency = 'eth', 'cop'
+        base_currency, quote_currency = 'BTC', 'USDC'
         side = 'bid'
         order_type = 'limit'
         order_amount = 0.0012
@@ -113,8 +113,8 @@ def main() -> None:
         # print(json.dumps(buda.create_quote_currency_address('usdc')))
         #order_canceled = buda.cancel_order(base_currency, quote_currency, order_id)
         #print(json.dumps(order_canceled, indent=2))
-        #order_states = buda.get_order_states(base_currency, quote_currency)
-        #print(json.dumps(order_states, indent=2))
+        order_states = buda.get_order_states(base_currency, quote_currency)
+        print(json.dumps(order_states, indent=2))
         #ltc_withdrawal = buda.create_withdraw_request(coin='ltc', amount=0.00702, address=ltc_address, simulate=True)
         #print(json.dumps(ltc_withdrawal, indent=2))
         #order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')
