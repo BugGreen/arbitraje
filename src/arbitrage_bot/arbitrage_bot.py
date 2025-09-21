@@ -380,8 +380,8 @@ class ArbitrageBot:
         """
         symbol = arb_order.base_currency.upper() + arb_order.quote_currency.upper()
 
-        to_trade_quote_currency = arb_order.get_pending_quote_amount_high_liquidity()
-        to_trade_base_currency = arb_order.get_pending_base_amount_high_liquidity()  # Pending amount, in base currency
+        to_trade_quote_currency = arb_order.get_pending_quote_amount_high_liquidity
+        to_trade_base_currency = arb_order.get_pending_base_amount_high_liquidity  # Pending amount, in base currency
 
         if arb_order.order_type in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
             side = "SELL"
@@ -785,6 +785,9 @@ class ArbitrageBot:
         # Combine results
         if btc_success and quote_success:
             logger.info("All funds transferred successfully (BTC + quote).")
+            logger.info("Reset order attributes.")
+
+            arb_order.reset_values(order_completion=True)
             return True
         else:
             logger.warning("Some transfer(s) failed. btc_success=%s, quote_success=%s", btc_success, quote_success)

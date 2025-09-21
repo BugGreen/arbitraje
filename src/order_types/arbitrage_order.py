@@ -55,10 +55,6 @@ class ArbitrageOrder(Order):
         # e.g. def on_pending_high_liquidity_update(arb_order, delta): ...
         self.on_pending_high_liquidity_updated: Optional[Callable[['ArbitrageOrder', float], None]] = None
 
-    @property
-    def pending_amount_high_liquidity(self) -> float:
-        return self._pending_quote_amount_high_liquidity
-
     def update_low_liquidity_traded(self, traded_quote_delta: float, traded_base_delta: float) -> None:
         """
         Called whenever a sub-order on the low-liquidity exchange is traded or partially traded.
@@ -78,11 +74,37 @@ class ArbitrageOrder(Order):
         if self.on_pending_high_liquidity_updated is not None:
             self.on_pending_high_liquidity_updated(self, traded_quote_delta)
 
+    @property
     def get_pending_quote_amount_high_liquidity(self):
         return self._pending_quote_amount_high_liquidity
 
+    @property
     def get_pending_base_amount_high_liquidity(self):
         return self._pending_base_amount_high_liquidity
+
+    def reset_values(self, order_completion: bool) -> None:
+        """
+        Restore all trading values, except `_pending_quote_amount_high_liquidity` and
+        `_pending_base_amount_high_liquidity`, because these can be used in the next order
+        (in case there is an amount left to execute).
+        :param order_completion: True if the order was successfully completed, else False
+        :return: None
+        """
+        if order_completion:
+            # Dynamic attributes Low-liquidity side
+            self.pending_amount_low_liquidity = self.original_amount  # Initially the entire original amount is pending
+            self.traded_base_amount_low_liquidity: float = 0.0
+            self.traded_quote_amount_low_liquidity: float = 0.0
+            # This is how much has actually been traded (sub-orders filled) on the low-liquidity exchange
+
+            # High-liquidity side
+            self.traded_amount_base_high_liquidity: float = 0.0
+            self.traded_amount_quote_high_liquidity: float = 0.0
+
+            if self.currency_of_interest == CurrencyOfInterest.QUOTE:
+                self.profit = Profit(0, self.quote_currency)
+            if self.currency_of_interest == CurrencyOfInterest.BASE:
+                self.profit = Profit(0, self.base_currency)
 
     def fulfill_high_liquidity(self, traded_quote_delta: float, traded_base_delta: float) -> None:
         """

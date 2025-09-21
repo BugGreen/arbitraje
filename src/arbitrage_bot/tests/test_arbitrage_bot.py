@@ -500,7 +500,7 @@ class TestArbitrageBot(unittest.TestCase):
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
-        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0)
+        self.assertAlmostEqual(arb_order._pending_quote_amount_high_liquidity, 0.0)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, arb_order.traded_amount_base_high_liquidity)
         self.assertAlmostEqual(arb_order.traded_amount_quote_high_liquidity, 220.0)
         self.assertEqual(arb_order.profit.amount, 20)
@@ -542,7 +542,7 @@ class TestArbitrageBot(unittest.TestCase):
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
-        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0, places=4)
+        self.assertAlmostEqual(arb_order._pending_base_amount_high_liquidity, 0.0, places=4)
         self.assertAlmostEqual(round(arb_order.traded_amount_quote_high_liquidity, 1), 200.0, places=4)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, 1.0)
         self.assertEqual(arb_order.traded_amount_base_high_liquidity + arb_order.profit.amount,
@@ -586,7 +586,7 @@ class TestArbitrageBot(unittest.TestCase):
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
-        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0, places=4)
+        self.assertAlmostEqual(arb_order._pending_quote_amount_high_liquidity, 0.0, places=4)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, 1.0)
         self.assertEqual(arb_order.traded_amount_base_high_liquidity + arb_order.profit.amount,
                          arb_order.traded_base_amount_low_liquidity)
@@ -630,7 +630,7 @@ class TestArbitrageBot(unittest.TestCase):
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
-        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0, places=4)
+        self.assertAlmostEqual(arb_order._pending_base_amount_high_liquidity, 0.0, places=4)
         self.assertAlmostEqual(round(arb_order.traded_amount_quote_high_liquidity, 1), 180.0, places=4)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, arb_order.traded_amount_base_high_liquidity)
         self.assertAlmostEqual(arb_order.profit.amount, -20.0, places=4)
@@ -672,7 +672,7 @@ class TestArbitrageBot(unittest.TestCase):
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 1000.0)
-        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0, places=4)
+        self.assertAlmostEqual(arb_order._pending_base_amount_high_liquidity, 0.0, places=4)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, arb_order.traded_amount_base_high_liquidity)
         self.assertAlmostEqual(round(arb_order.traded_amount_quote_high_liquidity, 1), 1100.0, places=4)
         self.assertAlmostEqual(arb_order.profit.amount, 100.0, places=4)
@@ -711,7 +711,7 @@ class TestArbitrageBot(unittest.TestCase):
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
-        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0)
+        self.assertAlmostEqual(arb_order._pending_quote_amount_high_liquidity, 0.0)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, arb_order.traded_amount_base_high_liquidity)
         self.assertAlmostEqual(arb_order.traded_amount_quote_high_liquidity, 180.0)
         self.assertEqual(arb_order.profit.amount, 20)
@@ -750,7 +750,7 @@ class TestArbitrageBot(unittest.TestCase):
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
-        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0)
+        self.assertAlmostEqual(arb_order._pending_base_amount_high_liquidity, 0.0)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, arb_order.traded_amount_base_high_liquidity)
         self.assertAlmostEqual(arb_order.traded_amount_quote_high_liquidity, 220.0)
         self.assertEqual(arb_order.profit.amount, -20)
@@ -793,7 +793,7 @@ class TestArbitrageBot(unittest.TestCase):
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
-        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0, places=4)
+        self.assertAlmostEqual(arb_order._pending_base_amount_high_liquidity, 0.0, places=4)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, 0.2)
         self.assertAlmostEqual(round(arb_order.traded_amount_quote_high_liquidity, 1), 200.0, places=4)
         self.assertAlmostEqual(arb_order.traded_base_amount_low_liquidity + arb_order.profit.amount,
@@ -839,7 +839,7 @@ class TestArbitrageBot(unittest.TestCase):
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, 0.2)
-        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0, places=4)
+        self.assertAlmostEqual(arb_order._pending_base_amount_high_liquidity, 0.0, places=4)
         self.assertAlmostEqual(round(arb_order.traded_amount_quote_high_liquidity, 1), 200.0, places=4)
         self.assertAlmostEqual(arb_order.traded_base_amount_low_liquidity + arb_order.profit.amount,
                                arb_order.traded_amount_base_high_liquidity)
@@ -888,7 +888,7 @@ class TestArbitrageBot(unittest.TestCase):
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 1000.0)
-        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0)
+        self.assertAlmostEqual(arb_order._pending_base_amount_high_liquidity, 0.0)
         self.assertAlmostEqual(arb_order.traded_amount_quote_high_liquidity, 1100.0)
         self.assertEqual(round(arb_order.profit.amount, 1), 100.0)
         self.assertEqual(arb_order.profit.currency, 'USDC')
@@ -1041,6 +1041,9 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order.traded_quote_amount_low_liquidity = 20
 
         assert self.bot.funds_transfer(arb_order)
+        self.assertEqual(arb_order.pending_amount_low_liquidity, arb_order.original_amount)
+        self.assertEqual(arb_order.traded_quote_amount_low_liquidity, arb_order.traded_quote_amount_low_liquidity)
+        self.assertEqual(arb_order.traded_amount_base_high_liquidity, arb_order.traded_amount_quote_high_liquidity)
 
     @patch.object(BudaProxy, 'create_lightning_invoice',
                   return_value=test_api_constants.buda_ln_invoice_001)
@@ -1071,7 +1074,11 @@ class TestArbitrageBot(unittest.TestCase):
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
         )
+        arb_order.pending_amount_low_liquidity = 10
         arb_order.traded_base_amount_low_liquidity = 0.000095
         arb_order.traded_quote_amount_low_liquidity = 20
 
         assert self.bot.funds_transfer(arb_order)
+        self.assertEqual(arb_order.pending_amount_low_liquidity, arb_order.original_amount)
+        self.assertEqual(arb_order.traded_quote_amount_low_liquidity, arb_order.traded_quote_amount_low_liquidity)
+        self.assertEqual(arb_order.traded_amount_base_high_liquidity, arb_order.traded_amount_quote_high_liquidity)
