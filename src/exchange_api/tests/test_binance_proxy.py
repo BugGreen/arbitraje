@@ -96,3 +96,34 @@ def test_create_deposit_address():
             headers={"X-MBX-APIKEY": binance.api_key},
             params=mock_get.call_args[1]["params"]  # Ensure params match the call
         )
+
+
+def test_create_withdraw_request():
+    """
+    Test the create_withdraw_request method of BinanceProxy.
+    """
+    binance = BinanceProxy()
+
+    # Mock the expected API response
+    expected_response = {"id": "7213fea8e94b4a5593d507237e5a555b"}
+
+    # Mock the requests.post method
+    with patch('requests.post') as mock_post:
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = expected_response
+        mock_post.return_value = mock_response
+
+        # Call the method
+        withdraw_request = binance.create_withdraw_request(
+            coin="BTC", address="1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", amount=0.01
+        )
+
+        # Assertions
+        assert withdraw_request == expected_response
+        mock_post.assert_called_once()
+        mock_post.assert_called_with(
+            f"{binance.BASE_URL}{binance.ENDPOINTS['WITHDRAW_REQUEST']}",
+            headers={"X-MBX-APIKEY": binance.api_key},
+            params=mock_post.call_args[1]["params"]  # Ensures parameters match
+        )

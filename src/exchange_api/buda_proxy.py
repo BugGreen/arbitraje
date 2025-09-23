@@ -15,6 +15,7 @@ class BudaProxy(BaseExchange):
     Proxy class for interacting with the BUDA API.
     """
 
+    # ToDo: Implement BUDA calls
     BASE_URL = "https://api.buda.com"  # Replace with actual BUDA API base URL
     ENDPOINTS = {
         "ALL_COINS_INFO": "/api/v2/assets",  # Replace with actual endpoint
@@ -76,4 +77,8 @@ class BudaProxy(BaseExchange):
         return False
 
     def create_deposit_address(self, coin: str, network: str = None) -> Dict:
+        pass
+
+    def create_withdraw_request(self, coin: str, address: str, amount: float,
+                                network: Optional[str] = None, **kwargs) -> Dict:
         pass

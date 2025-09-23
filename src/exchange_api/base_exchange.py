@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 
 class BaseExchange(ABC):
@@ -36,3 +36,19 @@ class BaseExchange(ABC):
         :return: A dictionary with deposit address details.
         """
         pass
+
+    @abstractmethod
+    def create_withdraw_request(self, coin: str, address: str, amount: float,
+                                network: Optional[str] = None, **kwargs) -> Dict:
+        """
+        Abstract method for creating a withdrawal request.
+
+        :param coin: The symbol of the cryptocurrency to withdraw (e.g., 'BTC').
+        :param address: The destination address for the withdrawal.
+        :param amount: The amount of cryptocurrency to withdraw.
+        :param network: Optional, the network to use for withdrawal.
+        :param kwargs: Additional optional parameters (withdrawOrderId, addressTag, etc.).
+        :return: A dictionary containing the withdrawal request ID.
+        """
+        pass
+

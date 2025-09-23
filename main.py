@@ -10,9 +10,11 @@ def main() -> None:
     # Example usage with Binance
     try:
         binance = ExchangeFactory.get_exchange("binance")
-        coin = "BTC"
-        lightning_address = binance.create_deposit_address(coin)
-        print(json.dumps(lightning_address, indent=2))
+        coin = "USDC"
+        coin_info = binance.supports_lightning_network(coin)
+        # lightning_address = binance.create_deposit_address(coin)
+        # print(json.dumps(lightning_address, indent=2))
+        print(json.dumps(coin_info, indent=2))
     except Exception as e:
         print(f"Error with Binance: {e}")
 

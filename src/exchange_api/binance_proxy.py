@@ -18,7 +18,8 @@ class BinanceProxy(BaseExchange):
     BASE_URL = "https://api.binance.com"
     ENDPOINTS = {
         "ALL_COINS_INFO": "/sapi/v1/capital/config/getall",
-        "DEPOSIT_ADDRESS": "/sapi/v1/capital/deposit/address"
+        "DEPOSIT_ADDRESS": "/sapi/v1/capital/deposit/address",
+        "WITHDRAW_REQUEST": "/sapi/v1/capital/withdraw/apply",
     }
 
     def __init__(self) -> None:
@@ -70,7 +71,8 @@ class BinanceProxy(BaseExchange):
         coins_info = self.get_coin_info()
         for coin_info in coins_info:
             if coin_info.get("coin") == coin:
-                # print(json.dumps(coin_info, indent=2)) Uncomment to display the response
+                # Uncomment to display the response
+                # print(json.dumps(coin_info, indent=2))
                 for network in coin_info.get("networkList", []):
                     if "lightning" in network.get("network", "").lower():
                         return network.get("withdrawEnable", False)
@@ -106,6 +108,48 @@ class BinanceProxy(BaseExchange):
         url = f"{self.BASE_URL}{self.ENDPOINTS['DEPOSIT_ADDRESS']}"
         headers = {"X-MBX-APIKEY": self.api_key}
         response = requests.get(url, headers=headers, params=signed_params)
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception(f"Error {response.status_code}: {response.text}")
+
+    def create_withdraw_request(self, coin: str, address: str, amount: float,
+                                network: Optional[str] = "LIGHTNING", **kwargs) -> Dict:
+        """
+        Submit a withdrawal request to Binance.
+
+        :param coin: The symbol of the cryptocurrency to withdraw (e.g., 'BTC').
+        :param address: The destination address for the withdrawal.
+        :param amount: The amount of cryptocurrency to withdraw.
+        :param network: Optional, the network to use for withdrawal.
+        :param kwargs: Additional optional parameters (e.g., withdrawOrderId, addressTag, transactionFeeFlag, name).
+        :return: A dictionary containing the withdrawal request ID.
+        :raises Exception: If the request fails or the response contains an error.
+        """
+        params = {
+            "coin": coin,
+            "address": address,
+            "amount": amount,
+            "timestamp": int(time.time() * 1000),
+        }
+
+        if network:
+            params["network"] = network
+
+        # Add additional optional parameters from kwargs
+        optional_fields = ["withdrawOrderId", "addressTag", "transactionFeeFlag", "name", "walletType", "recvWindow"]
+        for field in optional_fields:
+            if field in kwargs:
+                params[field] = kwargs[field]
+
+        # Sign the request
+        signed_params = self._sign_request(params)
+
+        # Make the API request
+        url = f"{self.BASE_URL}{self.ENDPOINTS['WITHDRAW_REQUEST']}"
+        headers = {"X-MBX-APIKEY": self.api_key}
+        response = requests.post(url, headers=headers, params=signed_params)
 
         if response.status_code == 200:
             return response.json()
