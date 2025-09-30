@@ -1,4 +1,5 @@
 from typing import Dict, List
+import json
 
 successful_batch_order = [
             {
@@ -1133,6 +1134,24 @@ binance_withdrawal_history: List[Dict] = [
      }
 ]
 
+binance_withdrawal_history_USDC: List[Dict] = [
+    {
+        'id': '7b32ca91132c45ca929ded6cdcf8ac74',
+        'amount': '11.5', 'transactionFee': '8.5',
+        'coin': 'USDC',
+        'status': 6,
+        'address': '0x4f56c765e4a5ae10d924235a2c813e8b260a3291',
+        'txId': '0xa3599321fec630a2a6bc88170f2c5e7adc9ef006c34962ee50250a50cda02590',
+        'applyTime': '2025-01-20 18:15:17',
+        'network': 'ETH',
+        'transferType': 0,
+        'info': '0x28c6c06298d514db089934071355e5743bf21d60,11482483',
+        'confirmNo': 48, 'walletType': 0,
+        'txKey': '',
+        'completeTime': '2025-01-20 18:17:41',
+        'state': 'confirmed'}
+]
+
 binance_deposit_history: List[Dict] = [
     {
         'id': '4275309289780248321',
@@ -1281,8 +1300,6 @@ buda_deposit_history: List[Dict] = [
 
 
 buda_withdrawal_response = {
-    "withdrawal":
-        {
             'id': 'VWBwmE',
             'uuid': '9803d6c9-2aa1-459e-8b27-bec08c35709a',
             'state': 'executing',
@@ -1308,8 +1325,150 @@ buda_withdrawal_response = {
             'fee': ['0.0', 'BTC'],
             'usd_amount': ['10.46', 'USD']
         }
-    }
+
 
 binance_withdrawal_response = {
     "id": "156e566fe1d04820a4b6b46d53a96570"
 }
+
+binance_withdrawal_usdc_response = {
+    'id': '7b32ca91132c45ca929ded6cdcf8ac74'
+}
+
+
+buda_withdrawal_usdc_response = {
+    'id': 'bgRpYj',
+    'uuid': '31f9dccc-fc0a-41d7-80a1-47e634b91825',
+    'state': 'executing',
+    'currency': 'USDC',
+    'created_at': '2025-01-20T18:35:59.725Z',
+    'withdrawal_data': {
+        'type': 'usdc_withdrawal_data',
+        'target_address': '0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b',
+        'direct': False,
+        'tx_hash': None,
+        'direct_hash': None,
+        'carbon_footprint_donation_confirmed': False,
+        'carbon_footprint_donation': None
+    },
+    'forced_reason': None,
+    'account_id': 143870,
+    'user_id': 143870,
+    'expected_execution_time': None,
+    'expected_arrival_time': None,
+    'hold_execution': False,
+    'reserve_name': 'USDC',
+    'reserve_code': 'usdc',
+    'rejection_reasons': [],
+    'amount': ['20.0', 'USDC'],
+    'fee': ['6.0', 'USDC'],
+    'usd_amount': ['19.84', 'USD']
+}
+
+binance_usdc_address_ERC20_response = {
+    "coin": "USDC",
+    "address": "0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b",
+    "tag": "",
+    "url": "https://etherscan.io/address/0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b",
+    "isDefault": 0
+}
+
+buda_usdc_address_ERC20_response = {
+    "receive_address":
+        {
+            "id": 270780,
+            "address": "0x4f56c765e4a5ae10d924235a2c813e8b260a3291",
+            "created_at": "2025-01-20T11:45:39.000Z",
+            "used": False,
+            "ready": True}
+}
+
+buda_usdc_withdrawal_history: List[Dict] = [
+    {
+        'id': 'DdBYRG',
+        'uuid': '34b8bfa0-5211-4028-8398-db8f5a76e9d9',
+        'state': 'confirmed',
+        'currency': 'USDC',
+        'created_at': '2025-01-23T14:39:30.715Z',
+        'withdrawal_data':
+            {
+                'type': 'usdc_withdrawal_data',
+                'target_address': '0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b',
+                'direct': False,
+                'tx_hash': '0x3d9dcca2887020a93438ceef165fb27ca0576a5fcf6467c4ac18cf50a15a5e8d',
+                'direct_hash': None,
+                'carbon_footprint_donation_confirmed': False,
+                'carbon_footprint_donation': None
+            },
+        'forced_reason': None,
+        'account_id': 143870,
+        'user_id': 143870,
+        'expected_execution_time': None,
+        'expected_arrival_time': None,
+        'hold_execution': False,
+        'reserve_name': 'USDC',
+        'reserve_code': 'usdc',
+        'rejection_reasons': [],
+        'amount': ['20.0', 'USDC'],
+        'fee': ['8.0', 'USDC'],
+        'usd_amount': ['20.1', 'USD']
+    },
+    {
+        'id': 'dMbExR',
+        'uuid': '892acaad-0e05-4649-9f3d-f1ce37a9b083',
+        'state': 'confirmed',
+        'currency': 'USDC',
+        'created_at': '2025-01-23T14:35:38.941Z',
+        'withdrawal_data':
+            {
+                'type': 'usdc_withdrawal_data',
+                'target_address': '0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b',
+                'direct': False,
+                'tx_hash': '0x3d9dcca2887020a93438ceef165fb27ca0576a5fcf6467c4ac18cf50a15a5e8d',
+                'direct_hash': None,
+                'carbon_footprint_donation_confirmed': False,
+                'carbon_footprint_donation': None
+            },
+        'forced_reason': None,
+        'account_id': 143870,
+        'user_id': 143870,
+        'expected_execution_time': None,
+        'expected_arrival_time': None,
+        'hold_execution': False,
+        'reserve_name': 'USDC',
+        'reserve_code': 'usdc',
+        'rejection_reasons': [],
+        'amount': ['20.0', 'USDC'],
+        'fee': ['6.0', 'USDC'],
+        'usd_amount': ['20.1', 'USD']
+    },
+    {
+        'id': 'bgRpYj',
+        'uuid': '31f9dccc-fc0a-41d7-80a1-47e634b91825',
+        'state': 'confirmed',
+        'currency': 'USDC',
+        'created_at': '2025-01-20T18:35:59.725Z',
+        'withdrawal_data':
+            {
+                'type': 'usdc_withdrawal_data',
+                'target_address': '0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b',
+                'direct': False,
+                'tx_hash': '0x119eaf9e4944d77ebf2df324bf1af3f0c597d5869fb302d223ec9e513f2739bb',
+                'direct_hash': None,
+                'carbon_footprint_donation_confirmed': False,
+                'carbon_footprint_donation': None
+            },
+        'forced_reason': None,
+        'account_id': 143870,
+        'user_id': 143870,
+        'expected_execution_time': None,
+        'expected_arrival_time': None,
+        'hold_execution': False,
+        'reserve_name': 'USDC',
+        'reserve_code': 'usdc',
+        'rejection_reasons': [],
+        'amount': ['20.0', 'USDC'],
+        'fee': ['6.0', 'USDC'],
+        'usd_amount': ['19.84', 'USD']
+    }
+]

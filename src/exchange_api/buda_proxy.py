@@ -11,7 +11,6 @@ from src.exchange_api.utils import load_api_keys
 import json
 import logging
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -36,7 +35,9 @@ class BudaProxy(BaseExchange):
         "BATCH_ORDERS": "/api/v2/orders",
         "CRYPTO_WITHDRAWAL": "/api/v2/currencies/{currency}/withdrawals",
         "ORDER_BOOK": "/api/v2/markets/{}/order_book",
-        "WITHDRAW_HISTORY": "/api/v2/currencies/{}/{}"
+        "WITHDRAW_HISTORY": "/api/v2/currencies/{}/{}",
+        "ADDRESS_ID": "/api/v2/currencies/{}/receive_addresses",
+        "DEPOSIT_ADDRESS": "/api/v2/currencies/{}/receive_addresses/{}"
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -210,7 +211,7 @@ class BudaProxy(BaseExchange):
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
 
-    def get_withdraw_or_deposit_history(self, coin: str, direction: str) -> Dict[str, List[Dict]]:
+    def _get_withdraw_or_deposit_history(self, coin: str, direction: str) -> Dict[str, List[Dict]]:
         """
         Get the Deposit/Withdrawal history of a given coin, or a given order.
 
@@ -244,7 +245,7 @@ class BudaProxy(BaseExchange):
         :return: Deposit/Withdrawal history
         """
         direction = "withdrawals"
-        withdraw_history = self.get_withdraw_or_deposit_history(coin=coin, direction=direction).get(direction)
+        withdraw_history = self._get_withdraw_or_deposit_history(coin=coin, direction=direction).get(direction)
         return withdraw_history
 
     def get_deposit_history(self, coin: str) -> List[Dict]:
@@ -255,14 +256,15 @@ class BudaProxy(BaseExchange):
         :return: Deposit history
         """
         direction = "deposits"
-        withdraw_history = self.get_withdraw_or_deposit_history(coin=coin, direction=direction).get(direction)
+        withdraw_history = self._get_withdraw_or_deposit_history(coin=coin, direction=direction).get(direction)
         return withdraw_history
 
     def create_deposit_address(self, coin: str = "BTC", network: Optional[str] = "lightning",
                                amount_satoshis: Optional[int] = 0, memo: Optional[str] = None,
                                expiry_seconds: Optional[int] = 0) -> Dict:
         """
-        Create a Lightning Network deposit address (invoice) for BTC.
+        # TODO: Ajustar el parametro `network` para cuando la red SOL esté habilitada
+        Create a deposit address (invoice if BTC) for any available crypto.
 
         :param coin: The cryptocurrency symbol (e.g., 'BTC'). Must be 'BTC' for Lightning Network.
         :param network: The network for the deposit. If provided, must be 'lightning'.
@@ -272,36 +274,92 @@ class BudaProxy(BaseExchange):
         :return: A dictionary containing the encoded payment request.
         :raises Exception: If the request fails or the response contains an error.
         """
-        if coin != "BTC":
-            raise ValueError("Lightning Network invoices are only supported for BTC.")
-        if network and network.lower() != "lightning":
-            raise ValueError("This method only supports the Lightning Network.")
+        coin = coin.lower()
 
-        # Define the endpoint path
-        endpoint_path = self.ENDPOINTS["LIGHTNING_INVOICE"]
-        url = f"{self.BASE_URL}{endpoint_path}"
+        if coin == 'btc':
 
-        # Build the payload
-        payload = {
-            "amount_satoshis": amount_satoshis,
-            "currency": "BTC"
-        }
-        if memo:
-            payload["memo"] = memo
-        if expiry_seconds:
-            payload["expiry_seconds"] = expiry_seconds
+            # Define the endpoint path
+            endpoint_path = self.ENDPOINTS["LIGHTNING_INVOICE"]
+            url = f"{self.BASE_URL}{endpoint_path}"
 
-        # Authenticate the request
-        headers = self._sign_request(method="POST", path=endpoint_path, body=payload if payload else "")
+            # Build the payload
+            payload = {
+                "amount_satoshis": amount_satoshis,
+                "currency": "BTC"
+            }
+            if memo:
+                payload["memo"] = memo
+            if expiry_seconds:
+                payload["expiry_seconds"] = expiry_seconds
 
-        # Make the API call
-        response = requests.post(url, headers=headers, json=payload)
+            # Authenticate the request
+            headers = self._sign_request(method="POST", path=endpoint_path, body=payload if payload else "")
+
+            # Make the API call
+            response = requests.post(url, headers=headers, json=payload)
+
+        elif coin in ['eth', 'ltc', 'bch', 'usdc', 'usdt']:
+            response = self._create_altcoin_address(coin)
+            if not self._validate_address_availability(response):
+                logger.error(f"Deposit address is not available, got this response:")
+                raise Exception(f"Error for deposit address {response.status_code}: {response.text}")
 
         # Handle the response
         if response.status_code in [200, 201]:
-            return response.json().get("invoice", {})
+            if coin == 'btc':
+                response = response.json().get("invoice", {})
+            else:
+                response = response.json()
+            return response
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
+
+    def _create_altcoin_address(self, coin: str) -> str:
+        """
+        Create a new altcoin address
+
+        :param coin: Acronym of the currency being deposited
+        :return: the id
+        """
+        endpoint_path = self.ENDPOINTS["ADDRESS_ID"].format(coin)
+        url = f"{self.BASE_URL}{endpoint_path}"
+        # Authenticate the request
+        headers = self._sign_request(method="POST", path=endpoint_path)
+
+        # Make the API call
+        response = requests.post(url, headers=headers)
+        # Handle the response
+        if response.status_code in [200, 201]:
+            return response
+        else:
+            raise Exception(f"Error {response.status_code}: {response.text}")
+
+    def create_quote_currency_address(self,
+                                      coin: str,
+                                      network: Optional[str] = None) -> Dict:
+        """
+        Create a deposit address for any available alt_coin.
+
+        :param coin: The cryptocurrency symbol.
+        :param network: The network for the deposit.
+        """
+        response = self.create_deposit_address(coin=coin, network=network)
+        return {"address": response.get("receive_address").get('address')}
+
+    @staticmethod
+    def _validate_address_availability(address_creation_response: dict) -> bool:
+        """
+        Check the availability of a given crypto address
+
+        :param address_creation_response: response object
+        :return: True if it is available, False otherwise
+        """
+        address_creation_response = address_creation_response.json()
+        available = address_creation_response.get("receive_address", {}).get("ready", False)
+        if available:
+            return True
+        else:
+            False
 
     def create_lightning_invoice(self,
                                  amount: float,
@@ -361,14 +419,19 @@ class BudaProxy(BaseExchange):
     def supports_lightning_network(self, coin: str) -> bool:
         pass
 
-    def create_withdraw_request(self, coin: str, address: str, amount: float, simulate: bool = False) -> Dict:
+    def create_withdraw_request(self, coin: str, address: str, amount: float,
+                                simulate: Optional[bool] = False, network: Optional[bool] = False,
+                                priority: Optional[bool] = True) -> Dict:
         """
         Submit a withdrawal request for a selected cryptocurrency (BTC, ETH, USDC, BCH, LTC).
+
 
         :param coin: The cryptocurrency symbol (e.g., 'BTC', 'ETH', 'USDC', 'BCH', 'LTC').
         :param address: The target address (for crypto transfers) or payment request (for Lightning Network).
         :param amount: The withdrawal amount.
         :param simulate: Optional flag to simulate the payment request without executing it.
+        :param network: Optional, the network to use for withdrawal.
+        :param priority: Optional, True for a priority withdrawal.
         :return: A dictionary containing the details of the withdrawal request.
         :raises ValueError: If the coin is unsupported or if incorrect parameters are provided.
         :raises Exception: If the request fails or the response contains an error.
@@ -386,12 +449,14 @@ class BudaProxy(BaseExchange):
             # Define the endpoint path for traditional crypto withdrawals
             endpoint_path = self.ENDPOINTS["CRYPTO_WITHDRAWAL"].format(currency=coin.lower())
             url = f"{self.BASE_URL}{endpoint_path}"
-            withdrawal_data = {"target_address": address}
+            withdrawal_data = {
+                "target_address": address,
+                "priority": priority
+            }
 
         else:
             # Raise an error if the coin is unsupported
             raise ValueError(f"Withdrawal not supported for the cryptocurrency {coin.upper()}.")
-
         payload = {
             "amount": amount,
             "withdrawal_data": withdrawal_data,
@@ -405,7 +470,8 @@ class BudaProxy(BaseExchange):
 
         # Handle the response
         if response.status_code in [200, 201]:
-            return response.json()
+            response = response.json().get("withdrawal")
+            return response
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
 
@@ -423,7 +489,7 @@ class BudaProxy(BaseExchange):
 
         coin = 'BTC'
         withdraw_info = self.create_withdraw_request(coin=coin, address=ln_invoice, amount=amount, simulate=simulate)
-        return {"id": withdraw_info["withdrawal"].get("id")}
+        return {"id": withdraw_info.get("id")}
 
     def new_order(self, base_currency: str, quote_currency: str, side: str, order_type: str, amount: float,
                   price: Optional[float] = None,

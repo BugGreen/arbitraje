@@ -87,6 +87,25 @@ def test_create_withdraw_request_ltc():
 
 
 @patch("requests.post")
+def test_create_quote_currency_address(mock_post):
+    """
+    Test the create_deposit_address method for an alt-coin with a successful response.
+    """
+    buda = BudaProxy()
+    buda.api_key = "test_api_key"
+    buda.api_secret = "test_api_secret"
+
+    expected_response = constants.buda_usdc_address_ERC20_response
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = expected_response
+    mock_post.return_value = mock_response
+    result = buda.create_quote_currency_address(coin='USDC')
+    assert result.get('address') == "0x4f56c765e4a5ae10d924235a2c813e8b260a3291"
+
+
+@patch("requests.post")
 def test_create_deposit_address_success(mock_post):
     """
     Test the create_deposit_address method with a successful response.
@@ -156,7 +175,7 @@ def test_create_ln_invoice_success(mock_post):
     amount = 0.01
     sats_amount = amount * 100000000
     # Act
-    result = buda.create_lightning_invoice(amount=amount)
+    result = buda.create_lightning_invoice(coin=amount)
 
     # Assert
     assert result == expected_response

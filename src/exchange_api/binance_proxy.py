@@ -166,8 +166,8 @@ class BinanceProxy(BaseExchange):
             deposit['state'] = state
         return response
 
-    def create_deposit_address(self, coin: str, network: Optional[str] = "LIGHTNING",
-                               amount: Optional[float] = 0.00002) -> Dict:
+    def create_deposit_address(self, coin: str, network: str,
+                               amount: Optional[float] = None) -> Dict:
         """
         Fetch a deposit address for a specific coin and network.
 
@@ -177,7 +177,7 @@ class BinanceProxy(BaseExchange):
         :return: A dictionary containing the deposit address and related details.
         :raises Exception: If the request fails or the response contains an error.
         """
-        network = network.upper()
+        network = network.upper() if network else network
 
         params = {
             "coin": coin,
@@ -198,9 +198,44 @@ class BinanceProxy(BaseExchange):
         response = requests.get(url, headers=headers, params=signed_params)
 
         if response.status_code == 200:
-            return response.json()
+            response = response.json()
+            if self._validate_deposit_availability(coin, network_name=network):
+                return response
+            else:
+                logger.error(f"Deposit address is not available, got this response:")
+                raise Exception(f"Error for deposit address {response.status_code}: {response.text}")
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
+
+    def _validate_deposit_availability(self, coin: str, network_name: str) -> bool:
+        """
+        Check the availability of a given crypto address
+
+        :param coin: Coin to deposit
+        :param network_name: network to check
+        :return: True if it is available, False otherwise
+        """
+        coins_info = self.get_coin_info()
+        for coin_info in coins_info:
+            if coin_info.get("coin") == coin:
+                # Uncomment to display the response
+                # print(json.dumps(coin_info, indent=2))
+                for network in coin_info.get("networkList", []):
+                    if network_name in network.get("network", ""):
+                        return network.get("depositEnable", False)
+        return False
+
+    def create_quote_currency_address(self,
+                                      coin: str,
+                                      network: Optional[str] = None) -> Dict:
+        """
+        Create a deposit address for any available alt_coin.
+
+        :param coin: The cryptocurrency symbol.
+        :param network: The network for the deposit.
+        """
+        response = self.create_deposit_address(coin=coin, network=network)
+        return {"address": response.get('address')}
 
     def create_lightning_invoice(self,
                                  amount: float) -> Dict:

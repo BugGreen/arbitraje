@@ -955,3 +955,55 @@ class TestArbitrageBot(unittest.TestCase):
         # Check that pay_ln_invoice was called once with correct parameters
         binance_withdrawal_response_mock.assert_called_once()
         assert transfer_completion
+
+    @patch.object(BinanceProxy, 'create_withdraw_request',
+                  return_value=test_api_constants.binance_withdrawal_usdc_response)
+    @patch.object(BinanceProxy, 'get_withdraw_history',
+                  return_value=test_api_constants.binance_withdrawal_history_USDC)
+    def test_quote_transfer_buy(self, binance_withdrawal_response_mock, binance_withdrawal_history_mock):
+        """
+        Suppose we have a BUY_LIMIT scenario with 0.017 BTC traded on the low-liquidity side.
+        We expect it to be split into 2 chunks: 0.009999, 0.007001.
+        """
+
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=1.0,
+            original_amount=24000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+        arb_order.traded_base_amount_low_liquidity = 0.000095
+        arb_order.traded_quote_amount_low_liquidity = 20
+
+        transfer_completion = self.bot.quote_currency_transfer(arb_order)
+        # Check that LN invoice was created once
+        binance_withdrawal_history_mock.assert_called_once()
+        assert transfer_completion
+
+    @patch.object(BudaProxy, 'create_withdraw_request',
+                   return_value=test_api_constants.buda_withdrawal_usdc_response)
+    @patch.object(BudaProxy, 'get_withdraw_history',
+                  return_value=test_api_constants.buda_withdrawal_usdc_response)
+    def test_quote_transfer_sell(self, buda_withdrawal_response_mock, buda_withdrawal_history_usdc):
+        """
+        Suppose we have a SELL_LIMIT scenario with 0.017 BTC traded on the low-liquidity side.
+        We expect it to be split into 2 chunks: 0.009999, 0.007001.
+        """
+
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=1.0,
+            original_amount=24000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        arb_order.traded_base_amount_low_liquidity = 0.000095
+        arb_order.traded_quote_amount_low_liquidity = 20
+
+        transfer_completion = self.bot.quote_currency_transfer(arb_order)
+        # Check that LN invoice was created once
+        # binance_withdrawal_history_mock.assert_called_once()
+        assert transfer_completion

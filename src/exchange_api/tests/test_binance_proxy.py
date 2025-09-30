@@ -132,6 +132,15 @@ def test_create_ln_invoice():
         )
 
 
+def test_create_quote_currency_address():
+    """
+    Test the create_deposit_address method for an alt-coin with a successful response.
+    """
+    binance = BinanceProxy()
+    result = binance.create_quote_currency_address(coin='USDC', network="ETH")
+    assert result.get('address') == "0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b"
+
+
 def test_create_withdraw_request():
     """
     Test the create_withdraw_request method of BinanceProxy.

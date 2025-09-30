@@ -4,7 +4,7 @@ from src.arbitrage_bot.order import Order
 from src.exchange_api.binance_proxy import BinanceProxy
 from src.exchange_api.buda_proxy import BudaProxy
 from src.arbitrage_bot.constants import MIN_AMOUNT_REQUIREMENTS, MIN_AMOUNT_BINANCE_REQUIREMENTS, MIN_BTC_PER_INVOICE, \
-    MAX_BTC_PER_INVOICE
+    MAX_BTC_PER_INVOICE, MIN_WITHDRAWAL_AMOUNT_BINANCE
 from src.order_types.arbitrage_order import ArbitrageOrder
 from src.order_types.encoders import OrderType, CurrencyOfInterest
 import logging
@@ -727,7 +727,8 @@ class ArbitrageBot:
                 side = 'sell' if order.order_type == 'bid_limit' else 'buy'
                 opposite_order_price = target_exchange_price  # This could be refined
 
-                opposite_response = self.execute_opposite_order_on_target_exchange(executed_amount, side, opposite_order_price)
+                opposite_response = self.execute_opposite_order_on_target_exchange(executed_amount, side,
+                                                                                   opposite_order_price)
                 order.executed_amount += opposite_response["executed_amount"]
 
                 # Cancel resting sub_orders
@@ -822,7 +823,7 @@ class ArbitrageBot:
                         withdraw_id, chunk, sender.__class__.__name__)
 
             # 4c) Wait for confirm
-            success = self._wait_for_btc_withdraw(sender, withdraw_id)
+            success = self._wait_for_asset_withdraw(arb_order.base_currency, sender, withdraw_id)
             if not success:
                 logger.error(
                     "Withdrawal ID=%s for chunk=%.8f BTC failed or timed out. Aborting this chunk.",
@@ -840,6 +841,90 @@ class ArbitrageBot:
             logger.info("All BTC chunks transferred successfully!")
         else:
             logger.error("Some BTC chunks failed to transfer or confirm.")
+        return all_success
+
+    def quote_currency_transfer(self, arb_order: 'ArbitrageOrder') -> bool:
+        """
+        Synchronously transfer the quote currency between exchanges based on the arbitrage order's type.
+        If order_type in [BUY_LIMIT, BUY_MARKET], we transfer from high-liquidity to low-liquidity.
+        If order_type in [SELL_LIMIT, SELL_MARKET], we transfer from low-liquidity to high-liquidity.
+
+        :param arb_order: The ArbitrageOrder containing traded_base_amount_low_liquidity.
+        :return: Bool indicating success/failure of the entire operation.
+        """
+        # 1. Decide sender / receiver
+        if arb_order.order_type.name in ("BUY_LIMIT", "BUY_MARKET"):
+            sender = self.exchange_high_liquidity
+            receiver = self.exchange_low_liquidity
+        elif arb_order.order_type.name in ("SELL_LIMIT", "SELL_MARKET"):
+            sender = self.exchange_low_liquidity
+            receiver = self.exchange_high_liquidity
+        else:
+            logger.error("Unknown order_type: %s", arb_order.order_type)
+            return
+
+        # 2. The total QUOTE currency to send
+        # TODO: Esto deberia depender de arb_order.currency_of_interest ?
+        total_quote_currency = arb_order.traded_quote_amount_low_liquidity
+        if total_quote_currency <= MIN_WITHDRAWAL_AMOUNT_BINANCE.get(arb_order.quote_currency):
+            logger.info("No =%s to transfer (traded_base_amount_low_liquidity=%.6f). Skipping.",
+                        arb_order.quote_currency, total_quote_currency)
+            return
+
+        # Track overall success
+        all_success = True
+
+        # TODO: Automatizar la red cuando actualicen BUDA para que soporte SOL
+        deposit_address = receiver.create_quote_currency_address(coin=arb_order.quote_currency, network="ETH")
+        # TODO: Revisar si es necesario usar el uuid en vez de el id en BUDA
+        address = deposit_address.get("address")
+        if not address:
+            logger.error(
+                "Failed to create a deposit address for quote=%.8f on %s. invoice_data=%s",
+                total_quote_currency, receiver.__class__.__name__, deposit_address
+            )
+            all_success = False
+
+        # TODO: Automatizar la red cuando actualicen BUDA para que soporte SOL
+        # 4b) Send funds from sender
+        withdrawal_response = sender.create_withdraw_request(
+            coin=arb_order.quote_currency,
+            address=address,
+            amount=total_quote_currency,
+            network="ETH")
+
+        if ("code" in withdrawal_response and withdrawal_response.get("code", 0) < 0) or (
+                "error" in withdrawal_response):
+            logger.error("Fund transfer failed. transfer=%s", withdrawal_response)
+            all_success = False
+
+        withdraw_id = str(withdrawal_response.get("id", ""))
+        if not withdraw_id:
+            logger.error("No withdraw_id found in transfer=%s", withdrawal_response)
+            all_success = False
+
+        logger.info("Withdrawal initiated ID=%s for amount=%.8f BTC on %s",
+                    withdraw_id, total_quote_currency, sender.__class__.__name__)
+
+        # 4c) Wait for confirm
+        success = self._wait_for_asset_withdraw(arb_order.quote_currency, sender, withdraw_id)
+        if not success:
+            logger.error(
+                "Withdrawal ID=%s for quote=%.8f BTC failed or timed out. Aborting this transfer.",
+                withdraw_id, total_quote_currency
+            )
+            all_success = False
+        else:
+            logger.info(
+                "Withdrawal ID=%s for quote=%.8f confirmed successfully.",
+                withdraw_id, total_quote_currency
+            )
+
+        # Final result
+        if all_success:
+            logger.info("All funds transferred successfully!")
+        else:
+            logger.error("Withdrawal failed to transfer or confirm.")
         return all_success
 
     @staticmethod
@@ -862,16 +947,19 @@ class ArbitrageBot:
 
         return chunks
 
+    # TODO: Adapt `max_wait_seconds` according to the coin, bcs, some take longer than others
     @staticmethod
-    def _wait_for_btc_withdraw(
-        sender: Any,
-        withdraw_id: str,
-        max_wait_seconds: int = 120
+    def _wait_for_asset_withdraw(
+            coin: str,
+            sender: Any,
+            withdraw_id: str,
+            max_wait_seconds: int = 60 * 6
     ) -> bool:
         """
-        Wait for a BTC withdrawal to be confirmed by polling the sender's
+        Wait for an asset withdrawal to be confirmed by polling the sender's
         withdraw history.
 
+        :param coin: The Coin history of interest
         :param sender: The exchange proxy (BudaProxy or BinanceProxy) that initiated the withdrawal.
         :param withdraw_id: The unique identifier for the withdrawal request (e.g., 'WBbWyN' in Buda).
         :param max_wait_seconds: The maximum time in seconds to wait before giving up.
@@ -882,7 +970,7 @@ class ArbitrageBot:
             withdraw_id, sender.__class__.__name__, max_wait_seconds
         )
         start_time = time.time()
-        coin = 'BTC'  # For clarity, we pass 'BTC' to get_withdraw_history
+        coin = coin.upper()
 
         while True:
             elapsed = time.time() - start_time
@@ -926,7 +1014,7 @@ class ArbitrageBot:
 
             # If the state is something else (e.g. 'rejected' or 'error'),
             # we can consider that a failure or log it
-            if state not in ("pending_confirmation", "confirmed"):
+            if state not in ("pending_confirmation", "confirmed", 'executing'):
                 logger.error(
                     "Withdrawal ID=%s entered unexpected state=%s. Stopping.",
                     withdraw_id, state
