@@ -152,47 +152,53 @@ class ArbitrageOrder(Order):
         self.paid_fee_base_currency_high_liquidity += paid_fee_base_currency
         self.paid_fee_quote_currency_high_liquidity += paid_fee_quote_currency
 
-    def update_profit(self, delta_amount_base_currency: float, delta_amount_quote_currency: float) -> None:
+    def update_profit(self, price_difference: float) -> None:
         """
         Calculates the profit based on the order type and the amount of interest.
         WARNING: ALWAYS use after `fulfill_high_liquidity` method.
         NOTE: An order can be either profitable or non-profitable, therefore attribute `profit` might have neg values
 
-        :param delta_amount_base_currency: amount delta resulting from the desired BASE currency amount to trade and the
-        actual amount traded.
-        :param delta_amount_quote_currency: price delta resulting from the desired QUOTE currency amount to trade and the
-        actual amount traded.
+        :param price_difference: The real price difference between the low and high liquidity exchanges.
         """
-        pending_quote_amount = self._pending_quote_amount_high_liquidity
-        pending_base_amount = self._pending_base_amount_high_liquidity
+        currency_of_interest = self.currency_of_interest
+        order_type = self.order_type
+        # PAID FEES
         total_fees_base_currency = \
             self.paid_fee_base_currency_low_liquidity + self.paid_fee_base_currency_high_liquidity
         total_fees_quote_currency = \
             self.paid_fee_quote_currency_low_liquidity + self.paid_fee_quote_currency_high_liquidity
 
-        if self.order_type == OrderType.BUY_LIMIT:
-            if self.currency_of_interest == CurrencyOfInterest.QUOTE:
-                self.profit = Profit(round(self.profit.amount - pending_quote_amount - total_fees_quote_currency, 7),
-                                     self.quote_currency)
+        # Percentage of executed amount
+        base_amount_traded_both_exchanges = \
+            abs(self.traded_amount_base_high_liquidity / self.traded_base_amount_low_liquidity )
+        quote_amount_traded_both_exchanges = \
+            abs(self.traded_amount_quote_high_liquidity / self.traded_quote_amount_low_liquidity)
 
-            elif self.currency_of_interest == CurrencyOfInterest.BASE:
-                self.profit = Profit(round(self.profit.amount + pending_base_amount - total_fees_base_currency, 7),
-                                     self.base_currency)
+        if currency_of_interest == CurrencyOfInterest.QUOTE:
+            if order_type in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
+                profit_quote_amount = \
+                    base_amount_traded_both_exchanges * self.traded_quote_amount_low_liquidity * price_difference
 
-            self._pending_quote_amount_high_liquidity, self._pending_base_amount_high_liquidity = 0, 0
+                self._pending_quote_amount_high_liquidity = 0
+            elif order_type in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
+                profit_quote_amount = \
+                    quote_amount_traded_both_exchanges * self.traded_quote_amount_low_liquidity * price_difference
 
-        elif self.order_type == OrderType.SELL_LIMIT:
-            if self.currency_of_interest == CurrencyOfInterest.QUOTE:
-                self.profit = Profit(round(self.profit.amount + pending_quote_amount - total_fees_quote_currency, 7),
-                                     self.quote_currency)
+                self._pending_base_amount_high_liquidity = 0
+            self.profit = Profit(round(profit_quote_amount - total_fees_quote_currency, 7), self.quote_currency)
+        elif currency_of_interest == CurrencyOfInterest.BASE:
+            if order_type in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
+                profit_base_amount =\
+                    base_amount_traded_both_exchanges * self.traded_base_amount_low_liquidity * price_difference
 
-            elif self.currency_of_interest == CurrencyOfInterest.BASE:
-                self.profit = Profit(round(self.profit.amount - pending_base_amount - total_fees_base_currency, 7),
-                                     self.base_currency)
+                self._pending_quote_amount_high_liquidity = 0
+            elif order_type in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
+                profit_base_amount =\
+                    quote_amount_traded_both_exchanges * self.traded_base_amount_low_liquidity * price_difference
 
-            self._pending_base_amount_high_liquidity = delta_amount_base_currency
-            self._pending_quote_amount_high_liquidity = delta_amount_quote_currency
+                self._pending_base_amount_high_liquidity = 0
 
+            self.profit = Profit(round(profit_base_amount - total_fees_base_currency, 7), self.base_currency)
         else:
             logger.warning(f"No logic for order_type: {self.order_type}")
 

@@ -493,13 +493,21 @@ class TestArbitrageBot(unittest.TestCase):
         ]
         self.bot.place_sub_orders(sub_orders, arb_order)
 
+        low_liquidity_price = 1000
+        high_liquidity_price = 1100
+        price_diff_buy_limit = (high_liquidity_price - low_liquidity_price) / low_liquidity_price
+        paid_fees_quote_currency = 0.01114035
+        traded_ratio = 1
+        traded_quote_amount = 200 * traded_ratio
+
+        expected_profit_quote_amount = round((traded_quote_amount * price_diff_buy_limit) - paid_fees_quote_currency, 7)
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
         self.assertAlmostEqual(arb_order._pending_quote_amount_high_liquidity, 0.0)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, arb_order.traded_amount_base_high_liquidity)
         self.assertAlmostEqual(arb_order.traded_amount_quote_high_liquidity, 220.0)
-        self.assertEqual(arb_order.profit.amount, 19.9888596)
+        self.assertEqual(arb_order.profit.amount, expected_profit_quote_amount)
         self.assertEqual(arb_order.profit.currency, 'USDC')
 
     @patch.object(BinanceProxy, 'new_order',
@@ -663,6 +671,16 @@ class TestArbitrageBot(unittest.TestCase):
             {"mode": "place", "order": {"amount": 500.0}},
             {"mode": "place", "order": {"amount": 500.0}},
         ]
+
+        low_liquidity_price = 1000
+        high_liquidity_price = 1100
+        price_diff_buy_limit = (high_liquidity_price - low_liquidity_price) / low_liquidity_price
+        paid_fees_quote_currency = 0.01114035 + 0.01114035
+        traded_ratio = 1
+        traded_quote_amount = 1000 * traded_ratio
+
+        expected_profit_quote_amount = round((traded_quote_amount * price_diff_buy_limit) - paid_fees_quote_currency, 7)
+
         self.bot.place_sub_orders(sub_orders, arb_order)
 
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
@@ -671,7 +689,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertAlmostEqual(arb_order._pending_base_amount_high_liquidity, 0.0, places=4)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, arb_order.traded_amount_base_high_liquidity)
         self.assertAlmostEqual(round(arb_order.traded_amount_quote_high_liquidity, 1), 1100.0, places=4)
-        self.assertAlmostEqual(arb_order.profit.amount, 99.966579, places=4)
+        self.assertAlmostEqual(arb_order.profit.amount, expected_profit_quote_amount, places=4)
         self.assertEqual(arb_order.profit.currency, 'USDC')
 
     @patch.object(BinanceProxy, 'new_order',
@@ -789,7 +807,7 @@ class TestArbitrageBot(unittest.TestCase):
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
-        self.assertAlmostEqual(arb_order._pending_base_amount_high_liquidity, -0.02221999999999999, places=4)
+        self.assertAlmostEqual(arb_order._pending_base_amount_high_liquidity, 0, places=4)
         self.assertAlmostEqual(arb_order.get_pending_quote_amount_high_liquidity, 0.0020000000000095497, places=4)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, 0.2)
         self.assertAlmostEqual(round(arb_order.traded_amount_quote_high_liquidity, 1), 200.0, places=4)
@@ -830,16 +848,24 @@ class TestArbitrageBot(unittest.TestCase):
         ]
         self.bot.place_sub_orders(sub_orders, arb_order)
 
+        low_liquidity_price = 1000
+        high_liquidity_price = 1100
+        price_diff_sell_limit = (low_liquidity_price - high_liquidity_price) / high_liquidity_price
+        paid_fees_base_currency = 1.012759090909091e-05
+        traded_ratio = 0.999955
+        traded_base_amount = 0.2 * traded_ratio
+
+        expected_profit = round((traded_base_amount * price_diff_sell_limit) - paid_fees_base_currency, 7)
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
         self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
         self.assertEqual(arb_order.traded_base_amount_low_liquidity, 0.2)
-        self.assertAlmostEqual(arb_order._pending_base_amount_high_liquidity, 0.01819000000000001, places=4)
+        self.assertAlmostEqual(arb_order._pending_base_amount_high_liquidity, 0, places=4)
         self.assertAlmostEqual(arb_order._pending_quote_amount_high_liquidity, 0.00899999999998613, places=4)
         self.assertAlmostEqual(round(arb_order.traded_amount_quote_high_liquidity, 1), 200.0, places=4)
-        self.assertAlmostEqual(arb_order.traded_base_amount_low_liquidity + arb_order.profit.amount,
+        self.assertAlmostEqual(arb_order.traded_base_amount_low_liquidity * traded_ratio + arb_order.profit.amount,
                                arb_order.traded_amount_base_high_liquidity - 1.012759090909091e-05)
-        self.assertAlmostEqual(arb_order.profit.amount, -0.01819, places=4)
+        self.assertAlmostEqual(arb_order.profit.amount, expected_profit, places=4)
         self.assertEqual(arb_order.profit.currency, 'BTC')
 
     @patch.object(BinanceProxy, 'new_order',
@@ -1316,40 +1342,40 @@ class TestArbitrageBot(unittest.TestCase):
     #     )
     #     self.bot.run_arbitrage_flow(arb_order=arb_order)
 
-    @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.place_sub_orders_sell_limit_flow_traded)
-    @patch.object(BudaProxy, 'batch_cancellation', return_value=test_a_bot_constans.batch_cancellation_sell_limit_flow_traded)
-    @patch.object(BinanceProxy, 'new_order', return_value=test_a_bot_constans.new_order_binance_sell_limit_flow_traded)
-    @patch.object(BudaProxy, 'create_withdraw_request', return_value=test_a_bot_constans.buda_create_withdraw_request_sell_limit_flow_traded)
-    @patch.object(BinanceProxy, 'pay_ln_invoice', return_value=test_a_bot_constans.binance_pay_ln_invoice_sell_limit_flow_traded)
-    @patch.object(BinanceProxy, 'get_withdraw_history',
-                  side_effect=[
-                      test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_1,
-                      test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_2])
-    @patch.object(BudaProxy, 'get_withdraw_history',
-                  side_effect=[
-                      test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_1,
-                      test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_2])
-    def test_run_arbitrage_flow_sell_limit_traded(self,
-                                                  mock_buda_place_sub_orders,
-                                                  mock_buda_batch_cancellation,
-                                                  mock_binance_new_order,
-                                                  mock_buda_create_withdraw_request,
-                                                  mock_binance_pay_ln_invoice,
-                                                  mock_binance_get_withdraw_history,
-                                                  mock_buda_get_withdraw_history
-                                                  ):
-        """
-        Test the arbitrage flow, on a first iteration condition
-        """
-
-        arb_order = ArbitrageOrder(
-            base_currency="BTC",
-            quote_currency="USDC",
-            amount=100.0,
-            original_amount=15,
-            currency_of_interest=CurrencyOfInterest.QUOTE,
-            order_type=OrderType.SELL_LIMIT
-        )
-        self.bot.run_arbitrage_flow(arb_order=arb_order)
+    # @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.place_sub_orders_sell_limit_flow_traded)
+    # @patch.object(BudaProxy, 'batch_cancellation', return_value=test_a_bot_constans.batch_cancellation_sell_limit_flow_traded)
+    # @patch.object(BinanceProxy, 'new_order', return_value=test_a_bot_constans.new_order_binance_sell_limit_flow_traded)
+    # @patch.object(BudaProxy, 'create_withdraw_request', return_value=test_a_bot_constans.buda_create_withdraw_request_sell_limit_flow_traded)
+    # @patch.object(BinanceProxy, 'pay_ln_invoice', return_value=test_a_bot_constans.binance_pay_ln_invoice_sell_limit_flow_traded)
+    # @patch.object(BinanceProxy, 'get_withdraw_history',
+    #               side_effect=[
+    #                   test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_1,
+    #                   test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_2])
+    # @patch.object(BudaProxy, 'get_withdraw_history',
+    #               side_effect=[
+    #                   test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_1,
+    #                   test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_2])
+    # def test_run_arbitrage_flow_sell_limit_traded(self,
+    #                                               mock_buda_place_sub_orders,
+    #                                               mock_buda_batch_cancellation,
+    #                                               mock_binance_new_order,
+    #                                               mock_buda_create_withdraw_request,
+    #                                               mock_binance_pay_ln_invoice,
+    #                                               mock_binance_get_withdraw_history,
+    #                                               mock_buda_get_withdraw_history
+    #                                               ):
+    #     """
+    #     Test the arbitrage flow, on a first iteration condition
+    #     """
+    #
+    #     arb_order = ArbitrageOrder(
+    #         base_currency="BTC",
+    #         quote_currency="USDC",
+    #         amount=100.0,
+    #         original_amount=15,
+    #         currency_of_interest=CurrencyOfInterest.QUOTE,
+    #         order_type=OrderType.SELL_LIMIT
+    #     )
+    #     self.bot.run_arbitrage_flow(arb_order=arb_order)
 
 

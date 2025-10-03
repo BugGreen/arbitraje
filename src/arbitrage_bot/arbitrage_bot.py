@@ -810,9 +810,6 @@ class ArbitrageBot:
             limit_price_high_liquidity = float(order_resp.get("fills", [0.0])[0].get("price", 0.0))
             executed_quote_qty = round(executed_base_qty * limit_price_high_liquidity, 5)
 
-            # Price deltas occurs because of rounding values in Binance
-            delta_amount_base_currency = to_trade_base_currency - executed_base_qty
-            delta_amount_quote_currency = to_trade_quote_currency - executed_quote_qty
             # Turn it back to quote currency
             paid_fee_base_currency, paid_fee_quote_currency = \
                 self._calculate_paid_fee_high_liquidity(order_resp, arb_order)
@@ -828,7 +825,7 @@ class ArbitrageBot:
                 limit_low_liquidity=limit_price_low_liquidity,
                 limit_high_liquidity=limit_price_high_liquidity
             )
-            arb_order.update_profit(delta_amount_base_currency, delta_amount_quote_currency)  # TODO: se puede hacer metodo privado y encapsularlo en fulfull_high_liquidity
+            arb_order.update_profit(price_difference=price_difference)  # TODO: se puede hacer metodo privado y encapsularlo en fulfull_high_liquidity
 
             return order_resp
 
