@@ -132,7 +132,7 @@ class ArbitrageBot:
             self,
             arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]],
             mode: str = "infinite_loop",
-            debug_mode: bool = True,
+            debug_mode: bool = False,
             sleep_interval: float = 0.8
     ) -> None:
         """
