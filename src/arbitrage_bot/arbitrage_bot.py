@@ -40,7 +40,7 @@ class ArbitrageBot:
         self.currency_of_interest = CurrencyOfInterest.QUOTE  # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
         self.ui = ArbitrageUI()
 
-    def run_arbitrage_flow(self, arb_order: ArbitrageOrder, mode: str = "infinite_loop", sleep_interval: float = 0.5) \
+    def run_arbitrage_flow(self, arb_order: ArbitrageOrder, mode: str = "infinite_loop", sleep_interval: float = 0.8) \
             -> None:
         """
         Execute the arbitrage flow using REST calls to fetch the high-liquidity price.
@@ -91,7 +91,7 @@ class ArbitrageBot:
                 continue
 
             # 2) Compute price difference
-            p_diff, reference_price = self.get_price_difference(high_liquidity_price, arb_order)
+            p_diff, reference_price = self.get_price_reference(high_liquidity_price, arb_order)
 
             logger.info("p_diff=%.4f, reference_price=%.2f for order_type=%s",
                         p_diff, reference_price, arb_order.order_type.name)
@@ -106,7 +106,7 @@ class ArbitrageBot:
                 # Depending on logic, continue or break
                 if mode == "single_cycle":
                     break
-                time.sleep(sleep_interval)
+                # time.sleep(sleep_interval)
                 continue
 
             # 5) Check completion
@@ -152,13 +152,20 @@ class ArbitrageBot:
         :param arb_order: The ArbitrageOrder describing order_type, amounts, etc.
         """
 
+        if arb_order.currency_of_interest is CurrencyOfInterest.QUOTE:
+            traded_low = arb_order.traded_quote_amount_low_liquidity
+            traded_high = arb_order.traded_amount_quote_high_liquidity
+        elif arb_order.currency_of_interest is CurrencyOfInterest.BASE:
+            traded_low = arb_order.traded_base_amount_low_liquidity
+            traded_high = arb_order.traded_amount_base_high_liquidity
+
         trade_event = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "order_type": str(arb_order.order_type),
             "price_difference": arb_order.price_difference,
             "profit": arb_order.profit.amount,
-            "traded_low": arb_order.traded_base_amount_low_liquidity,
-            "traded_high": arb_order.traded_amount_base_high_liquidity,
+            "traded_low": traded_low,
+            "traded_high": traded_high,
             "low_price": arb_order.low_liquidity_price,
             "high_price": arb_order.high_liquidity_price
         }
@@ -205,25 +212,73 @@ class ArbitrageBot:
         price = float(price_info.get('price'))
         return price
 
-    # TODO: LA LOGICA DEBE TENER EN CUENTA BUY_MARKET Y SELL_MARKET, hasta ahora solo esl valida para las otras ordenes
-    def get_price_difference(self, high_liquidity_price: float, arb_order: ArbitrageOrder) -> Tuple[float, float]:
+    def filter_order_levels(
+            self,
+            levels: List[List[str]],
+            arb_order: ArbitrageOrder,
+            high_liquidity_price: float,
+            min_volume: float = 0.1,
+            reverse: bool = False
+    ) -> Optional[float]:
         """
-        Retrieve the order book from the low-liquidity exchange and compute a price difference (%)
-        relative to `high_liquidity_price`.
+        Filters a list of order book levels to find the price at which the cumulative volume
+        meets or exceeds a minimum threshold.
 
-        Workflow:
-          1) Call `get_order_book(...)` on the low-liquidity exchange; parse the resulting asks/bids.
-          2) If `arb_order.order_type` in [BUY_LIMIT, BUY_MARKET], use:
-               p_diff = (highest_bid - high_liquidity_price) / high_liquidity_price
-             If `arb_order.order_type` in [SELL_LIMIT, SELL_MARKET], use:
-               p_diff = (high_liquidity_price - lowest_ask) / lowest_ask
-          3) Return p_diff as a decimal fraction. For example, 0.05 means 5%.
+        :param levels: A list of levels, where each level is [price, amount] as strings.
+        :param arb_order: An `ArbotrageOrder` object storing the OrderType and original_amount to trade.
+        :param high_liquidity_price: The limit asset price in the high liquidity exchange.
+        :param min_volume: The minimum cumulative volume required.
+        :param reverse: If True, process levels in descending order (for bids); otherwise, ascending (for asks).
+        :return: The price (as float) at which the cumulative volume threshold is met, or None if not found.
+        """
+        cumulative_volume = 0.0
+        taker_fee = 0.008  # TODO: Automatiazar la obtencion de este valor
+        # Sort levels: ascending for asks, descending for bids.
+        sorted_levels = sorted(levels, key=lambda x: float(x[0]), reverse=reverse)
+        min_volume = arb_order.original_amount * min_volume / float(sorted_levels[0][0])
+        for level in sorted_levels:
+            try:
+                price = float(level[0])
+                volume = float(level[1])
+            except (ValueError, IndexError) as e:
+                logger.error("Error parsing level data %s: %s", level, e)
+                continue
+
+            price_difference = self._calculate_real_price_diff(arb_order, price, high_liquidity_price)
+            cumulative_volume += volume
+
+            # Prevent the creation of non-profitable market orders
+            if price_difference > self.price_diff_threshold:
+                if price_difference >= taker_fee + self.price_diff_threshold:
+                    return price  # Creation of profitable market order
+                else:
+                    if arb_order.order_type is OrderType.SELL_LIMIT:
+                        return price * ((1 + 0.001) / (1 + self.price_diff_threshold))
+                    elif arb_order.order_type is OrderType.BUY_LIMIT:
+                        return price * ((1 - 0.001) / (1 - self.price_diff_threshold))
+
+            elif cumulative_volume >= min_volume:
+                return price
+
+        return None
+
+    # TODO: LA LOGICA DEBE TENER EN CUENTA BUY_MARKET Y SELL_MARKET, hasta ahora solo es valida para las otras ordenes
+    def get_price_reference(self, high_liquidity_price: float, arb_order: ArbitrageOrder) -> Tuple[float, float]:
+        """
+        Retrieve the order book from the low-liquidity exchange, filter the levels to ensure that the
+        cumulative volume meets a minimum threshold, and compute a price difference (%) relative to
+        the high_liquidity_price.
+
+        For BUY orders, the filtered price is derived from the bids
+        (using the highest bid that meets the volume threshold).
+        For SELL orders, the filtered price is derived from the asks
+        (using the lowest ask that meets the volume threshold).
 
         :param high_liquidity_price: The asset price on the high-liquidity exchange (float).
-        :param arb_order: The `ArbitrageOrder` describing the operation type (BUY or SELL).
-        :return: A tuple of floats, the first one representing the price difference in decimal form (e.g. 0.05 = 5%),
-        and the second one the price reference according to the order type.
-        :raises RuntimeError: If the order book is missing or invalid, or if top-level fields are missing.
+        :param arb_order: The ArbitrageOrder describing the operation type.
+        :return: A tuple (p_diff, price_reference) where p_diff is the price difference in decimal form (e.g., 0.05 = 5%)
+                 and price_reference is the filtered price level from the low-liquidity exchange.
+        :raises RuntimeError: If the order book data is missing/invalid or if no price level meets the volume threshold.
         """
         logger.info(
             "Computing price difference with high_liquidity_price=%.6f for order_type=%s",
@@ -261,33 +316,38 @@ class ArbitrageBot:
         highest_bid = max(float_bids)
 
         # 3) Decide formula based on order_type
+        # The important value here is price_reference, not virtual_p_diff
         # TODO: Adaptar a BUY_MARKET y SELL_MARKET
         order_type_name = arb_order.order_type
         if order_type_name in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
             # p_diff = (high_liquidity_price - lowest_exchange_lowest_ask) / lowest_exchange_lowest_ask
-            price_reference = min([lowest_ask, high_liquidity_price])
-            low_liquidity_price = lowest_ask if order_type_name is OrderType.BUY_MARKET else highest_bid
-            p_diff = (high_liquidity_price - low_liquidity_price) / low_liquidity_price
+            filtered_lowest_ask = self.filter_order_levels(asks, arb_order, high_liquidity_price, reverse=False)
+            price_reference = min([filtered_lowest_ask, high_liquidity_price])
+            low_liquidity_price = lowest_ask if order_type_name is OrderType.BUY_MARKET else \
+                highest_bid
+            virtual_p_diff = (high_liquidity_price - low_liquidity_price) / low_liquidity_price
         elif order_type_name in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
             # p_diff = (lowest_exchange_highest_bid - high_liquidity_price) / high_liquidity_price
-            price_reference = max([highest_bid, high_liquidity_price])
-            low_liquidity_price = highest_bid if order_type_name is OrderType.SELL_MARKET else lowest_ask
-            p_diff = (low_liquidity_price - high_liquidity_price) / high_liquidity_price
+            filtered_highest_bid = self.filter_order_levels(bids, arb_order, high_liquidity_price, reverse=True)
+            price_reference = max([filtered_highest_bid, high_liquidity_price])
+            low_liquidity_price = highest_bid if order_type_name is OrderType.SELL_MARKET else \
+                lowest_ask
+            virtual_p_diff = (low_liquidity_price - high_liquidity_price) / high_liquidity_price
         else:
             logger.error("Unrecognized order type for price diff: %s", order_type_name)
             return 0.0, 0.0  # or raise an exception
 
         logger.info(
             "Computed price diff=%.4f for order_type=%s (lowest_ask=%.4f, highest_bid=%.4f, high_price=%.4f)",
-            p_diff, order_type_name, lowest_ask, highest_bid, high_liquidity_price
+            virtual_p_diff, order_type_name, lowest_ask, highest_bid, high_liquidity_price
         )
 
         arb_order.update_market_data(
-            price_diff=p_diff,
+            price_diff=virtual_p_diff,
             low_liquidity_price=low_liquidity_price,
             high_liquidity_price=high_liquidity_price
         )
-        return p_diff, price_reference
+        return virtual_p_diff, price_reference
 
     def _enforce_minimum_amounts(self, sub_orders: List[Dict[str, Any]], side: str, arb_order: ArbitrageOrder) -> Any:
         """

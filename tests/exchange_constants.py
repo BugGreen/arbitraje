@@ -15,6 +15,20 @@ buda_order_book_response = {
                     }
                 }
 
+buda_order_book_response_to_filter = {
+                    "order_book": {
+                        "asks": [
+                            ["104", "0.4"],  # lowest ask
+                            ["103", "0.0001"]
+                        ],
+                        "bids": [
+                            ["101", "0.0001"],
+                            ["100", "0.447349"],    # highest bid
+                            ["99.9", "1.43804963"]
+                        ]
+                    }
+                }
+
 successful_batch_order = [
             {
                 "mode": "place",

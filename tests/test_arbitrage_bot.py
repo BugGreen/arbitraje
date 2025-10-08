@@ -143,14 +143,12 @@ class TestArbitrageBot(unittest.TestCase):
             mode='conservative',
             base_currency='ETH',
             quote_currency='COP',
-            amount=0.05  # Example amount
         )
         self.bot.exchange_low_liquidity = BudaProxy()
         self.bot.exchange_high_liquidity = BinanceProxy()
         self.arb_order = ArbitrageOrder(
             base_currency="ETH",
             quote_currency="COP",
-            amount=1.0,
             original_amount=24000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
@@ -260,7 +258,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=100.0,
             original_amount=0.000009,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
@@ -438,7 +435,7 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="ETH",
             quote_currency="USDC",
-            amount=10000.0,
+            original_amount=10000,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
         )
@@ -481,7 +478,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
         )
@@ -619,7 +615,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
         )
@@ -661,7 +656,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
         )
@@ -749,7 +743,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
         )
@@ -792,7 +785,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1000.0,
             currency_of_interest=CurrencyOfInterest.BASE,
             order_type=OrderType.SELL_LIMIT
         )
@@ -836,7 +828,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1000.0,
             currency_of_interest=CurrencyOfInterest.BASE,
             order_type=OrderType.SELL_LIMIT
         )
@@ -895,7 +886,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
         )
@@ -933,7 +923,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="COP",
-            amount=1.0,
             original_amount=24000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
@@ -964,7 +953,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="ETH",
             quote_currency="COP",
-            amount=1.0,
             original_amount=24000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
@@ -991,7 +979,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1.0,
             original_amount=24000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
@@ -1017,7 +1004,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1.0,
             original_amount=24000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
@@ -1054,13 +1040,12 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1.0,
-            original_amount=24000.0,
+            original_amount=1.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
         )
         arb_order.traded_base_amount_low_liquidity = 0.000095
-        arb_order.traded_quote_amount_low_liquidity = 20
+        arb_order.traded_quote_amount_low_liquidity = 20 # is smaller than minimum amount
 
         assert self.bot.funds_transfer(arb_order)
         self.assertEqual(arb_order.pending_amount_low_liquidity, arb_order.original_amount)
@@ -1091,7 +1076,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1.0,
             original_amount=24000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
@@ -1112,16 +1096,15 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1.0,
             original_amount=24000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
         )
         # Suppose high_liquidity_price=837000.0
-        # highest_bid=836677.14 => p_diff = (836677.14 - 837000)/837000 = ~-0.000385
-        p_diff = self.bot.get_price_difference(837000.0, arb_order)
-        self.assertAlmostEqual(p_diff[0], -0.00071, places=5)
-        self.assertEqual(p_diff[1], 837000.0)
+        # lowest_ask=836677.14 => p_diff = (837462.23 - 837000)/837000 = ~-0.000551
+        p_diff, reference_price = self.bot.get_price_reference(837000.0, arb_order)
+        self.assertAlmostEqual(p_diff, -0.00055, places=5)
+        self.assertEqual(reference_price, 837000.0)
 
     @patch.object(BudaProxy, 'get_order_book',
                   return_value=test_api_constants.buda_order_book_response)
@@ -1130,16 +1113,154 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1.0,
             original_amount=24000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
         )
         # Suppose high_liquidity_price=837000.0
-        # highest_bid=836677.14 => p_diff = (836677.14 - 837000)/837000 = ~-0.000385
-        p_diff = self.bot.get_price_difference(837000.0, arb_order)
-        self.assertAlmostEqual(p_diff[0], 0.00055, places=5)
-        self.assertEqual(p_diff[1], 837462.23)
+        # lowest_ask=837597.23 => p_diff = (837597.23 - 837000)/837000 = ~0.000714
+        p_diff, reference_price = self.bot.get_price_reference(837000.0, arb_order)
+        self.assertAlmostEqual(p_diff, 0.00071, places=5)
+        self.assertEqual(reference_price, 837462.23)
+
+    @patch.object(BudaProxy, 'get_order_book',
+                  return_value=test_api_constants.buda_order_book_response_to_filter)
+    def test_get_price_difference_sell_limit_filtered_market(self, buda_order_book_mock):
+        """
+        SELL_LIMIT case:
+        Test an event where the creation of a profitable market order is possible
+        """
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        high_liquidity_price = 99
+        # lowest_ask=103 => p_diff = (103 - 99)/99 = ~0.04040
+        p_diff, reference_price = self.bot.get_price_reference(high_liquidity_price, arb_order)
+        self.assertAlmostEqual(p_diff, 0.04040, places=5)
+        self.assertEqual(reference_price, 101)
+
+    @patch.object(BudaProxy, 'get_order_book',
+                  return_value=test_api_constants.buda_order_book_response_to_filter)
+    def test_get_price_difference_buy_limit_filtered_market(self, buda_order_book_mock):
+        """
+        BUY_LIMIT case:
+        Test an event where the creation of a profitable market order is possible
+        """
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+        high_liquidity_price = 105
+        # Suppose high_liquidity_price=837000.0
+        # highest_bid=101 => p_diff = (105 - 101)/101 = ~0.03960
+        p_diff, reference_price = self.bot.get_price_reference(high_liquidity_price, arb_order)
+        self.assertAlmostEqual(p_diff, 0.03960, places=5)
+        self.assertEqual(reference_price, 103)
+
+    @patch.object(BudaProxy, 'get_order_book',
+                  return_value=test_api_constants.buda_order_book_response_to_filter)
+    def test_get_price_difference_sell_limit_filtered(self, buda_order_book_mock):
+        """
+        SELL_LIMIT case:
+        Test an event where the price in the high liquidity exchange lower than the highest bid order
+        of the low liquidity exchange, but the price difference in not enough to create a profitable market order.
+        """
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        high_liquidity_price = 100
+        highest_bid_price = 101
+        # lowest_ask=103 => p_diff = (103 - 99)/99 = ~0.04040
+        expected_p_diff = (103 - high_liquidity_price) / high_liquidity_price
+        expected_price = highest_bid_price * ((1 + 0.001) / (1 + self.bot.price_diff_threshold))
+        p_diff, reference_price = self.bot.get_price_reference(high_liquidity_price, arb_order)
+        self.assertEqual(p_diff, expected_p_diff)
+        self.assertEqual(reference_price, expected_price)
+
+    @patch.object(BudaProxy, 'get_order_book',
+                  return_value=test_api_constants.buda_order_book_response_to_filter)
+    def test_get_price_difference_buy_limit_filtered(self, buda_order_book_mock):
+        """
+        BUY_LIMIT case:
+        Test an event where the price in the high liquidity exchange bigger than the lowest ask order
+        of the low liquidity exchange, but the price difference in not enough to create a profitable market order.
+        """
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+        high_liquidity_price = 104
+        lowest_ask_price = 103
+        # highest_bid=101 => p_diff = (103 - 101)/101 = ~0.04040
+        expected_p_diff = (high_liquidity_price - 101) / 101
+        expected_price = lowest_ask_price * ((1 - 0.001) / (1 - self.bot.price_diff_threshold))
+        p_diff, reference_price = self.bot.get_price_reference(high_liquidity_price, arb_order)
+        self.assertEqual(p_diff, expected_p_diff)
+        self.assertEqual(reference_price, expected_price)
+
+    @patch.object(BudaProxy, 'get_order_book',
+                  return_value=test_api_constants.buda_order_book_response_to_filter)
+    def test_get_price_difference_sell_limit_filtered_volume(self, buda_order_book_mock):
+        """
+        SELL_LIMIT case:
+        Test an event where the price in the high liquidity exchange lower than the highest bid order
+        of the low liquidity exchange, but the price difference in not enough to create a profitable market order.
+        Also, the highest bid order does not have a volume representative enough to be considered, so it is ignored.
+        """
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        high_liquidity_price = 100.8
+        second_highest_bid_price = 100
+        # lowest_ask=103 => p_diff = (103 - 100.8)/100.8 = ~0.04040
+        expected_p_diff = (103 - high_liquidity_price) / high_liquidity_price
+        expected_price = max([second_highest_bid_price, high_liquidity_price])
+        p_diff, reference_price = self.bot.get_price_reference(high_liquidity_price, arb_order)
+        self.assertEqual(p_diff, expected_p_diff)
+        self.assertEqual(reference_price, expected_price)
+
+    @patch.object(BudaProxy, 'get_order_book',
+                  return_value=test_api_constants.buda_order_book_response_to_filter)
+    def test_get_price_difference_buy_limit_filtered(self, buda_order_book_mock):
+        """
+        BUY_LIMIT case:
+        Test an event where the price in the high liquidity exchange bigger than the lowest ask order
+        of the low liquidity exchange, but the price difference in not enough to create a profitable market order.
+        Also, the lowest order does not have a volume representative enough to be considered, so it is ignored.
+        """
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+        high_liquidity_price = 103.222
+        second_lowest_ask_price = 104
+        # highest_bid=101 => p_diff = (103 - 101)/101 = ~0.04040
+        expected_p_diff = (high_liquidity_price - 101) / 101
+        expected_price = min([second_lowest_ask_price, high_liquidity_price])
+        p_diff, reference_price = self.bot.get_price_reference(high_liquidity_price, arb_order)
+        self.assertEqual(p_diff, expected_p_diff)
+        self.assertEqual(reference_price, expected_price)
 
     def test_arbitrage_order_completion(self):
         """
@@ -1149,7 +1270,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=1.0,
             original_amount=24000.0,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
@@ -1185,7 +1305,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=100.0,
             original_amount=15,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
@@ -1246,7 +1365,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=100.0,
             original_amount=15,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
@@ -1303,7 +1421,6 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=100.0,
             original_amount=15,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
@@ -1336,41 +1453,41 @@ class TestArbitrageBot(unittest.TestCase):
     #     )
     #     self.bot.run_arbitrage_flow(arb_order=arb_order)
 
-    @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.place_sub_orders_sell_limit_flow_traded)
-    @patch.object(BudaProxy, 'batch_cancellation', return_value=test_a_bot_constans.batch_cancellation_sell_limit_flow_traded)
-    @patch.object(BudaProxy, 'get_order_states', return_value=test_a_bot_constans.states_sub_orders_sell_limit_flow)
-    @patch.object(BinanceProxy, 'new_order', return_value=test_a_bot_constans.new_order_binance_sell_limit_flow_traded)
-    @patch.object(BudaProxy, 'create_withdraw_request', return_value=test_a_bot_constans.buda_create_withdraw_request_sell_limit_flow_traded)
-    @patch.object(BinanceProxy, 'pay_ln_invoice', return_value=test_a_bot_constans.binance_pay_ln_invoice_sell_limit_flow_traded)
-    @patch.object(BinanceProxy, 'get_withdraw_history',
-                  side_effect=[
-                      test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_1,
-                      test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_2])
-    @patch.object(BudaProxy, 'get_withdraw_history',
-                  side_effect=[
-                      test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_1,
-                      test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_2])
-    def test_run_arbitrage_flow_sell_limit_traded(self,
-                                                  mock_buda_place_sub_orders,
-                                                  mock_buda_batch_cancellation,
-                                                  mock_buda_get_order_states,
-                                                  mock_binance_new_order,
-                                                  mock_buda_create_withdraw_request,
-                                                  mock_binance_pay_ln_invoice,
-                                                  mock_binance_get_withdraw_history,
-                                                  mock_buda_get_withdraw_history
-                                                  ):
-        """
-        Test the arbitrage flow, on a first iteration condition
-        """
-
-        arb_order = ArbitrageOrder(
-            base_currency="BTC",
-            quote_currency="USDC",
-            original_amount=15,
-            currency_of_interest=CurrencyOfInterest.QUOTE,
-            order_type=OrderType.SELL_LIMIT
-        )
-        self.bot.run_arbitrage_flow(arb_order=arb_order)
+    # @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.place_sub_orders_sell_limit_flow_traded)
+    # @patch.object(BudaProxy, 'batch_cancellation', return_value=test_a_bot_constans.batch_cancellation_sell_limit_flow_traded)
+    # @patch.object(BudaProxy, 'get_order_states', return_value=test_a_bot_constans.states_sub_orders_sell_limit_flow)
+    # @patch.object(BinanceProxy, 'new_order', return_value=test_a_bot_constans.new_order_binance_sell_limit_flow_traded)
+    # @patch.object(BudaProxy, 'create_withdraw_request', return_value=test_a_bot_constans.buda_create_withdraw_request_sell_limit_flow_traded)
+    # @patch.object(BinanceProxy, 'pay_ln_invoice', return_value=test_a_bot_constans.binance_pay_ln_invoice_sell_limit_flow_traded)
+    # @patch.object(BinanceProxy, 'get_withdraw_history',
+    #               side_effect=[
+    #                   test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_1,
+    #                   test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_2])
+    # @patch.object(BudaProxy, 'get_withdraw_history',
+    #               side_effect=[
+    #                   test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_1,
+    #                   test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_2])
+    # def test_run_arbitrage_flow_sell_limit_traded(self,
+    #                                               mock_buda_place_sub_orders,
+    #                                               mock_buda_batch_cancellation,
+    #                                               mock_buda_get_order_states,
+    #                                               mock_binance_new_order,
+    #                                               mock_buda_create_withdraw_request,
+    #                                               mock_binance_pay_ln_invoice,
+    #                                               mock_binance_get_withdraw_history,
+    #                                               mock_buda_get_withdraw_history
+    #                                               ):
+    #     """
+    #     Test the arbitrage flow, on a first iteration condition
+    #     """
+    #
+    #     arb_order = ArbitrageOrder(
+    #         base_currency="BTC",
+    #         quote_currency="USDC",
+    #         original_amount=15,
+    #         currency_of_interest=CurrencyOfInterest.QUOTE,
+    #         order_type=OrderType.SELL_LIMIT
+    #     )
+    #     self.bot.run_arbitrage_flow(arb_order=arb_order)
 
 
