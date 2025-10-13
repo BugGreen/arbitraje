@@ -1,7 +1,7 @@
+from src.order_types.encoders import Profit, OrderType, CurrencyOfInterest, PROFIT_ROUNDING_DECIMALS
+from typing import Optional, List, Dict, Callable, Any
 from src.order_types.order import Order
 import logging
-from typing import Optional, List, Dict, Callable
-from src.order_types.encoders import Profit, OrderType, CurrencyOfInterest, PROFIT_ROUNDING_DECIMALS
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class ArbitrageOrder(Order):
 
         self.price_reference = None  # Store price reference here
         self.sub_orders_info = None  # Info about the sub_orders that conforms the amount to trade
-        self.sub_orders_ids: list = []
+        self.sub_orders_ids: List[str] = []
 
     def update_sub_orders_info(self, sub_orders_info: dict):
         """
@@ -158,6 +158,9 @@ class ArbitrageOrder(Order):
         :return: None
         """
         if order_completion:
+            # Global attributes
+            self.sub_orders_info: List = []
+            self.sub_orders_ids: List = []
             # Dynamic attributes Low-liquidity side
             self.pending_amount_low_liquidity = self.original_amount  # Initially the entire original amount is pending
             self.traded_base_amount_low_liquidity: float = 0.0

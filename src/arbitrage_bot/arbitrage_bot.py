@@ -731,16 +731,19 @@ class ArbitrageBot:
         """
 
         if isinstance(arb_orders, list):
-            sub_orders_prices: Dict = {}
-            pass
+            sub_orders_prices: List[Dict[str, Any]] = []
+            for arb_order in arb_orders:
+                sub_orders_prices += arb_order.sub_orders_info
         else:
-            sub_orders_prices: Dict = arb_orders.sub_orders_info
+            sub_orders_prices: List[Dict[str, Any]] = arb_orders.sub_orders_info
 
         logger.info("Placing sub-orders on low-liquidity exchange: %s", sub_orders_prices)
         try:
             # Place the sub-orders on the exchange
             standardized_response = self.exchange_low_liquidity.batch_creation(sub_orders_prices)
 
+            # Update arb_orders `sub_orders_ids` attribute
+            self._assing_order_ids(arb_orders, standardized_response)
             # Assume it's a list of sub-order responses (partial or complete success)
             logger.info("Exchange sub-order placement response: %s", standardized_response)
 
@@ -767,6 +770,58 @@ class ArbitrageBot:
                 "error_code": "EXCHANGE_HTTP_ERROR",
                 "message": str(e)
             }
+
+    @staticmethod
+    def _assing_order_ids(
+            arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]],
+            standardized_response: List[Dict[str, Any]]
+    ) -> None:
+        """
+        For one or more ArbitrageOrder objects, match each sub-order (found in sub_orders_info)
+        with a standardized order (from standardized_response) using the 'limit' value (and order type)
+        and update the ArbitrageOrder attribute sub_orders_ids with the corresponding order id.
+
+        Args:
+            arb_orders: A single ArbitrageOrder or list of ArbitrageOrder objects.
+            standardized_response: A list of dictionaries containing standardized order responses.
+        """
+        # Ensure arb_orders is a list
+        if not isinstance(arb_orders, list):
+            arb_orders = [arb_orders]
+
+        # Keep track of standardized responses already used for a match
+        used_indices = set()
+
+        for arb_order in arb_orders:
+            for sub_order in arb_order.sub_orders_info:
+                # Extract order details from sub_order_info
+                order_details: Dict = sub_order.get('order', {})
+                limit_value: str = order_details.get('limit')
+                order_type: str = order_details.get('type', '').lower()  # e.g., "ask" or "bid"
+
+                matched = False
+                for idx, std_order in enumerate(standardized_response):
+                    if idx in used_indices:
+                        continue
+
+                    # Standardized response has a "limit" field in the form [limit_value_str, currency]
+                    std_limit_list = std_order.get('limit', [])
+                    if not std_limit_list or std_limit_list[0] is None:
+                        continue
+                    try:
+                        std_limit = float(std_limit_list[0])
+                    except (ValueError, TypeError):
+                        continue
+
+                    # Check if the limits match (within a small tolerance) and the order type matches.
+                    if abs(limit_value - std_limit) < 1e-6 and std_order.get('type', '').lower() == order_type:
+                        arb_order.sub_orders_ids.append(std_order['id'])
+                        used_indices.add(idx)
+                        matched = True
+                        break  # Found a match for this sub order; move to the next one.
+                if not matched:
+                    # Optionally, log or handle the case where no matching standardized order is found.
+                    pass
 
     def place_sub_order_cancellations(self, sub_orders: List[Dict[str, Any]], arb_order: ArbitrageOrder) -> \
             List[Dict[str, Any]]:

@@ -153,6 +153,17 @@ class TestArbitrageBot(unittest.TestCase):
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
         )
+        self.standardized_response = [
+            {'id': 1413479079, 'status': 'received', 'error_message': None,
+             'amount': ['0.01250602', 'BTC'], 'traded_amount': ['0.0', 'BTC'], 'total_exchanged': ['0.0', 'USDC'],
+             'type': 'Ask', 'limit': ['95953.765919', 'USDC']},
+            {'id': 1413479080, 'status': 'received', 'error_message': None,
+             'amount': ['0.00624676', 'BTC'], 'traded_amount': ['0.0', 'BTC'], 'total_exchanged': ['0.0', 'USDC'],
+             'type': 'Ask', 'limit': ['96049.719685', 'USDC']},
+            {'id': 1413479082, 'status': 'received', 'error_message': None,
+             'amount': ['0.00208017', 'BTC'], 'traded_amount': ['0.0', 'BTC'], 'total_exchanged': ['0.0', 'USDC'],
+             'type': 'Ask', 'limit': ['96145.673451', 'USDC']}
+        ]
 
     def test_split_order_below_minimum_multiple(self):
         arb_order = ArbitrageOrder(
@@ -1542,6 +1553,69 @@ class TestArbitrageBot(unittest.TestCase):
         taker_fee = self.bot.get_low_liquidity_taker_fee(arb_order)
         expected_fee = 0.7 / 100
         self.assertEqual(taker_fee, expected_fee)
+
+    def test_assign_order_ids_single_order(self):
+        # Test with a single ArbitrageOrder
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        sub_orders_info = [
+            {'mode': 'place', 'order': {'amount': 0.012506022963189188, 'limit': 95953.76591999999,
+                                        'market_name': 'BTC-USDC', 'price_type': 'limit', 'type': 'ask'}},
+            {'mode': 'place', 'order': {'amount': 0.006246764716877717, 'limit': 96049.71968591998,
+                                        'market_name': 'BTC-USDC', 'price_type': 'limit', 'type': 'ask'}},
+            {'mode': 'place', 'order': {'amount': 0.002080176806917696, 'limit': 96145.67345183999,
+                                        'market_name': 'BTC-USDC', 'price_type': 'limit', 'type': 'ask'}}
+        ]
+        arb_order.sub_orders_info = sub_orders_info
+        self.bot._assing_order_ids(arb_order, self.standardized_response)
+        self.assertEqual(arb_order.sub_orders_ids, [1413479079, 1413479080, 1413479082])
+
+    def test_assign_order_ids_multiple_orders(self):
+        # Create another ArbitrageOrder with a different sub-order
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        arb_order_2 = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+        sub_orders_info = [
+            {'mode': 'place', 'order': {'amount': 0.012506022963189188, 'limit': 95953.76591999999,
+                                        'market_name': 'BTC-USDC', 'price_type': 'limit', 'type': 'ask'}},
+            {'mode': 'place', 'order': {'amount': 0.006246764716877717, 'limit': 96049.71968591998,
+                                        'market_name': 'BTC-USDC', 'price_type': 'limit', 'type': 'ask'}},
+            {'mode': 'place', 'order': {'amount': 0.002080176806917696, 'limit': 96145.67345183999,
+                                        'market_name': 'BTC-USDC', 'price_type': 'limit', 'type': 'ask'}}
+        ]
+        sub_orders_info2 = [
+            {'mode': 'place', 'order': {'amount': 0.01, 'limit': 12345.67,
+                                          'market_name': 'BTC-USDC', 'price_type': 'limit', 'type': 'ask'}}
+        ]
+
+        arb_order.sub_orders_info = sub_orders_info
+        arb_order_2.sub_orders_info = sub_orders_info2
+        # Append an extra standardized response for the second order
+        standardized_response_extended = self.standardized_response + [
+            {'id': 1413479090, 'status': 'received', 'error_message': None,
+             'amount': ['0.01000000', 'BTC'], 'traded_amount': ['0.0', 'BTC'], 'total_exchanged': ['0.0', 'USDC'],
+             'type': 'Ask', 'limit': ['12345.670000', 'USDC']}
+        ]
+        # Call with a list of orders
+        self.bot._assing_order_ids([arb_order, arb_order_2], standardized_response_extended)
+        self.assertEqual(arb_order.sub_orders_ids, [1413479079, 1413479080, 1413479082])
+        self.assertEqual(arb_order_2.sub_orders_ids, [1413479090])
 
     # def test_run_arbitrage_flow_sell_limit(self):
     #     """
