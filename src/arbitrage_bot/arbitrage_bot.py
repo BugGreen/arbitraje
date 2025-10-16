@@ -10,6 +10,8 @@ from src.order_types.arbitrage_order import ArbitrageOrder
 from src.order_types.encoders import OrderType, CurrencyOfInterest
 import logging
 import time
+from src.user_interface.arbitrage_ui import ArbitrageUI
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,7 @@ class ArbitrageBot:
         self.quote_currency = quote_currency
         self.amount = amount
         self.currency_of_interest = CurrencyOfInterest.QUOTE  # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
+        self.ui = ArbitrageUI()
 
     def run_arbitrage_flow(self, arb_order: ArbitrageOrder, mode: str = "infinite_loop", sleep_interval: float = 0.111) \
             -> None:
@@ -60,6 +63,10 @@ class ArbitrageBot:
         :return: None. Blocks or loops until user stops or single cycle completes.
         """
         logger.info("Starting arbitrage flow with REST-based price retrieval. mode=%s", mode)
+        # Start the UI in a separate thread
+        ui_thread = threading.Thread(target=self.ui.display_ui, args=(arb_order,))
+        ui_thread.daemon = True  # Ensures it ends when the main program ends
+        ui_thread.start()
 
         while True:
             # 1) Get the high-liquidity price
@@ -73,6 +80,7 @@ class ArbitrageBot:
 
             # 2) Compute price difference
             p_diff, reference_price = self.get_price_difference(high_liquidity_price, arb_order)
+
             logger.info("p_diff=%.4f, reference_price=%.2f for order_type=%s",
                         p_diff, reference_price, arb_order.order_type.name)
 
@@ -234,6 +242,12 @@ class ArbitrageBot:
         logger.info(
             "Computed price diff=%.4f for order_type=%s (lowest_ask=%.4f, highest_bid=%.4f, high_price=%.4f)",
             p_diff, order_type_name, lowest_ask, highest_bid, high_liquidity_price
+        )
+
+        arb_order.update_market_data(
+            price_diff=p_diff,
+            low_liquidity_price=price_reference,
+            high_liquidity_price=high_liquidity_price
         )
         return p_diff, price_reference
 

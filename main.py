@@ -2,9 +2,12 @@ import json
 from src.exchange_api.exchange_factory import ExchangeFactory
 import requests
 import logging
+from src.arbitrage_bot.arbitrage_bot import ArbitrageBot
+from src.order_types.arbitrage_order import ArbitrageOrder
+from src.order_types.encoders import CurrencyOfInterest, OrderType
 
 logging.basicConfig(
-    level=logging.INFO,  # Set to DEBUG to capture all levels of log messages
+    level=logging.WARNING,  # Set to DEBUG to capture all levels of log messages
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # Log message format
 )
 logger = logging.getLogger(__name__)
@@ -15,7 +18,28 @@ def main() -> None:
     Main function to run the arbitrage bot.
     """
     # Example usage with Binance
+
     try:
+
+        bot = ArbitrageBot(
+            exchange_high_liquidity='binance',
+            exchange_low_liquidity='buda',
+            price_diff_threshold=0.4,
+            mode='conservative',
+            base_currency='ETH',
+            quote_currency='COP',
+            amount=0.05  # Example amount
+        )
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=20.0,
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        bot.run_arbitrage_flow(arb_order=arb_order)
+
         binance = ExchangeFactory.get_exchange("binance")
         coin = "USDC"
         ln_invoice = 'lnbc50u1pn5f8ljpp5dc6y936p79j9dfqs59vdkz6dfurxcgzvsren4mtahdrva9paqxhsdq8w3jhxaqcqzzsxqyz5vqsp5yp9j2fghxfw4dvxnkcu5lyldykew7ymuq27f8jpay8ms7q9kwe9s9qxpqysgqqczpcedj6ry8t8z5emqvz9mvjr263fsv7p64st6j5pyxfcdmm9hparffkgfsxv883kh6hkczfgpktlevn3rldcskqv392fk8n7ad3lcp6yx88t'

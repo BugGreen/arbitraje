@@ -55,6 +55,11 @@ class ArbitrageOrder(Order):
         if self.currency_of_interest == CurrencyOfInterest.BASE:
             self.profit = Profit(0, self.base_currency)
 
+        # For testing purposes now:
+        self.price_difference: float = 0
+        self.low_liquidity_price: float = 0
+        self.high_liquidity_price: float = 0
+
         # Optionally, define a callback that gets invoked whenever pending_amount_high_liquidity changes.
         # e.g. def on_pending_high_liquidity_update(arb_order, delta): ...
         self.on_pending_high_liquidity_updated: Optional[Callable[['ArbitrageOrder', float], None]] = None
@@ -89,6 +94,22 @@ class ArbitrageOrder(Order):
 
         if self.on_pending_high_liquidity_updated is not None:
             self.on_pending_high_liquidity_updated(self, traded_quote_delta)
+
+    def update_market_data(self,
+                           price_diff: float,
+                           low_liquidity_price: float,
+                           high_liquidity_price: float
+                           ) -> None:
+        """
+        Tracks market data by updating attributes `price_difference`, `low_liquidity_price` and `high_liquidity_price`
+
+        :param price_diff: The price difference between exchanges as a decimal fraction. For example, 0.05 means 5%.
+        :param low_liquidity_price: The asset price on the low-liquidity exchange (float)
+        :param high_liquidity_price: The asset price on the high-liquidity exchange (float)
+        """
+        self.price_difference = price_diff
+        self.low_liquidity_price = low_liquidity_price
+        self.high_liquidity_price = high_liquidity_price
 
     @property
     def get_pending_quote_amount_high_liquidity(self):
