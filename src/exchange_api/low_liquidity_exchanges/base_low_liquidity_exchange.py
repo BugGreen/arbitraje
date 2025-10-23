@@ -14,6 +14,15 @@ class BaseLowLiquidityExchange(BaseExchange, ABC):
     """
 
     @abstractmethod
+    def get_account_info(self) -> Dict:
+        """
+        Shows the account's personal information.
+
+        :return: A dictionary containing the account's personal information.
+        :raises Exception: If the API request fails.
+        """
+
+    @abstractmethod
     def batch_cancellation(self, orders: List[Dict]) -> Dict:
         """
         Cancel orders in batch on the exchange.
@@ -71,4 +80,39 @@ class BaseLowLiquidityExchange(BaseExchange, ABC):
 
         :param response: The raw response from the exchange or an Exception.
         :return: Standardized response.
+        """
+
+    @abstractmethod
+    def connect_to_order_book(self, base_currency: str, quote_currency: str) -> None:
+        """
+        Connects to the order book channel of the specified market pair (base-quote) using WebSocket.
+
+        :param base_currency: Base currency (e.g., BTC).
+        :param quote_currency: Quote currency (e.g., USDT).
+        """
+
+    @abstractmethod
+    def get_current_order_book(self) -> dict:
+        """
+        Thread-safely retrieves a copy of the current order book snapshot, formatted as a list of lists
+        for both asks and bids.
+
+        :return: A dictionary with the 'order_book' structure:
+                 {'order_book': {'asks': [['price', 'amount'], ...], 'bids': [['price', 'amount'], ...]}}
+        """
+
+    @abstractmethod
+    def connect_to_order_states(self):
+        """
+        Connects to the order state WebSocket channel for the specified market pair.
+        :param initial_snapshot: Optional initial snapshot from REST.
+        """
+
+    @abstractmethod
+    def get_current_order_states(self) -> dict:
+        """
+        Thread-safely retrieves a copy of the current order states snapshot in the expected format.
+
+        :return: A dictionary with the order states structure:
+                 {"orders": [ {order_data}, {order_data}, ... ]}
         """

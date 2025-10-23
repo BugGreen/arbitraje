@@ -60,420 +60,7 @@ class BudaProxy(BaseLowLiquidityExchange):
         "BALANCES": "/api/v2/balances/{}"
     }
 
-    def get_account_info(self) -> Dict:
-        """
-        Shows the account's personal information.
-
-        :return: A dictionary containing the account's personal information.
-        :raises Exception: If the API request fails.
-        """
-
-        # Define the endpoint path for retrieving the order book
-        endpoint_path = self.ENDPOINTS["ACCOUNT_INFO"]
-        url = f"{self.BASE_URL}{endpoint_path}"
-
-        # Define the API call to be retried
-        def api_call():
-            headers = self._sign_request(method="GET", path=endpoint_path)
-            response = requests.get(url, headers=headers)
-            return response
-
-        # Use handle_api_response to handle retries and responses
-        try:
-            return handle_api_response(api_call)
-        except Exception as e:
-            current_method_name = inspect.currentframe().f_code.co_name
-            logger.error(f"{current_method_name} - Error fetching account information request from Buda: {e}")
-            raise e
-
-    def on_message_order_state(self, ws, message):
-        """
-        Handles incoming messages for the order states from the WebSocket server.
-
-        :param ws: WebSocket instance.
-        :param message: Message received from WebSocket.
-        """
-        try:
-            data = json.loads(message)
-            if "ev" in data:
-                if data["ev"] == "order-created":
-                    self.process_order_state_created(data)
-                elif data["ev"] == "order-updated":
-                    self.process_order_state_updated(data)
-                else:
-                    logger.warning(f"Unknown event type: {data['ev']}")
-            else:
-                logger.warning(f"Invalid message format: {message}")
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to decode WebSocket message: {e}")
-
-    def process_order_state_created(self, data):
-        """
-        Processes the 'order-created' event, which indicates a new order has been created.
-
-        :param data: The message data from the 'order-created' event.
-        """
-        order_data = data.get("order", {})
-        order_id = order_data.get("id")
-
-        # print("Create order: {}".format(order_id))
-        if order_id:
-            # Check if the order already exists in the snapshot
-            self.add_or_update_order_state(order_id, order_data)
-
-    def process_order_state_updated(self, data):
-        """
-        Processes the 'order-updated' event, which indicates an existing order has been updated.
-
-        :param data: The message data from the 'order-updated' event.
-        """
-        order_data = data.get("order", {})
-        order_id = order_data.get("id")
-
-        # print("Update order: {}".format(order_id))
-
-        if order_id:
-            # Update the order in the snapshot
-            self.add_or_update_order_state(order_id, order_data)
-
-    def add_or_update_order_state(self, order_id: int, order_data: dict):
-        """
-        Adds a new order state or updates an existing one in the snapshot.
-
-        :param order_id: The unique identifier of the order.
-        :param order_data: The order data.
-        """
-        with self.order_states_snapshot_lock:
-            # Check if order exists in the snapshot
-            existing_order = next((order for order in self.order_states_snapshot["orders"]
-                                   if order["order"]["id"] == order_id), None)
-            if existing_order:
-                # Update the existing order's state
-                existing_order["order"] = order_data
-                logger.info(f"Updated order state: {order_id}")
-            else:
-                # Add the new order state
-                self.order_states_snapshot["orders"].append({"order": order_data})
-                logger.info(f"Added new order state: {order_id}")
-
-            # Keep the snapshot's length within the maximum limit
-            if len(self.order_states_snapshot["orders"]) > self.max_order_states_length:
-                self.order_states_snapshot["orders"].pop(0)  # Remove the oldest entry
-
-    def connect_to_order_states(self, initial_snapshot: dict = None):
-        """
-        Connects to the order state WebSocket channel for the specified market pair.
-        :param initial_snapshot: Optional initial snapshot from REST.
-        """
-        socket_url = f"wss://realtime.buda.com/sub?channel=orders%40{self.pubsub_key}"
-
-        # Initialize snapshot if provided
-        if initial_snapshot is None:
-            self.set_initial_order_states()
-
-        websocket.enableTrace(False)
-        self.ws_order_states = websocket.WebSocketApp(
-            socket_url,
-            on_message=self.on_message_order_state,
-            on_open=self.on_open_order_state,
-            on_error=self.on_error_order_state,
-            on_close=self.on_close_order_state
-        )
-
-        # Running the WebSocket connection in a separate thread
-        thread = Thread(target=self.ws_order_states.run_forever, kwargs={"ping_interval": 10})
-        thread.daemon = True
-        thread.start()
-
-    def get_current_order_states(self) -> dict:
-        """
-        Thread-safely retrieves a copy of the current order states snapshot in the expected format.
-
-        :return: A dictionary with the order states structure:
-                 {"orders": [ {order_data}, {order_data}, ... ]}
-        """
-        with self.order_states_snapshot_lock:
-            # Transform each order entry: if it has the key "order", return its value,
-            # otherwise, return the entry as is.
-            transformed_orders = [
-                order_entry.get("order", order_entry)
-                for order_entry in self.order_states_snapshot.get("orders", [])
-            ]
-        return {"orders": transformed_orders}
-
-    @staticmethod
-    def on_open_order_state(ws):
-        """
-        Called when the WebSocket connection is established for order states.
-
-        :param ws: WebSocket instance.
-        """
-        logger.info("WebSocket connected to order states.")
-
-    def on_error_order_state(self, ws, error):
-        """
-        Called when there's an error with the WebSocket connection.
-
-        :param ws: WebSocket instance.
-        :param error: Error message.
-        """
-        logger.error(f"[ORDER STATES] -- WebSocket error occurred: {error}")
-        self.reconnect_to_order_states()
-
-    def reconnect_to_order_states(self):
-        """
-        Tries to reconnect to the order book WebSocket.
-        """
-        logger.info("[ORDER STATES] -- Attempting to reconnect to WebSocket...")
-        time.sleep(.5)  # Sleep before trying to reconnect
-        self.connect_to_order_states()
-
-    def on_close_order_state(self, ws, close_status_code, close_msg):
-        """
-        Called when the WebSocket connection is closed for order states.
-
-        :param ws: WebSocket instance.
-        :param close_status_code: Close status code.
-        :param close_msg: Close message.
-        """
-        logger.warning(f"WebSocket closed with status code: {close_status_code} and message: {close_msg}")
-        self.reconnect_to_order_states()
-
-    def set_initial_order_states(self):
-        """
-        Sets the initial order states snapshot (from REST) in a thread-safe manner.
-        """
-        lastest_order_states: Dict[str, List[Dict[str, Any]]] = self.get_order_states(
-            self.base_currency,
-            self.quote_currency
-        )
-        with self.order_states_snapshot_lock:
-            transformed_orders: List[Dict[str, Dict[str, Any]]] = [
-                {"order": order_entry} for order_entry in lastest_order_states.get("orders", [])
-            ]
-            self.order_states_snapshot: Dict[str, List[Dict[str, Dict[str, Any]]]] = {"orders": transformed_orders}
-        logger.info("Initial order states snapshot set.")
-
-    def set_initial_order_book(self) -> None:
-        """
-        Sets the initial order book snapshot (from REST) in a thread-safe manner.
-        Converts the order book lists to dictionaries for easier updates.
-
-        :param snapshot: The initial snapshot with structure:
-                         {'order_book': {'asks': List[List[str]], 'bids': List[List[str]]}, 'market_id': str}
-        """
-        lastest_order_book: Dict[str, Dict[List[List[str]]]] = self.get_order_book(
-            self.base_currency,
-            self.quote_currency
-        )
-        order_book_data = lastest_order_book.get("order_book", {})
-        asks_list = order_book_data.get("asks", [])
-        bids_list = order_book_data.get("bids", [])
-        with self.order_book_lock:
-            self.order_book_snapshot = {
-                "asks": {price: amount for price, amount in asks_list},
-                "bids": {price: amount for price, amount in bids_list}
-            }
-        logger.info("Initial order book snapshot set: %s", self.order_book_snapshot)
-
-    def on_message_order_book(self, ws, message):
-        """
-        Handles incoming messages for the order book from the WebSocket server,
-        processes order book changes or snapshots.
-
-        :param ws: WebSocket instance.
-        :param message: Message received from WebSocket.
-        """
-        try:
-            data = json.loads(message)
-            if "ev" in data:
-                if data["ev"] == "book-changed":
-                    self.process_order_book_update(data)
-                elif data["ev"] == "book-sync":
-                    self.process_order_book_snapshot(data)
-                else:
-                    logger.warning(f"Unknown event type: {data['ev']}")
-            else:
-                logger.warning(f"Invalid message format: {message}")
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to decode WebSocket message: {e}")
-
-    @staticmethod
-    def on_open_order_book(ws):
-        """
-        Called when the WebSocket connection for the order book is established.
-        :param ws: WebSocket instance.
-        """
-        logger.info("WebSocket connected to order book.")
-
-    def connect_to_order_book(self, base_currency: str, quote_currency: str) -> None:
-        """
-        Connects to the order book channel of the specified market pair (base-quote) using WebSocket.
-
-        :param base_currency: Base currency (e.g., BTC).
-        :param quote_currency: Quote currency (e.g., USDT).
-        """
-        market_id = f"{base_currency.lower()}{quote_currency.lower()}"
-        socket_url = f"wss://realtime.buda.com/sub?channel=book%40{market_id}"
-        self.base_currency: str = base_currency
-        self.quote_currency: str = quote_currency
-
-        self.set_initial_order_book()
-
-        websocket.enableTrace(False)
-        self.ws_order_book = websocket.WebSocketApp(
-            socket_url,
-            on_message=self.on_message_order_book,
-            on_open=self.on_open_order_book,
-            on_error=self.on_error_order_book,
-            on_close=self.on_close_order_book,
-        )
-
-        # Running the WebSocket connection in a separate thread
-        thread = Thread(target=self.ws_order_book.run_forever, kwargs={"ping_interval": 10})
-        thread.daemon = True
-        thread.start()
-
-    def on_error_order_book(self, ws, error):
-        """
-        Called when there's an error with the WebSocket connection.
-
-        :param ws: WebSocket instance.
-        :param error: Error message.
-        """
-        logger.error(f"[ORDER BOOK] -- WebSocket error occurred: {error}")
-        self.reconnect_to_order_book()
-
-    def on_close_order_book(self, ws, close_status_code, close_msg):
-        """
-        Called when the WebSocket connection is closed.
-
-        :param ws: WebSocket instance.
-        :param close_status_code: Close status code.
-        :param close_msg: Close message.
-        """
-        logger.info(f"[ORDER BOOK] -- WebSocket closed with status code: {close_status_code} and message: {close_msg}")
-        self.reconnect_to_order_book()
-
-    def reconnect_to_order_book(self):
-        """
-        Tries to reconnect to the order book WebSocket.
-        """
-        logger.info("[ORDER BOOK] -- Attempting to reconnect to WebSocket...")
-        time.sleep(0.1)  # Sleep before trying to reconnect
-        self.connect_to_order_book(self.base_currency, self.quote_currency)
-
-    def process_order_book_update(self, data: dict) -> None:
-        """
-        Processes the 'book-changed' event to update the order book incrementally.
-
-        :param data: The message data from the 'book-changed' event.
-                     Expected structure:
-                     {'mk': <market_id>, 'ts': <timestamp>, 'ev': 'book-changed', 'change': [side, price, amount_change]}
-        """
-        change = data.get("change", [])
-        if len(change) != 3:
-            logger.error("Invalid 'change' format: %s", change)
-            return
-        side, price_level, amount_change = change
-        logger.info("Processing order book update. Side: %s, Price: %s, Amount Change: %s", side, price_level,
-                    amount_change)
-        self.update_order_book_state(side, price_level, amount_change)
-
-    def process_order_book_snapshot(self, data: dict) -> None:
-        """
-        Processes the 'book-sync' event to replace the full order book snapshot.
-
-        :param data: The message data from the 'book-sync' event.
-                     Expected structure: {'ev': 'book-sync', 'order_book': <serialized order book>}
-        """
-        snapshot = data.get("order_book", {})
-        logger.info("Processing order book snapshot.")
-        self.update_order_book_snapshot(snapshot)
-
-    def update_order_book_state(self, side: str, price_level: str, amount_change: str) -> None:
-        """
-        Thread-safely updates the order book state for a given side (asks or bids) based on a change event.
-        Instead of deleting the price level immediately when a negative change is received,
-        this method subtracts the change from the current level. If the resulting aggregate amount
-        is less than or equal to a small threshold, the price level is removed.
-
-        :param side: 'asks' or 'bids'
-        :param price_level: The price level affected (as string).
-        :param amount_change: The change in the amount at that price level (as string).
-        """
-        with self.order_book_lock:
-            # Convert amount_change to float
-            try:
-                change_value = float(amount_change)
-            except ValueError:
-                logger.error("Invalid amount_change value: %s", amount_change)
-                return
-
-            # Ensure the side exists
-            if side not in self.order_book_snapshot:
-                self.order_book_snapshot[side] = {}
-
-            # Get the current amount at this price level, defaulting to 0 if not present.
-            current_str = self.order_book_snapshot[side].get(price_level, "0")
-            try:
-                current_amount = float(current_str)
-            except ValueError:
-                logger.error("Invalid current amount at price level %s: %s", price_level, current_str)
-                current_amount = 0.0
-
-            # Calculate the new amount
-            new_amount = current_amount + change_value
-
-            # Define a threshold to consider the level as empty (to avoid floating-point issues)
-            epsilon = 1e-8
-            if new_amount <= epsilon:
-                if price_level in self.order_book_snapshot[side]:
-                    del self.order_book_snapshot[side][price_level]
-                    logger.info("Removed price level %s from %s (new amount: %f)", price_level, side, new_amount)
-                else:
-                    logger.info("Price level %s not found in %s for removal.", price_level, side)
-            else:
-                self.order_book_snapshot[side][price_level] = f"{new_amount}"
-                logger.info("Updated %s at price %s to new amount: %f", side, price_level, new_amount)
-
-    def update_order_book_snapshot(self, order_book: dict) -> None:
-        """
-        Thread-safely updates the entire order book snapshot.
-        Converts list representation into a dictionary representation for easier updates.
-
-        :param order_book: The full order book snapshot. Expected structure:
-                           {'asks': List[List[str]], 'bids': List[List[str]]}
-        """
-        with self.order_book_lock:
-            asks_list = order_book.get("asks", [])
-            bids_list = order_book.get("bids", [])
-            self.order_book_snapshot = {
-                "asks": {price: amount for price, amount in asks_list},
-                "bids": {price: amount for price, amount in bids_list}
-            }
-            logger.debug("Order book snapshot updated: %s", self.order_book_snapshot)
-
-    def get_current_order_book(self) -> dict:
-        """
-        Thread-safely retrieves a copy of the current order book snapshot, formatted as a list of lists
-        for both asks and bids.
-
-        :return: A dictionary with the 'order_book' structure:
-                 {'order_book': {'asks': [['price', 'amount'], ...], 'bids': [['price', 'amount'], ...]}}
-        """
-        with self.order_book_lock:
-            # Convert the snapshot dictionary to the desired list of lists format
-            asks_list = [[price, amount] for price, amount in self.order_book_snapshot.get("asks", {}).items()]
-            bids_list = [[price, amount] for price, amount in self.order_book_snapshot.get("bids", {}).items()]
-
-            # Return the formatted order book
-            return {
-                "order_book": {
-                    "asks": asks_list,
-                    "bids": bids_list
-                }
-            }
+# -------------------------------- REST API CALLS -------------------------------------
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
         """
@@ -514,6 +101,128 @@ class BudaProxy(BaseLowLiquidityExchange):
             "Referer": "https://www.buda.com",
             "Origin": "https://www.buda.com"
         }
+
+    # ----------------------------- PUBLIC CALLS -------------------------------
+    def get_price(self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Retrieve the price of an asset in a specified market.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'USD').
+        :return: A dictionary containing the price information.
+        :raises Exception: If the API request fails.
+        """
+        symbol = base_currency.lower() + '-' + quote_currency.lower()
+
+        # Define the endpoint path
+        endpoint_path = self.ENDPOINTS["PRICE"].format(symbol)
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Define the API call to be retried
+        def api_call():
+            response = requests.get(url)
+            return response
+
+        try:
+            response: Dict = handle_api_response(api_call)
+            info = response.get('ticker')
+            symbol: str = info.get("market_id")
+            last_price: str = info.get("last_price")[0]
+
+            price_info = {
+                'symbol': symbol.replace("-", ''),
+                'price': last_price
+            }
+            return price_info
+        except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
+            logger.error(f"{current_method_name} - Error fetching price information ({symbol}) request from Buda: {e}")
+            raise e
+
+    def get_order_book(self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Retrieve the current order book for a specified market.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'USD').
+        :return: A dictionary containing 'asks' and 'bids' lists from the order book.
+        :raises Exception: If the API request fails.
+        """
+        market_id = "-".join([base_currency.lower(), quote_currency.lower()])
+
+        # Define the endpoint path for retrieving the order book
+        endpoint_path = self.ENDPOINTS["ORDER_BOOK"].format(market_id)
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Define the API call to be retried
+        def api_call():
+            headers = self._sign_request(method="GET", path=endpoint_path)
+            response = requests.get(url, headers=headers)
+            return response
+
+        # Use handle_api_response to handle retries and responses
+        try:
+            return handle_api_response(api_call)
+        except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
+            logger.error(f"{current_method_name} - Error fetching order book request from Buda: {e}")
+            raise e
+
+    def get_market_info(self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Retrieve the market information of the market f'{base_currency}-{quote_currency}'.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'USDC').
+        :return: A dictionary containing the market information.
+        :raises Exception: If the API request fails.
+        """
+        market_id = "-".join([base_currency.lower(), quote_currency.lower()])
+
+        # Define the endpoint path for retrieving the order book
+        endpoint_path = self.ENDPOINTS["MARKETS"].format(market_id)
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Define the API call to be retried
+        def api_call():
+            headers = self._sign_request(method="GET", path=endpoint_path)
+            response = requests.get(url, headers=headers)
+            return response
+
+        try:
+            return handle_api_response(api_call)
+        except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
+            logger.error(f"{current_method_name} - Error fetching MARKET INFO request from Buda: {e}")
+            raise e
+
+    # ----------------------------- PRIVATE CALLS -------------------------------
+
+    def get_account_info(self) -> Dict:
+        """
+        Shows the account's personal information.
+
+        :return: A dictionary containing the account's personal information.
+        :raises Exception: If the API request fails.
+        """
+
+        # Define the endpoint path for retrieving the order book
+        endpoint_path = self.ENDPOINTS["ACCOUNT_INFO"]
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Define the API call to be retried
+        def api_call():
+            headers = self._sign_request(method="GET", path=endpoint_path)
+            response = requests.get(url, headers=headers)
+            return response
+
+        # Use handle_api_response to handle retries and responses
+        try:
+            return handle_api_response(api_call)
+        except Exception as e:
+            current_method_name = inspect.currentframe().f_code.co_name
+            logger.error(f"{current_method_name} - Error fetching account information request from Buda: {e}")
+            raise e
 
     @staticmethod
     def _translate_batch_response(response: Union[Dict[str, Any], Exception]) \
@@ -581,35 +290,6 @@ class BudaProxy(BaseLowLiquidityExchange):
 
         return standardized_orders
 
-    def get_order_book(self, base_currency: str, quote_currency: str) -> Dict:
-        """
-        Retrieve the current order book for a specified market.
-
-        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
-        :param quote_currency: The quote currency of the trading pair (e.g., 'USD').
-        :return: A dictionary containing 'asks' and 'bids' lists from the order book.
-        :raises Exception: If the API request fails.
-        """
-        market_id = "-".join([base_currency.lower(), quote_currency.lower()])
-
-        # Define the endpoint path for retrieving the order book
-        endpoint_path = self.ENDPOINTS["ORDER_BOOK"].format(market_id)
-        url = f"{self.BASE_URL}{endpoint_path}"
-
-        # Define the API call to be retried
-        def api_call():
-            headers = self._sign_request(method="GET", path=endpoint_path)
-            response = requests.get(url, headers=headers)
-            return response
-
-        # Use handle_api_response to handle retries and responses
-        try:
-            return handle_api_response(api_call)
-        except Exception as e:
-            current_method_name = inspect.currentframe().f_code.co_name
-            logger.error(f"{current_method_name} - Error fetching order book request from Buda: {e}")
-            raise e
-
     def get_order_states(self, base_currency: str, quote_currency: str) -> Dict:
         """
         Get the states of orders in a given market.
@@ -662,34 +342,6 @@ class BudaProxy(BaseLowLiquidityExchange):
         except Exception as e:
             current_method_name = inspect.currentframe().f_code.co_name
             logger.error(f"{current_method_name} - Error fetching balance information request from Buda: {e}")
-            raise e
-
-    def get_market_info(self, base_currency: str, quote_currency: str) -> Dict:
-        """
-        Retrieve the market information of the market f'{base_currency}-{quote_currency}'.
-
-        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
-        :param quote_currency: The quote currency of the trading pair (e.g., 'USDC').
-        :return: A dictionary containing the market information.
-        :raises Exception: If the API request fails.
-        """
-        market_id = "-".join([base_currency.lower(), quote_currency.lower()])
-
-        # Define the endpoint path for retrieving the order book
-        endpoint_path = self.ENDPOINTS["MARKETS"].format(market_id)
-        url = f"{self.BASE_URL}{endpoint_path}"
-
-        # Define the API call to be retried
-        def api_call():
-            headers = self._sign_request(method="GET", path=endpoint_path)
-            response = requests.get(url, headers=headers)
-            return response
-
-        try:
-            return handle_api_response(api_call)
-        except Exception as e:
-            current_method_name = inspect.currentframe().f_code.co_name
-            logger.error(f"{current_method_name} - Error fetching MARKET INFO request from Buda: {e}")
             raise e
 
     def _get_withdraw_or_deposit_history(self, coin: str, direction: str) -> Dict[str, List[Dict]]:
@@ -1181,40 +833,396 @@ class BudaProxy(BaseLowLiquidityExchange):
         withdraw_info = self.create_withdraw_request(coin=coin, address=ln_invoice, amount=amount, simulate=simulate)
         return {"id": withdraw_info.get("id")}
 
-    def get_price(self, base_currency: str, quote_currency: str) -> Dict:
+# ---------------------------- WEBSOCKET CONNECTIONS -----------------------------------
+
+    # ------------------------- Order Book Channel -----------------------------
+    def connect_to_order_book(self, base_currency: str, quote_currency: str) -> None:
         """
-        Retrieve the price of an asset in a specified market.
+        Connects to the order book channel of the specified market pair (base-quote) using WebSocket.
 
-        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
-        :param quote_currency: The quote currency of the trading pair (e.g., 'USD').
-        :return: A dictionary containing the price information.
-        :raises Exception: If the API request fails.
+        :param base_currency: Base currency (e.g., BTC).
+        :param quote_currency: Quote currency (e.g., USDT).
         """
-        symbol = base_currency.lower() + '-' + quote_currency.lower()
+        market_id = f"{base_currency.lower()}{quote_currency.lower()}"
+        socket_url = f"wss://realtime.buda.com/sub?channel=book%40{market_id}"
+        self.base_currency: str = base_currency
+        self.quote_currency: str = quote_currency
 
-        # Define the endpoint path
-        endpoint_path = self.ENDPOINTS["PRICE"].format(symbol)
-        url = f"{self.BASE_URL}{endpoint_path}"
+        self._set_initial_order_book()
 
-        # Define the API call to be retried
-        def api_call():
-            response = requests.get(url)
-            return response
+        websocket.enableTrace(False)
+        self.ws_order_book = websocket.WebSocketApp(
+            socket_url,
+            on_message=self._on_message_order_book,
+            on_open=self._on_open_order_book,
+            on_error=self._on_error_order_book,
+            on_close=self._on_close_order_book,
+        )
 
+        # Running the WebSocket connection in a separate thread
+        thread = Thread(target=self.ws_order_book.run_forever, kwargs={"ping_interval": 10})
+        thread.daemon = True
+        thread.start()
+
+    @staticmethod
+    def _on_open_order_book(ws):
+        """
+        Called when the WebSocket connection for the order book is established.
+        :param ws: WebSocket instance.
+        """
+        logger.info("WebSocket connected to order book.")
+
+    def _on_message_order_book(self, ws, message):
+        """
+        Handles incoming messages for the order book from the WebSocket server,
+        processes order book changes or snapshots.
+
+        :param ws: WebSocket instance.
+        :param message: Message received from WebSocket.
+        """
         try:
-            response: Dict = handle_api_response(api_call)
-            info = response.get('ticker')
-            symbol: str = info.get("market_id")
-            last_price: str = info.get("last_price")[0]
+            data = json.loads(message)
+            if "ev" in data:
+                if data["ev"] == "book-changed":
+                    self._process_order_book_update(data)
+                elif data["ev"] == "book-sync":
+                    self._process_order_book_snapshot(data)
+                else:
+                    logger.warning(f"Unknown event type: {data['ev']}")
+            else:
+                logger.warning(f"Invalid message format: {message}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode WebSocket message: {e}")
 
-            price_info = {
-                'symbol': symbol.replace("-", ''),
-                'price': last_price
+    def _update_order_book_state(self, side: str, price_level: str, amount_change: str) -> None:
+        """
+        Thread-safely updates the order book state for a given side (asks or bids) based on a change event.
+        Instead of deleting the price level immediately when a negative change is received,
+        this method subtracts the change from the current level. If the resulting aggregate amount
+        is less than or equal to a small threshold, the price level is removed.
+
+        :param side: 'asks' or 'bids'
+        :param price_level: The price level affected (as string).
+        :param amount_change: The change in the amount at that price level (as string).
+        """
+        with self.order_book_lock:
+            # Convert amount_change to float
+            try:
+                change_value = float(amount_change)
+            except ValueError:
+                logger.error("Invalid amount_change value: %s", amount_change)
+                return
+
+            # Ensure the side exists
+            if side not in self.order_book_snapshot:
+                self.order_book_snapshot[side] = {}
+
+            # Get the current amount at this price level, defaulting to 0 if not present.
+            current_str = self.order_book_snapshot[side].get(price_level, "0")
+            try:
+                current_amount = float(current_str)
+            except ValueError:
+                logger.error("Invalid current amount at price level %s: %s", price_level, current_str)
+                current_amount = 0.0
+
+            # Calculate the new amount
+            new_amount = current_amount + change_value
+
+            # Define a threshold to consider the level as empty (to avoid floating-point issues)
+            epsilon = 1e-8
+            if new_amount <= epsilon:
+                if price_level in self.order_book_snapshot[side]:
+                    del self.order_book_snapshot[side][price_level]
+                    logger.info("Removed price level %s from %s (new amount: %f)", price_level, side, new_amount)
+                else:
+                    logger.info("Price level %s not found in %s for removal.", price_level, side)
+            else:
+                self.order_book_snapshot[side][price_level] = f"{new_amount}"
+                logger.info("Updated %s at price %s to new amount: %f", side, price_level, new_amount)
+
+    def _set_initial_order_book(self) -> None:
+        """
+        Sets the initial order book snapshot (from REST) in a thread-safe manner.
+        Converts the order book lists to dictionaries for easier updates.
+
+        :param snapshot: The initial snapshot with structure:
+                         {'order_book': {'asks': List[List[str]], 'bids': List[List[str]]}, 'market_id': str}
+        """
+        lastest_order_book: Dict[str, Dict[List[List[str]]]] = self.get_order_book(
+            self.base_currency,
+            self.quote_currency
+        )
+        order_book_data = lastest_order_book.get("order_book", {})
+        asks_list = order_book_data.get("asks", [])
+        bids_list = order_book_data.get("bids", [])
+        with self.order_book_lock:
+            self.order_book_snapshot = {
+                "asks": {price: amount for price, amount in asks_list},
+                "bids": {price: amount for price, amount in bids_list}
             }
-            return price_info
-        except Exception as e:
-            current_method_name = inspect.currentframe().f_code.co_name
-            logger.error(f"{current_method_name} - Error fetching price information ({symbol}) request from Buda: {e}")
-            raise e
+        logger.info("Initial order book snapshot set: %s", self.order_book_snapshot)
+
+    def _process_order_book_update(self, data: dict) -> None:
+        """
+        Processes the 'book-changed' event to update the order book incrementally.
+
+        :param data: The message data from the 'book-changed' event.
+                     Expected structure:
+                     {'mk': <market_id>, 'ts': <timestamp>, 'ev': 'book-changed', 'change': [side, price, amount_change]}
+        """
+        change = data.get("change", [])
+        if len(change) != 3:
+            logger.error("Invalid 'change' format: %s", change)
+            return
+        side, price_level, amount_change = change
+        logger.info("Processing order book update. Side: %s, Price: %s, Amount Change: %s", side, price_level,
+                    amount_change)
+        self._update_order_book_state(side, price_level, amount_change)
+
+    def _process_order_book_snapshot(self, data: dict) -> None:
+        """
+        Processes the 'book-sync' event to replace the full order book snapshot.
+
+        :param data: The message data from the 'book-sync' event.
+                     Expected structure: {'ev': 'book-sync', 'order_book': <serialized order book>}
+        """
+        snapshot = data.get("order_book", {})
+        logger.info("Processing order book snapshot.")
+        self._update_order_book_snapshot(snapshot)
+
+    def _update_order_book_snapshot(self, order_book: dict) -> None:
+        """
+        Thread-safely updates the entire order book snapshot.
+        Converts list representation into a dictionary representation for easier updates.
+
+        :param order_book: The full order book snapshot. Expected structure:
+                           {'asks': List[List[str]], 'bids': List[List[str]]}
+        """
+        with self.order_book_lock:
+            asks_list = order_book.get("asks", [])
+            bids_list = order_book.get("bids", [])
+            self.order_book_snapshot = {
+                "asks": {price: amount for price, amount in asks_list},
+                "bids": {price: amount for price, amount in bids_list}
+            }
+            logger.debug("Order book snapshot updated: %s", self.order_book_snapshot)
+
+    def _reconnect_to_order_book(self):
+        """
+        Tries to reconnect to the order book WebSocket.
+        """
+        logger.info("[ORDER BOOK] -- Attempting to reconnect to WebSocket...")
+        time.sleep(0.1)  # Sleep before trying to reconnect
+        self.connect_to_order_book(self.base_currency, self.quote_currency)
+
+    def _on_error_order_book(self, ws, error):
+        """
+        Called when there's an error with the WebSocket connection.
+
+        :param ws: WebSocket instance.
+        :param error: Error message.
+        """
+        logger.error(f"[ORDER BOOK] -- WebSocket error occurred: {error}")
+        self._reconnect_to_order_book()
+
+    def _on_close_order_book(self, ws, close_status_code, close_msg):
+        """
+        Called when the WebSocket connection is closed.
+
+        :param ws: WebSocket instance.
+        :param close_status_code: Close status code.
+        :param close_msg: Close message.
+        """
+        logger.info(f"[ORDER BOOK] -- WebSocket closed with status code: {close_status_code} and message: {close_msg}")
+        self._reconnect_to_order_book()
+
+    def get_current_order_book(self) -> dict:
+        """
+        Thread-safely retrieves a copy of the current order book snapshot, formatted as a list of lists
+        for both asks and bids.
+
+        :return: A dictionary with the 'order_book' structure:
+                 {'order_book': {'asks': [['price', 'amount'], ...], 'bids': [['price', 'amount'], ...]}}
+        """
+        with self.order_book_lock:
+            # Convert the snapshot dictionary to the desired list of lists format
+            asks_list = [[price, amount] for price, amount in self.order_book_snapshot.get("asks", {}).items()]
+            bids_list = [[price, amount] for price, amount in self.order_book_snapshot.get("bids", {}).items()]
+
+            # Return the formatted order book
+            return {
+                "order_book": {
+                    "asks": asks_list,
+                    "bids": bids_list
+                }
+            }
+
+    # ------------------------- Order States Channel -----------------------------
+
+    def connect_to_order_states(self):
+        """
+        Connects to the order state WebSocket channel for the specified market pair.
+        """
+        socket_url = f"wss://realtime.buda.com/sub?channel=orders%40{self.pubsub_key}"
+
+        # Initialize snapshot if provided
+        self._set_initial_order_states()
+
+        websocket.enableTrace(False)
+        self.ws_order_states = websocket.WebSocketApp(
+            socket_url,
+            on_message=self._on_message_order_state,
+            on_open=self._on_open_order_state,
+            on_error=self._on_error_order_state,
+            on_close=self._on_close_order_state
+        )
+
+        # Running the WebSocket connection in a separate thread
+        thread = Thread(target=self.ws_order_states.run_forever, kwargs={"ping_interval": 10})
+        thread.daemon = True
+        thread.start()
+
+    @staticmethod
+    def _on_open_order_state(ws):
+        """
+        Called when the WebSocket connection is established for order states.
+
+        :param ws: WebSocket instance.
+        """
+        logger.info("WebSocket connected to order states.")
+
+    def _on_message_order_state(self, ws, message):
+        """
+        Handles incoming messages for the order states from the WebSocket server.
+
+        :param ws: WebSocket instance.
+        :param message: Message received from WebSocket.
+        """
+        try:
+            data = json.loads(message)
+            if "ev" in data:
+                if data["ev"] == "order-created":
+                    self._process_order_state_created(data)
+                elif data["ev"] == "order-updated":
+                    self._process_order_state_updated(data)
+                else:
+                    logger.warning(f"Unknown event type: {data['ev']}")
+            else:
+                logger.warning(f"Invalid message format: {message}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode WebSocket message: {e}")
+
+    def _set_initial_order_states(self):
+        """
+        Sets the initial order states snapshot (from REST) in a thread-safe manner.
+        """
+        lastest_order_states: Dict[str, List[Dict[str, Any]]] = self.get_order_states(
+            self.base_currency,
+            self.quote_currency
+        )
+        with self.order_states_snapshot_lock:
+            transformed_orders: List[Dict[str, Dict[str, Any]]] = [
+                {"order": order_entry} for order_entry in lastest_order_states.get("orders", [])
+            ]
+            self.order_states_snapshot: Dict[str, List[Dict[str, Dict[str, Any]]]] = {"orders": transformed_orders}
+        logger.info("Initial order states snapshot set.")
+
+    def _process_order_state_created(self, data):
+        """
+        Processes the 'order-created' event, which indicates a new order has been created.
+
+        :param data: The message data from the 'order-created' event.
+        """
+        order_data = data.get("order", {})
+        order_id = order_data.get("id")
+
+        # print("Create order: {}".format(order_id))
+        if order_id:
+            # Check if the order already exists in the snapshot
+            self._add_or_update_order_state(order_id, order_data)
+
+    def _process_order_state_updated(self, data):
+        """
+        Processes the 'order-updated' event, which indicates an existing order has been updated.
+
+        :param data: The message data from the 'order-updated' event.
+        """
+        order_data = data.get("order", {})
+        order_id = order_data.get("id")
+
+        # print("Update order: {}".format(order_id))
+
+        if order_id:
+            # Update the order in the snapshot
+            self._add_or_update_order_state(order_id, order_data)
+
+    def _add_or_update_order_state(self, order_id: int, order_data: dict):
+        """
+        Adds a new order state or updates an existing one in the snapshot.
+
+        :param order_id: The unique identifier of the order.
+        :param order_data: The order data.
+        """
+        with self.order_states_snapshot_lock:
+            # Check if order exists in the snapshot
+            existing_order = next((order for order in self.order_states_snapshot["orders"]
+                                   if order["order"]["id"] == order_id), None)
+            if existing_order:
+                # Update the existing order's state
+                existing_order["order"] = order_data
+                logger.info(f"Updated order state: {order_id}")
+            else:
+                # Add the new order state
+                self.order_states_snapshot["orders"].append({"order": order_data})
+                logger.info(f"Added new order state: {order_id}")
+
+            # Keep the snapshot's length within the maximum limit
+            if len(self.order_states_snapshot["orders"]) > self.max_order_states_length:
+                self.order_states_snapshot["orders"].pop(0)  # Remove the oldest entry
+
+    def _reconnect_to_order_states(self):
+        """
+        Tries to reconnect to the order book WebSocket.
+        """
+        logger.info("[ORDER STATES] -- Attempting to reconnect to WebSocket...")
+        time.sleep(.5)  # Sleep before trying to reconnect
+        self.connect_to_order_states()
+
+    def _on_error_order_state(self, ws, error):
+        """
+        Called when there's an error with the WebSocket connection.
+
+        :param ws: WebSocket instance.
+        :param error: Error message.
+        """
+        logger.error(f"[ORDER STATES] -- WebSocket error occurred: {error}")
+        self._reconnect_to_order_states()
+
+    def _on_close_order_state(self, ws, close_status_code, close_msg):
+        """
+        Called when the WebSocket connection is closed for order states.
+
+        :param ws: WebSocket instance.
+        :param close_status_code: Close status code.
+        :param close_msg: Close message.
+        """
+        logger.warning(f"WebSocket closed with status code: {close_status_code} and message: {close_msg}")
+        self._reconnect_to_order_states()
+
+    def get_current_order_states(self) -> dict:
+        """
+        Thread-safely retrieves a copy of the current order states snapshot in the expected format.
+
+        :return: A dictionary with the order states structure:
+                 {"orders": [ {order_data}, {order_data}, ... ]}
+        """
+        with self.order_states_snapshot_lock:
+            # Transform each order entry: if it has the key "order", return its value,
+            # otherwise, return the entry as is.
+            transformed_orders = [
+                order_entry.get("order", order_entry)
+                for order_entry in self.order_states_snapshot.get("orders", [])
+            ]
+        return {"orders": transformed_orders}
 
 

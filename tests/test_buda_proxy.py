@@ -666,7 +666,7 @@ class TestBudaProxyOrderBook(unittest.TestCase):
         mock_response.json.return_value = snapshot
         # Configure the mock to return a response with our mock data
         mock_get.return_value = mock_response
-        self.proxy.set_initial_order_book()
+        self.proxy._set_initial_order_book()
         current = self.proxy.get_current_order_book()
         expected = {
             "order_book": {
@@ -702,7 +702,7 @@ class TestBudaProxyOrderBook(unittest.TestCase):
 
     def test_update_order_book_state_add(self):
         # Start with empty state, add a positive change
-        self.proxy.update_order_book_state("asks", "79559436.91", "0.00156315")
+        self.proxy._update_order_book_state("asks", "79559436.91", "0.00156315")
         current = self.proxy.order_book_snapshot
         self.assertIn("79559436.91", current["asks"])
         self.assertAlmostEqual(float(current["asks"]["79559436.91"]), 0.00156315, places=8)
@@ -710,7 +710,7 @@ class TestBudaProxyOrderBook(unittest.TestCase):
     def test_update_order_book_state_increment(self):
         # Set initial value, then add more
         self.proxy.order_book_snapshot = {"asks": {"79559436.91": "0.00156315"}, "bids": {}}
-        self.proxy.update_order_book_state("asks", "79559436.91", "0.00043685")
+        self.proxy._update_order_book_state("asks", "79559436.91", "0.00043685")
         current = self.proxy.order_book_snapshot
         # Expected new amount = 0.00156315 + 0.00043685 = 0.002
         self.assertIn("79559436.91", current["asks"])
@@ -719,7 +719,7 @@ class TestBudaProxyOrderBook(unittest.TestCase):
     def test_update_order_book_state_decrement_partial(self):
         # Set initial value, then subtract partially
         self.proxy.order_book_snapshot = {"asks": {"79559436.91": "0.002"}, "bids": {}}
-        self.proxy.update_order_book_state("asks", "79559436.91", "-0.001")
+        self.proxy._update_order_book_state("asks", "79559436.91", "-0.001")
         current = self.proxy.order_book_snapshot
         # Expected new amount = 0.002 - 0.001 = 0.001
         self.assertIn("79559436.91", current["asks"])
@@ -728,7 +728,7 @@ class TestBudaProxyOrderBook(unittest.TestCase):
     def test_update_order_book_state_remove(self):
         # Set initial value, then subtract enough to remove the level.
         self.proxy.order_book_snapshot = {"asks": {"79559436.91": "0.001"}, "bids": {}}
-        self.proxy.update_order_book_state("asks", "79559436.91", "-0.0011")
+        self.proxy._update_order_book_state("asks", "79559436.91", "-0.0011")
         current = self.proxy.order_book_snapshot
         self.assertNotIn("79559436.91", current["asks"])
 
@@ -739,12 +739,12 @@ class TestBudaProxyOrderBook(unittest.TestCase):
         MockWebSocketApp.return_value = mock_ws
 
         # Simulate a connection error
-        self.proxy.on_error_order_book(mock_ws, "Error: Broken pipe")
+        self.proxy._on_error_order_book(mock_ws, "Error: Broken pipe")
 
         # Verify that reconnect_to_order_book was called
-        self.proxy.reconnect_to_order_book = MagicMock()
-        self.proxy.on_error_order_book(mock_ws, "Error: Broken pipe")
-        self.proxy.reconnect_to_order_book.assert_called_once()
+        self.proxy._reconnect_to_order_book = MagicMock()
+        self.proxy._on_error_order_book(mock_ws, "Error: Broken pipe")
+        self.proxy._reconnect_to_order_book.assert_called_once()
 
     @patch("websocket.WebSocketApp")
     def test_reconnect_on_close(self, MockWebSocketApp):
@@ -753,12 +753,12 @@ class TestBudaProxyOrderBook(unittest.TestCase):
         MockWebSocketApp.return_value = mock_ws
 
         # Simulate WebSocket closure
-        self.proxy.on_close_order_book(mock_ws, 1000, "Normal closure")
+        self.proxy._on_close_order_book(mock_ws, 1000, "Normal closure")
 
         # Verify that reconnect_to_order_book was called
-        self.proxy.reconnect_to_order_book = MagicMock()
-        self.proxy.on_close_order_book(mock_ws, 1000, "Normal closure")
-        self.proxy.reconnect_to_order_book.assert_called_once_with()
+        self.proxy._reconnect_to_order_book = MagicMock()
+        self.proxy._on_close_order_book(mock_ws, 1000, "Normal closure")
+        self.proxy._reconnect_to_order_book.assert_called_once_with()
 
 
 class TestOrderStateWebSocketClient(unittest.TestCase):
@@ -766,11 +766,13 @@ class TestOrderStateWebSocketClient(unittest.TestCase):
     @patch('websocket.WebSocketApp')
     def test_connect_to_order_states(self, MockWebSocketApp):
         client: BudaProxy = BudaProxy()
+        client.base_currency: str = 'BTC'
+        client.quote_currency: str = 'USDC'
         mock_ws = MagicMock()
         MockWebSocketApp.return_value = mock_ws
 
         # Simulate successful connection
-        client.connect_to_order_states(initial_snapshot={"orders": []})
+        client.connect_to_order_states()
         mock_ws.run_forever.assert_called_once()
 
     def test_add_or_update_order_state(self):
@@ -778,16 +780,16 @@ class TestOrderStateWebSocketClient(unittest.TestCase):
         client.max_order_states_length: int = 2
 
         # Simulate adding a new order
-        client.add_or_update_order_state(1, {"id": 1, "state": "pending"})
+        client._add_or_update_order_state(1, {"id": 1, "state": "pending"})
         self.assertEqual(len(client.order_states_snapshot["orders"]), 1)
 
         # Simulate updating the order
-        client.add_or_update_order_state(1, {"id": 1, "state": "completed"})
+        client._add_or_update_order_state(1, {"id": 1, "state": "completed"})
         self.assertEqual(client.order_states_snapshot["orders"][0]["order"]["state"], "completed")
 
         # Simulate adding a second order and exceeding the limit
-        client.add_or_update_order_state(2, {"id": 2, "state": "pending"})
-        client.add_or_update_order_state(3, {"id": 3, "state": "pending"})
+        client._add_or_update_order_state(2, {"id": 2, "state": "pending"})
+        client._add_or_update_order_state(3, {"id": 3, "state": "pending"})
         self.assertEqual(len(client.order_states_snapshot["orders"]), 2)  # Should be capped at 2
 
     def test_get_current_order_states_transformation(self):

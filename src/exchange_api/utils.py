@@ -8,7 +8,7 @@ import os
 logger = logging.getLogger(__name__)
 
 
-def retry_with_exponential_backoff(func: Callable, max_retries=1, base_delay=1, max_delay=240) -> Dict[str, Any]:
+def retry_with_exponential_backoff(func: Callable, max_retries=4, base_delay=5, max_delay=240) -> Dict[str, Any]:
     """
     Retries a function call with exponential backoff.
 
