@@ -652,7 +652,8 @@ class TestBudaProxyOrderBook(unittest.TestCase):
         self.proxy.quote_currency: str = 'usdc'
         self.proxy.base_currency: str = 'btc'
 
-    def test_set_initial_order_book(self):
+    @patch("requests.get")
+    def test_set_initial_order_book(self, mock_get):
         snapshot = {
             "order_book": {
                 "asks": [["79084646.0", "0.008751"], ["79090631.0", "0.64661344"]],
@@ -660,7 +661,12 @@ class TestBudaProxyOrderBook(unittest.TestCase):
             },
             "market_id": "BTC-CLP"
         }
-        self.proxy.set_initial_order_book(snapshot)
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = snapshot
+        # Configure the mock to return a response with our mock data
+        mock_get.return_value = mock_response
+        self.proxy.set_initial_order_book()
         current = self.proxy.get_current_order_book()
         expected = {
             "order_book": {

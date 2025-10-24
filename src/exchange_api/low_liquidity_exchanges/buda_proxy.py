@@ -254,7 +254,7 @@ class BudaProxy(BaseLowLiquidityExchange):
             self.order_states_snapshot: Dict[str, List[Dict[str, Dict[str, Any]]]] = {"orders": transformed_orders}
         logger.info("Initial order states snapshot set.")
 
-    def set_initial_order_book(self, snapshot: dict) -> None:
+    def set_initial_order_book(self) -> None:
         """
         Sets the initial order book snapshot (from REST) in a thread-safe manner.
         Converts the order book lists to dictionaries for easier updates.
@@ -262,7 +262,11 @@ class BudaProxy(BaseLowLiquidityExchange):
         :param snapshot: The initial snapshot with structure:
                          {'order_book': {'asks': List[List[str]], 'bids': List[List[str]]}, 'market_id': str}
         """
-        order_book_data = snapshot.get("order_book", {})
+        lastest_order_book: Dict[str, Dict[List[List[str]]]] = self.get_order_book(
+            self.base_currency,
+            self.quote_currency
+        )
+        order_book_data = lastest_order_book.get("order_book", {})
         asks_list = order_book_data.get("asks", [])
         bids_list = order_book_data.get("bids", [])
         with self.order_book_lock:
@@ -302,21 +306,19 @@ class BudaProxy(BaseLowLiquidityExchange):
         """
         logger.info("WebSocket connected to order book.")
 
-    def connect_to_order_book(self, base_currency: str, quote_currency: str, initial_snapshot: dict = None) -> None:
+    def connect_to_order_book(self, base_currency: str, quote_currency: str) -> None:
         """
         Connects to the order book channel of the specified market pair (base-quote) using WebSocket.
 
         :param base_currency: Base currency (e.g., BTC).
         :param quote_currency: Quote currency (e.g., USDT).
-        :param initial_snapshot: Optional initial snapshot from REST.
         """
         market_id = f"{base_currency.lower()}{quote_currency.lower()}"
         socket_url = f"wss://realtime.buda.com/sub?channel=book%40{market_id}"
         self.base_currency: str = base_currency
         self.quote_currency: str = quote_currency
 
-        if initial_snapshot is not None:
-            self.set_initial_order_book(initial_snapshot)
+        self.set_initial_order_book()
 
         websocket.enableTrace(False)
         self.ws_order_book = websocket.WebSocketApp(

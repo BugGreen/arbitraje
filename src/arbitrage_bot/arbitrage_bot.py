@@ -163,8 +163,7 @@ class ArbitrageBot:
         quote_currency: str = arb_orders[0].quote_currency
         # WEBSOCKET Connections
         #  Order Book:
-        initial_order_book_ss = self.exchange_low_liquidity.get_order_book(base_currency, quote_currency)
-        self.exchange_low_liquidity.connect_to_order_book(base_currency, quote_currency, initial_order_book_ss)
+        self.exchange_low_liquidity.connect_to_order_book(base_currency, quote_currency)
         #  Order States:
         self.exchange_low_liquidity.connect_to_order_states()
         # Set relevant attributes:

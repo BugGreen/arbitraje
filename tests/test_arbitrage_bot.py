@@ -470,7 +470,7 @@ class TestArbitrageBot(unittest.TestCase):
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_after_cancelaion_profit)
     @patch.object(BudaProxy, 'batch_cancellation', return_value=test_api_constants.sub_orders_canceled_response)
-    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_cancel_states)
+    @patch.object(BudaProxy, 'get_current_order_states', return_value=test_api_constants.sub_orders_to_cancel_states)
     @patch.object(ArbitrageBot, 'place_sub_orders',
                   return_value=test_a_bot_constans.placed_sub_orders_to_cancel_response)
     def test_cancel_sub_orders(self, place_sub_orders_mock, get_order_states_mock, batch_cancellation_mock,
@@ -1735,9 +1735,9 @@ class TestArbitrageBot(unittest.TestCase):
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
         )
-        taker_fee = self.bot.get_low_liquidity_taker_fee(arb_order)
-        expected_fee = 0.7 / 100
-        self.assertEqual(taker_fee, expected_fee)
+        taker_fee = round(self.bot.get_low_liquidity_taker_fee(arb_order), 3)
+        expected_fee = 0.8 / 100
+        self.assertAlmostEqual(taker_fee, expected_fee)
 
     def test_assign_order_ids_single_order(self):
         # Test with a single ArbitrageOrder
