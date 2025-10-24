@@ -165,6 +165,8 @@ class ArbitrageBot:
         #  Order Book:
         initial_order_book_ss = self.exchange_low_liquidity.get_order_book(base_currency, quote_currency)
         self.exchange_low_liquidity.connect_to_order_book(base_currency, quote_currency, initial_order_book_ss)
+        #  Order States:
+        self.exchange_low_liquidity.connect_to_order_states()
         # Set relevant attributes:
         self._set_fee_values(arb_orders[0])
 
@@ -873,9 +875,10 @@ class ArbitrageBot:
         cancelled_orders_id = [order_id.get('order_id') for order_id in cancel_response['orders_diff']]
         logger.info("Exchange sub-order cancellation response: %s", cancel_response)
 
-        states_response = self.exchange_low_liquidity.get_order_states(
-            arb_orders[0].base_currency,
-            arb_orders[0].quote_currency)
+        # states_response = self.exchange_low_liquidity.get_order_states(
+        #     arb_orders[0].base_currency,
+        #     arb_orders[0].quote_currency)
+        states_response: Dict[str, List[Dict[str, Any]]] = self.exchange_low_liquidity.get_current_order_states()
         all_states = states_response.get("orders", [])
 
         # 3. If any sub-order is 'canceled_and_traded' or partial, update the ArbitrageOrder object
@@ -1053,10 +1056,12 @@ class ArbitrageBot:
             time.sleep(0.2)
 
             # 1. Retrieve updated states from the exchange
-            states_response = self.exchange_low_liquidity.get_order_states(
-                arb_orders[0].base_currency,
-                arb_orders[0].quote_currency
-            )
+            # states_response = self.exchange_low_liquidity.get_order_states(
+            #     arb_orders[0].base_currency,
+            #     arb_orders[0].quote_currency
+            # )
+
+            states_response: Dict[str, List[Dict[str, Any]]] = self.exchange_low_liquidity.get_current_order_states()
             all_states = states_response.get("orders", [])
 
             # 2. Update sub-orders that are 'received'

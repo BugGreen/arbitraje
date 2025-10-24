@@ -783,3 +783,57 @@ class TestOrderStateWebSocketClient(unittest.TestCase):
         client.add_or_update_order_state(2, {"id": 2, "state": "pending"})
         client.add_or_update_order_state(3, {"id": 3, "state": "pending"})
         self.assertEqual(len(client.order_states_snapshot["orders"]), 2)  # Should be capped at 2
+
+    def test_get_current_order_states_transformation(self):
+            client: BudaProxy = BudaProxy()
+            # Set a default snapshot for testing
+            client.order_states_snapshot = {
+                "orders": [
+                    {"order": {
+                        "id": 1267767109,
+                        "state": "canceled",
+                        "market_id": "ETH-COP",
+                        "account_id": 143870,
+                        "type": "Bid",
+                        "created_at": "2024-12-03T12:48:42.549Z",
+                        "limit": ["15000000.0", "COP"],
+                        "amount": ["0.0012", "ETH"]
+                    }},
+                    {"order": {
+                        "id": 123456789,
+                        "state": "pending",
+                        "market_id": "BTC-USDC",
+                        "account_id": 123456,
+                        "type": "Ask",
+                        "created_at": "2024-12-04T10:30:00.000Z",
+                        "limit": ["50000.0", "USDC"],
+                        "amount": ["0.0020", "BTC"]
+                    }}
+                ]
+            }
+            expected_response = {
+                "orders": [
+                    {
+                        "id": 1267767109,
+                        "state": "canceled",
+                        "market_id": "ETH-COP",
+                        "account_id": 143870,
+                        "type": "Bid",
+                        "created_at": "2024-12-03T12:48:42.549Z",
+                        "limit": ["15000000.0", "COP"],
+                        "amount": ["0.0012", "ETH"]
+                    },
+                    {
+                        "id": 123456789,
+                        "state": "pending",
+                        "market_id": "BTC-USDC",
+                        "account_id": 123456,
+                        "type": "Ask",
+                        "created_at": "2024-12-04T10:30:00.000Z",
+                        "limit": ["50000.0", "USDC"],
+                        "amount": ["0.0020", "BTC"]
+                    }
+                ]
+            }
+            result = client.get_current_order_states()
+            self.assertEqual(result, expected_response)

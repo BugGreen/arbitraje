@@ -28,7 +28,7 @@ def main() -> None:
 
     try:
 
-        #welcome_menu()
+        welcome_menu()
         buda_proxy = BudaProxy()
         acc_info: dict = buda_proxy.get_account_info()
         print(json.dumps(acc_info, indent=2))

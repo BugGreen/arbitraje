@@ -183,6 +183,22 @@ class BudaProxy(BaseLowLiquidityExchange):
         thread.daemon = True
         thread.start()
 
+    def get_current_order_states(self) -> dict:
+        """
+        Thread-safely retrieves a copy of the current order states snapshot in the expected format.
+
+        :return: A dictionary with the order states structure:
+                 {"orders": [ {order_data}, {order_data}, ... ]}
+        """
+        with self.order_states_snapshot_lock:
+            # Transform each order entry: if it has the key "order", return its value,
+            # otherwise, return the entry as is.
+            transformed_orders = [
+                order_entry.get("order", order_entry)
+                for order_entry in self.order_states_snapshot.get("orders", [])
+            ]
+        return {"orders": transformed_orders}
+
     @staticmethod
     def on_open_order_state(ws):
         """
