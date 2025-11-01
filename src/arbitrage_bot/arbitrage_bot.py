@@ -495,6 +495,7 @@ class ArbitrageBot:
                 st_state = st.get("state")
                 base_currency_traded_amount = float(st.get("traded_amount", 0.0)[0])
                 quote_currency_traded_amount = float(st.get("total_exchanged", 0.0)[0])
+                limit_price = float(st.get("limit", 0.0)[0])
                 paid_fee_base_currency, paid_fee_quote_currency = self._calculate_paid_fee_low_liquidity(st, arb_order)
 
                 self._update_arbitrage_order_on_fill(
@@ -504,6 +505,7 @@ class ArbitrageBot:
                     traded_quote_amount=quote_currency_traded_amount,
                     paid_fee_base_currency=paid_fee_base_currency,
                     paid_fee_quote_currency=paid_fee_quote_currency,
+                    limit_price_low_liquidity=limit_price,
                     arb_order=arb_order
                 )
 
@@ -687,6 +689,7 @@ class ArbitrageBot:
                             # We'll fetch that and update `arb_order`.
                             base_currency_traded_amount = float(st.get("traded_amount", 0.0)[0])
                             quote_currency_traded_amount = float(st.get("total_exchanged", 0.0)[0])
+                            limit_price = float(st.get("limit", 0.0)[0])
                             paid_fee_base_currency, paid_fee_quote_currency = \
                                 self._calculate_paid_fee_low_liquidity(st, arb_order)
 
@@ -697,6 +700,7 @@ class ArbitrageBot:
                                 traded_quote_amount=quote_currency_traded_amount,
                                 paid_fee_base_currency=paid_fee_base_currency,
                                 paid_fee_quote_currency=paid_fee_quote_currency,
+                                limit_price_low_liquidity=limit_price,
                                 arb_order=arb_order
                             )
 
@@ -714,6 +718,7 @@ class ArbitrageBot:
                                         traded_quote_amount: float,
                                         paid_fee_base_currency: float,
                                         paid_fee_quote_currency: float,
+                                        limit_price_low_liquidity: float,
                                         arb_order: 'ArbitrageOrder') -> None:
         """
         Update the ArbitrageOrder's dynamic attributes (e.g. traded_amount_low_liquidity,
@@ -727,6 +732,7 @@ class ArbitrageBot:
         of the qupte currency.
         :param paid_fee_base_currency: The paid fee expressed in the base currency
         :param paid_fee_quote_currency: The paid fee expressed in the quote currency
+        limit_price_low_liquidity: The limit price in the low liquidity exchange
         :param arb_order: The ArbitrageOrder object to update.
         """
 
