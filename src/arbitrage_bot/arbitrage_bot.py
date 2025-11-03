@@ -215,7 +215,7 @@ class ArbitrageBot:
                     continue
 
                 # 5) Check completion
-                order_completion = self.arbitrage_order_completion(arb_order, reference_price)
+                order_completion = self.arbitrage_order_completion(arb_order)
                 if order_completion:
                     # If fully done => funds_transfer
                     success_transfer = self.funds_transfer(arb_order)
@@ -229,7 +229,7 @@ class ArbitrageBot:
                     time.sleep(sleep_interval)
 
                     cancel_response = self.place_sub_order_cancellations(sub_orders, arb_order)
-                    order_completion = self.arbitrage_order_completion(arb_order, reference_price)
+                    order_completion = self.arbitrage_order_completion(arb_order)
                     if order_completion:
                         # If fully done => funds_transfer
                         success_transfer = self.funds_transfer(arb_order)
@@ -1209,17 +1209,17 @@ class ArbitrageBot:
             logger.warning("Some transfer(s) failed. btc_success=%s, quote_success=%s", btc_success, quote_success)
             return False
 
-    def arbitrage_order_completion(self, arb_order: ArbitrageOrder, reference_price: int) -> bool:
+    def arbitrage_order_completion(self, arb_order: ArbitrageOrder) -> bool:
         """
         Checks if an arbitrage order has been completed. This is True when ArbitrageOrder's attribute
         `traded_quote_amount_low_liquidity` is larger or equal than the 98.5 % of `original_amount` attribute.
         It is not exactly equal, because of fees and rounding errors.
 
         :param arb_order: The ArbitrageOrder to check.
-        :param reference_price: The reference price to convert express min_notional in quote currency
         :return: Boolean value defining the completion state of the order
         """
 
+        reference_price: float = arb_order.price_reference
         min_notional_low_liquidity_quote = self.minimum_notional_low_liquidity * reference_price * 1.1
 
         return arb_order.traded_quote_amount_low_liquidity \

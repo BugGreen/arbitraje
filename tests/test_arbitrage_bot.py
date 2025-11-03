@@ -1284,7 +1284,6 @@ class TestArbitrageBot(unittest.TestCase):
         # self.assertEqual(p_diff, expected_p_diff)
         self.assertEqual(arb_order_buy.price_reference, expected_price)
 
-
     def test_arbitrage_order_completion(self):
         """
         Tests different cases of ArbitrageOrder
@@ -1299,15 +1298,16 @@ class TestArbitrageBot(unittest.TestCase):
         )
 
         reference_price: float = 100000
+        arb_order.price_reference = reference_price
 
         arb_order.traded_quote_amount_low_liquidity = 24000.0
-        assert self.bot.arbitrage_order_completion(arb_order, reference_price)
+        assert self.bot.arbitrage_order_completion(arb_order)
 
         arb_order.traded_quote_amount_low_liquidity = 24000
-        assert self.bot.arbitrage_order_completion(arb_order, reference_price)
+        assert self.bot.arbitrage_order_completion(arb_order)
 
         arb_order.traded_quote_amount_low_liquidity = 2400
-        assert not self.bot.arbitrage_order_completion(arb_order, reference_price)
+        assert not self.bot.arbitrage_order_completion(arb_order)
 
     @patch.object(BinanceProxy, 'get_price', return_value=test_api_constants.binance_get_price_response)
     def test_get_latest_high_liquidity_price(self, get_price_binance_mock):
