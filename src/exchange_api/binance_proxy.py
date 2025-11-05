@@ -20,6 +20,7 @@ class BinanceProxy(BaseExchange):
         "ALL_COINS_INFO": "/sapi/v1/capital/config/getall",
         "DEPOSIT_ADDRESS": "/sapi/v1/capital/deposit/address",
         "WITHDRAW_REQUEST": "/sapi/v1/capital/withdraw/apply",
+        "TIME": "/api/v3/time"
     }
 
     def __init__(self) -> None:
@@ -27,6 +28,18 @@ class BinanceProxy(BaseExchange):
         Initialize the BinanceProxy with API key and secret.
         """
         self.api_key, self.api_secret = load_api_keys("BINANCE")
+
+    def _get_server_time(self) -> int:
+        """
+        Fetch the current server time from Binance.
+        :return: Server time in milliseconds.
+        """
+        url = f"{self.BASE_URL}{self.ENDPOINTS['TIME']}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()["serverTime"]
+        else:
+            raise Exception(f"Error fetching server time: {response.status_code} {response.text}")
 
     def _sign_request(self, params: Dict[str, str]) -> Dict[str, str]:
         """
@@ -44,9 +57,18 @@ class BinanceProxy(BaseExchange):
             query_string.encode("utf-8"),
             hashlib.sha256
         ).hexdigest()
-
         params["signature"] = signature
         return params
+
+    def check_datetime_differences(self) -> None:
+        """
+        Check if the local system clock is accurate by comparing it to Binance’s server time:
+        :return:
+        """
+        local_time = int(time.time() * 1000)
+        binance_time = self._get_server_time()
+        time_difference = abs(local_time - binance_time)
+        print(f"Time difference: {time_difference} ms")
 
     def get_coin_info(self) -> List[Dict]:
         """
@@ -72,7 +94,7 @@ class BinanceProxy(BaseExchange):
         for coin_info in coins_info:
             if coin_info.get("coin") == coin:
                 # Uncomment to display the response
-                # print(json.dumps(coin_info, indent=2))
+                print(json.dumps(coin_info, indent=2))
                 for network in coin_info.get("networkList", []):
                     if "lightning" in network.get("network", "").lower():
                         return network.get("withdrawEnable", False)
@@ -115,7 +137,7 @@ class BinanceProxy(BaseExchange):
             raise Exception(f"Error {response.status_code}: {response.text}")
 
     def create_withdraw_request(self, coin: str, address: str, amount: float,
-                                network: Optional[str] = "LIGHTNING", **kwargs) -> Dict:
+                                network: Optional[str] = "LIGHTNING", wallet_type: Optional[int] = 0, **kwargs) -> Dict:
         """
         Submit a withdrawal request to Binance.
 
@@ -123,22 +145,30 @@ class BinanceProxy(BaseExchange):
         :param address: The destination address for the withdrawal.
         :param amount: The amount of cryptocurrency to withdraw.
         :param network: Optional, the network to use for withdrawal.
+        :param wallet_type: The wallet type for withdraw，0-spot wallet ，1-funding wallet.
         :param kwargs: Additional optional parameters (e.g., withdrawOrderId, addressTag, transactionFeeFlag, name).
         :return: A dictionary containing the withdrawal request ID.
         :raises Exception: If the request fails or the response contains an error.
         """
+
+        if coin.upper() == "BTC":
+            fee = 0.000001  # From coins_info
+            sats_to_btc = amount / 100000000
+            amount = sats_to_btc + fee
+
         params = {
             "coin": coin,
             "address": address,
             "amount": amount,
             "timestamp": int(time.time() * 1000),
+            "walletType": wallet_type
         }
 
         if network:
             params["network"] = network
 
         # Add additional optional parameters from kwargs
-        optional_fields = ["withdrawOrderId", "addressTag", "transactionFeeFlag", "name", "walletType", "recvWindow"]
+        optional_fields = ["withdrawOrderId", "addressTag", "transactionFeeFlag", "name", "recvWindow"]
         for field in optional_fields:
             if field in kwargs:
                 params[field] = kwargs[field]

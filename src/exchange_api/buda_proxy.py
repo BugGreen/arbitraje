@@ -1,13 +1,14 @@
 # exchange_api/buda_proxy.py
-
+import base64
 import requests
 import time
 import hmac
 import hashlib
 from urllib.parse import urlencode
-from typing import List, Dict
+from typing import List, Dict, Optional
 from src.exchange_api.base_exchange import BaseExchange
 from src.exchange_api.utils import load_api_keys
+import json
 
 
 class BudaProxy(BaseExchange):
@@ -27,56 +28,95 @@ class BudaProxy(BaseExchange):
         """
         self.api_key, self.api_secret = load_api_keys("BUDA")
 
-    def _sign_request(self, params: Dict[str, str]) -> Dict[str, str]:
-        """
-        Sign the API request with HMAC SHA256.
+    BASE_URL = "https://www.buda.com"
+    ENDPOINTS = {
+        "LIGHTNING_INVOICE": "/api/v2/lightning_network_invoices",
+    }
 
-        :param params: Dictionary of query parameters.
-        :return: Dictionary of signed query parameters.
+    def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
         """
-        timestamp = int(time.time() * 1000)
-        params["timestamp"] = str(timestamp)
+        Sign a request to authenticate with the Buda API.
 
-        query_string = urlencode(params)
+        :param method: HTTP method (GET, POST, PUT).
+        :param path: API path (including query string if applicable).
+        :param body: Request body as a string (default is empty).
+        :return: Headers containing API key, nonce, and signature for authentication.
+        """
+        # Generate nonce (current timestamp in microseconds)
+        nonce = str(int(time.time() * 1e6))
+
+        # Prepare string for signing
+        if body:
+            # Convert body to JSON string and encode it in Base64
+            base64_encoded_body = base64.b64encode(json.dumps(body).encode()).decode()
+        else:
+            base64_encoded_body = ""
+
+        string_to_sign = f"{method} {path} {base64_encoded_body} {nonce}"
+
+        # Generate HMAC-SHA384 signature
         signature = hmac.new(
-            self.api_secret.encode("utf-8"),
-            query_string.encode("utf-8"),
-            hashlib.sha256
+            key=self.api_secret.encode(),
+            msg=string_to_sign.encode(),
+            digestmod=hashlib.sha384
         ).hexdigest()
 
-        params["signature"] = signature
-        return params
+        # Return headers
+        return {
+            "X-SBTC-APIKEY": self.api_key,
+            "X-SBTC-NONCE": nonce,
+            "X-SBTC-SIGNATURE": signature
+        }
+
+    def create_deposit_address(
+        self, coin: str = "BTC", network: Optional[str] = "lightning", amount_satoshis: int = 0,
+            memo: Optional[str] = None, expiry_seconds: Optional[int] = 0) -> Dict:
+        """
+        Create a Lightning Network deposit address (invoice) for BTC.
+
+        :param coin: The cryptocurrency symbol (e.g., 'BTC'). Must be 'BTC' for Lightning Network.
+        :param network: The network for the deposit. If provided, must be 'lightning'.
+        :param amount_satoshis: The amount of the invoice in satoshis.
+        :param memo: Optional brief description for the invoice.
+        :param expiry_seconds: Optional expiry time for the invoice in seconds.
+        :return: A dictionary containing the encoded payment request.
+        :raises Exception: If the request fails or the response contains an error.
+        """
+        if coin != "BTC":
+            raise ValueError("Lightning Network invoices are only supported for BTC.")
+        if network and network.lower() != "lightning":
+            raise ValueError("This method only supports the Lightning Network.")
+
+        # Define the endpoint path
+        endpoint_path = self.ENDPOINTS["LIGHTNING_INVOICE"]
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Build the payload
+        payload = {
+            "amount_satoshis": amount_satoshis,
+            "currency": "BTC"
+        }
+        if memo:
+            payload["memo"] = memo
+        if expiry_seconds:
+            payload["expiry_seconds"] = expiry_seconds
+
+        # Authenticate the request
+        headers = self._sign_request(method="POST", path=endpoint_path, body=payload if payload else "")
+
+        # Make the API call
+        response = requests.post(url, headers=headers, json=payload)
+
+        # Handle the response
+        if response.status_code in [200, 201]:
+            return response.json().get("invoice", {})
+        else:
+            raise Exception(f"Error {response.status_code}: {response.text}")
 
     def get_coin_info(self) -> List[Dict]:
-        """
-        Fetch information of all coins from BUDA API.
-
-        :return: List of dictionaries containing coin information.
-        """
-        url = f"{self.BASE_URL}{self.ENDPOINTS['ALL_COINS_INFO']}"
-        headers = {"X-MBX-APIKEY": self.api_key}  # Adjust header key if different for BUDA
-        params = self._sign_request({})
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        return response.json()["assets"]  # Adjust based on BUDA API response structure
+        pass
 
     def supports_lightning_network(self, coin: str) -> bool:
-        """
-        Check if BUDA supports the Lightning Network for a specific coin.
-
-        :param coin: The symbol of the coin (e.g., 'BTC').
-        :return: True if Lightning Network is supported and withdrawals are enabled, False otherwise.
-        """
-        coins_info = self.get_coin_info()
-        for coin_info in coins_info:
-            if coin_info.get("name") == coin:
-                networks = coin_info.get("networks", [])
-                for network in networks:
-                    if "lightning" in network.get("name", "").lower():
-                        return network.get("withdraw_enabled", False)
-        return False
-
-    def create_deposit_address(self, coin: str, network: str = None) -> Dict:
         pass
 
     def create_withdraw_request(self, coin: str, address: str, amount: float,
