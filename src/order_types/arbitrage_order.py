@@ -28,14 +28,15 @@ class ArbitrageOrder(Order):
         self.pending_amount_low_liquidity = self.original_amount  # Initially the entire original amount is pending
         self.traded_base_amount_low_liquidity: float = 0.0
         self.traded_quote_amount_low_liquidity: float = 0.0
+        self.paid_fee_base_currency_low_liquidity: float = 0.0
         self.paid_fee_quote_currency_low_liquidity: float = 0.0
         # This is how much has actually been traded (sub-orders filled) on the low-liquidity exchange
 
         # High-liquidity side
         self.traded_amount_base_high_liquidity: float = 0.0
         self.traded_amount_quote_high_liquidity: float = 0.0
+        self.paid_fee_base_currency_high_liquidity: float = 0.0
         self.paid_fee_quote_currency_high_liquidity: float = 0.0
-
 
         # This accumulates how much has actually been executed on the high-liquidity side
 
@@ -61,7 +62,9 @@ class ArbitrageOrder(Order):
     def update_low_liquidity_traded(self,
                                     traded_quote_delta: float,
                                     traded_base_delta: float,
-                                    paid_fee: float) -> None:
+                                    paid_fee_base_currency: float,
+                                    paid_fee_quote_currency: float
+                                    ) -> None:
         """
         Called whenever a sub-order on the low-liquidity exchange is traded or partially traded.
 
@@ -72,12 +75,14 @@ class ArbitrageOrder(Order):
 
         :param traded_base_delta: The traded amount expressed in the base currency
         :param traded_quote_delta: The traded amount expressed in the quote currency
-        :param paid_fee: The paid fee expressed in the quote currency
+        :param paid_fee_base_currency: The paid fee expressed in the base currency
+        :param paid_fee_quote_currency: The paid fee expressed in the quote currency
         """
         self.traded_base_amount_low_liquidity += traded_base_delta
         self.traded_quote_amount_low_liquidity += traded_quote_delta
         self.pending_amount_low_liquidity -= traded_quote_delta
-        self.paid_fee_quote_currency_low_liquidity += paid_fee
+        self.paid_fee_base_currency_low_liquidity += paid_fee_base_currency
+        self.paid_fee_quote_currency_low_liquidity += paid_fee_quote_currency
         # Move that same traded_delta to pending
         self._pending_quote_amount_high_liquidity += traded_quote_delta
         self._pending_base_amount_high_liquidity += traded_base_delta
@@ -106,12 +111,14 @@ class ArbitrageOrder(Order):
             self.pending_amount_low_liquidity = self.original_amount  # Initially the entire original amount is pending
             self.traded_base_amount_low_liquidity: float = 0.0
             self.traded_quote_amount_low_liquidity: float = 0.0
+            self.paid_fee_base_currency_low_liquidity: float = 0.0
             self.paid_fee_quote_currency_low_liquidity: float = 0.0
             # This is how much has actually been traded (sub-orders filled) on the low-liquidity exchange
 
             # High-liquidity side
             self.traded_amount_base_high_liquidity: float = 0.0
             self.traded_amount_quote_high_liquidity: float = 0.0
+            self.paid_fee_base_currency_low_liquidity: float = 0.0
             self.paid_fee_quote_currency_high_liquidity: float = 0.0
 
             if self.currency_of_interest == CurrencyOfInterest.QUOTE:
@@ -122,7 +129,8 @@ class ArbitrageOrder(Order):
     def fulfill_high_liquidity(self,
                                traded_quote_delta: float,
                                traded_base_delta: float,
-                               paid_fee: float) -> None:
+                               paid_fee_base_currency: float,
+                               paid_fee_quote_currency: float) -> None:
         """
         Called after the high-liquidity side is traded. We reduce the pending amounts (expressed in quote and base
         currencies) by 'traded_quote_delta' and "traded_base_delta'.
@@ -130,7 +138,8 @@ class ArbitrageOrder(Order):
 
         :param traded_base_delta: The traded amount expressed in the base currency
         :param traded_quote_delta: The traded amount expressed in the quote currency
-        :param paid_fee: The paid fee expressed in the quote currency
+        :param paid_fee_base_currency: The paid fee expressed in the base currency
+        :param paid_fee_quote_currency: The paid fee expressed in the quote currency
         """
         # Suppose we do not allow partial pending to remain.
         # But if partial is possible, you'd do a min operation
@@ -139,34 +148,49 @@ class ArbitrageOrder(Order):
 
         self.traded_amount_base_high_liquidity += traded_base_delta
         self.traded_amount_quote_high_liquidity += traded_quote_delta
-        self.paid_fee_quote_currency_high_liquidity += paid_fee
+        self.paid_fee_base_currency_high_liquidity += paid_fee_base_currency
+        self.paid_fee_quote_currency_high_liquidity += paid_fee_quote_currency
 
-    def update_profit(self) -> None:
+    def update_profit(self, delta_amount_base_currency: float, delta_amount_quote_currency: float) -> None:
         """
         Calculates the profit based on the order type and the amount of interest.
         WARNING: ALWAYS use after `fulfill_high_liquidity` method.
         NOTE: An order can be either profitable or non-profitable, therefore attribute `profit` might have neg values
+
+        :param delta_amount_base_currency: amount delta resulting from the desired BASE currency amount to trade and the
+        actual amount traded.
+        :param delta_amount_quote_currency: price delta resulting from the desired QUOTE currency amount to trade and the
+        actual amount traded.
         """
         pending_quote_amount = self._pending_quote_amount_high_liquidity
         pending_base_amount = self._pending_base_amount_high_liquidity
+        total_fees_base_currency = \
+            self.paid_fee_base_currency_low_liquidity + self.paid_fee_base_currency_high_liquidity
+        total_fees_quote_currency = \
+            self.paid_fee_quote_currency_low_liquidity + self.paid_fee_quote_currency_high_liquidity
+
         if self.order_type == OrderType.BUY_LIMIT:
             if self.currency_of_interest == CurrencyOfInterest.QUOTE:
-                self.profit = Profit(self.profit.amount - pending_quote_amount, self.quote_currency)
+                self.profit = Profit(round(self.profit.amount - pending_quote_amount - total_fees_quote_currency, 7),
+                                     self.quote_currency)
 
             elif self.currency_of_interest == CurrencyOfInterest.BASE:
-                self.profit = Profit(self.profit.amount + pending_base_amount, self.base_currency)
+                self.profit = Profit(round(self.profit.amount + pending_base_amount - total_fees_base_currency, 7),
+                                     self.base_currency)
 
             self._pending_quote_amount_high_liquidity, self._pending_base_amount_high_liquidity = 0, 0
 
         elif self.order_type == OrderType.SELL_LIMIT:
             if self.currency_of_interest == CurrencyOfInterest.QUOTE:
-                self.profit = Profit(self.profit.amount + pending_quote_amount, self.quote_currency)
+                self.profit = Profit(round(self.profit.amount + pending_quote_amount - total_fees_quote_currency, 7),
+                                     self.quote_currency)
 
             elif self.currency_of_interest == CurrencyOfInterest.BASE:
-                self.profit = Profit(self.profit.amount - pending_base_amount, self.base_currency)
+                self.profit = Profit(round(self.profit.amount - pending_base_amount - total_fees_base_currency, 7),
+                                     self.base_currency)
 
-            self._pending_quote_amount_high_liquidity, self._pending_base_amount_high_liquidity = 0, 0
-
+            self._pending_base_amount_high_liquidity = delta_amount_base_currency
+            self._pending_quote_amount_high_liquidity = delta_amount_quote_currency
 
         else:
             logger.warning(f"No logic for order_type: {self.order_type}")
