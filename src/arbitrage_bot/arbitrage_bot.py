@@ -392,7 +392,7 @@ class ArbitrageBot:
                 order_resp = self.exchange_high_liquidity.new_order(
                     base_currency=self.base_currency,
                     quote_currency=self.quote_currency,
-                    side=side.upper(),  # TODO: AUTOMATE with an attribute from ArbitrageOrder
+                    side=side.upper(),
                     order_type='MARKET',
                     quantity=round(to_trade_base_currency, 5),  # Amount expressed in base currency
                 )
@@ -409,13 +409,11 @@ class ArbitrageBot:
                 logger.error("High-liquidity exchange error: %s", order_resp)
                 return order_resp
 
-            # Suppose successful response has "executedQty"
-            # TODO: Esto debe cambiar dependiendo de si se quiere ganar mas quote currency o base currency
             executed_base_qty = float(order_resp.get("executedQty", 0.0))
             execution_price = float(order_resp.get("fills", [0.0])[0].get("price", 0.0))
             executed_quote_qty = round(executed_base_qty * execution_price, 5)  # Turn it back to quote currency
             arb_order.fulfill_high_liquidity(executed_quote_qty, executed_base_qty)
-            arb_order.update_profit()
+            arb_order.update_profit()  # TODO: se puede hacer metodo privado y encapsularlo en fulfull_high_liquidity
 
             return order_resp
 

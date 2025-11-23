@@ -21,9 +21,6 @@ class ArbitrageOrder(Order):
     ):
         super().__init__(base_currency, quote_currency, amount, price, status, trades, order_type)
 
-        # TODO: Se puede adicionar otro atributo que guarde lo que se tradeo en fiat, usando la respuesta
-        # TODO: de get_order_states con la llave "exchanged_amount"
-
         # The original total amount we aim to arbitrage
         self.original_amount = original_amount or amount
 
@@ -115,9 +112,16 @@ class ArbitrageOrder(Order):
 
         elif self.order_type == OrderType.SELL_LIMIT:
             if self.currency_of_interest == CurrencyOfInterest.QUOTE:
-                pass
-            if self.currency_of_interest == CurrencyOfInterest.BASE:
-                pass
+                self.profit = Profit(self.profit.amount + pending_quote_amount, self.quote_currency)
+
+            elif self.currency_of_interest == CurrencyOfInterest.BASE:
+                self.profit = Profit(self.profit.amount - pending_base_amount, self.base_currency)
+
+            self._pending_quote_amount_high_liquidity, self._pending_base_amount_high_liquidity = 0, 0
+
+
+        else:
+            logger.warning(f"No logic for order_type: {self.order_type}")
 
         # TODO: Extend to SELL_MARKET and BUY _MARKET
 

@@ -864,3 +864,189 @@ sub_orders_to_execute_in_binance_multiple_traded_states = {
       }
   ]
 }
+
+
+sub_orders_to_execute_in_binance_states_with_one_less_than_minimum = {
+  "orders": [
+    {
+      "id": 130000,
+      "uuid": "ab74839f-231a-4755-b69e-5c3c6033924e",
+      "market_id": "BTC-USDC",
+      "account_id": 143870,
+      "type": "Bid",
+      "state": "traded",
+      "created_at": "2024-12-27T19:01:35.154Z",
+      "fee_currency": "BTC",
+      "price_type": "limit",
+      "source": "null",
+      "client_id": "null",
+      "message": "null",
+      "order_type": "gtc",
+      "expire_at": 0,
+      "limit": [
+        "1000.0",
+        "USDC"
+      ],
+      "amount": [
+        "0.192",
+        "BTC"
+      ],
+      "original_amount": [
+        "0.192",
+        "BTC"
+      ],
+      "traded_amount": [
+        "0.192",
+        "BTC"
+      ],
+      "total_exchanged": [
+        "192.0",
+        "USDC"
+      ],
+      "paid_fee": [
+        "0.0",
+        "BTC"
+      ],
+      "stop_price": "null"
+    },
+    {
+          "id": 130001,
+          "uuid": "ab74839f-231a-4755-b69e-5c3c6033924e",
+          "market_id": "BTC-USDC",
+          "account_id": 143870,
+          "type": "Bid",
+          "state": "traded",
+          "created_at": "2024-12-27T19:01:35.154Z",
+          "fee_currency": "BTC",
+          "price_type": "limit",
+          "source": "null",
+          "client_id": "null",
+          "message": "null",
+          "order_type": "gtc",
+          "expire_at": 0,
+          "limit": [
+              "1000.0",
+              "USDC"
+          ],
+          "amount": [
+              "0.008",
+              "BTC"
+          ],
+          "original_amount": [
+              "0.008",
+              "BTC"
+          ],
+          "traded_amount": [
+              "0.008",
+              "BTC"
+          ],
+          "total_exchanged": [
+              "8.0",
+              "USDC"
+          ],
+          "paid_fee": [
+              "0.0",
+              "BTC"
+          ],
+          "stop_price": "null"
+      },
+      {
+          "id": 130002,
+          "uuid": "ab74839f-231a-4755-b69e-5c3c6033924e",
+          "market_id": "BTC-USDC",
+          "account_id": 143870,
+          "type": "Bid",
+          "state": "traded",
+          "created_at": "2024-12-27T19:01:35.154Z",
+          "fee_currency": "BTC",
+          "price_type": "limit",
+          "source": "null",
+          "client_id": "null",
+          "message": "null",
+          "order_type": "gtc",
+          "expire_at": 0,
+          "limit": [
+              "1000.0",
+              "USDC"
+          ],
+          "amount": [
+              "0.8",
+              "BTC"
+          ],
+          "original_amount": [
+              "0.8",
+              "BTC"
+          ],
+          "traded_amount": [
+              "0.8",
+              "BTC"
+          ],
+          "total_exchanged": [
+              "800.0",
+              "USDC"
+          ],
+          "paid_fee": [
+              "0.0",
+              "BTC"
+          ],
+          "stop_price": "null"
+      },
+  ]
+}
+
+binance_successful_sell_market_order_response_with_less_than_minimum_1 = {
+  "symbol": "BTCUSDC",
+  "orderId": 3713981899,
+  "orderListId": -1,
+  "clientOrderId": "JvCHh6jhpSYzm24YfSU86a",
+  "transactTime": 1736099553299,
+  "price": "0.00000000",
+  "origQty": "0.19200000",
+  "executedQty": "0.19200000",
+  "origQuoteOrderQty": "0.00000000",
+  "cummulativeQuoteQty": "211.20000000",
+  "status": "FILLED",
+  "timeInForce": "GTC",
+  "type": "MARKET",
+  "side": "SELL",
+  "workingTime": 1736099553299,
+  "fills": [
+    {
+      "price": "1100.00000000",
+      "qty": "0.19200000",
+      "commission": "0.01114035",
+      "commissionAsset": "USDC",
+      "tradeId": 126826282
+    }
+  ],
+  "selfTradePreventionMode": "EXPIRE_MAKER"
+}
+
+binance_successful_sell_market_order_response_with_less_than_minimum_2 = {
+  "symbol": "BTCUSDC",
+  "orderId": 3713981899,
+  "orderListId": -1,
+  "clientOrderId": "JvCHh6jhpSYzm24YfSU86a",
+  "transactTime": 1736099553299,
+  "price": "0.00000000",
+  "origQty": "0.80800000",
+  "executedQty": "0.80800000",
+  "origQuoteOrderQty": "0.00000000",
+  "cummulativeQuoteQty": "888.80000000",
+  "status": "FILLED",
+  "timeInForce": "GTC",
+  "type": "MARKET",
+  "side": "SELL",
+  "workingTime": 1736099553299,
+  "fills": [
+    {
+      "price": "1100.00000000",
+      "qty": "0.80800000",
+      "commission": "0.01114035",
+      "commissionAsset": "USDC",
+      "tradeId": 126826282
+    }
+  ],
+  "selfTradePreventionMode": "EXPIRE_MAKER"
+}
+

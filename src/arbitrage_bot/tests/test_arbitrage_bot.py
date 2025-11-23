@@ -450,7 +450,8 @@ class TestArbitrageBot(unittest.TestCase):
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response)
-    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
+    @patch.object(BudaProxy, 'get_order_states',
+                  return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
     def test_synchronous_opposite_order_buy_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
                                                                binance_market_order_mock):
@@ -489,7 +490,8 @@ class TestArbitrageBot(unittest.TestCase):
 
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_base)
-    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
+    @patch.object(BudaProxy, 'get_order_states',
+                  return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
     @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
     def test_synchronous_opposite_order_buy_limit_base_profit(self, batch_creation_mock, get_order_states_mock,
                                                               binance_market_order_mock):
@@ -649,4 +651,208 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0, places=4)
         self.assertAlmostEqual(round(arb_order.traded_amount_high_liquidity, 1), 1100.0, places=4)
         self.assertAlmostEqual(arb_order.profit.amount, 100.0, places=4)
+        self.assertEqual(arb_order.profit.currency, 'USDC')
+
+    @patch.object(BinanceProxy, 'new_order',
+                  return_value=test_api_constants.binance_successful_sell_market_order_response_quote_no_profit)
+    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
+    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+    def test_synchronous_opposite_order_sell_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
+                                                               binance_market_order_mock):
+        """
+        Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with profit
+        i.e., high_liquidity_exchange_price > low_liquidity_exchange_price.
+        In this case, the currency of interest is the quote one.
+        """
+        self.bot.base_currency = "BTC"
+        self.bot.quote_currency = 'USDC'
+
+        # 2. ArbitrageOrder: Simulation of a Buy limit order, with interest in accumulating Quote currecy
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=1000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+
+        # 3. Place sub-orders on low-liquidity
+        sub_orders = [
+            {"mode": "place", "order": {"amount": 200.0}},  # Just an example
+            {"mode": "place", "order": {"amount": 800.0}},
+        ]
+        self.bot.place_sub_orders(sub_orders, arb_order)
+
+        # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
+        #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
+        self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
+        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0)
+        self.assertAlmostEqual(arb_order.traded_amount_high_liquidity, 180.0)
+        self.assertEqual(arb_order.profit.amount, 20)
+        self.assertEqual(arb_order.profit.currency, 'USDC')
+
+    @patch.object(BinanceProxy, 'new_order',
+                  return_value=test_api_constants.binance_successful_sell_market_order_response)
+    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
+    @patch.object(BudaProxy, 'batch_creation', return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+    def test_synchronous_opposite_order_sell_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
+                                                               binance_market_order_mock):
+        """
+        Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with profit
+        i.e., high_liquidity_exchange_price > low_liquidity_exchange_price.
+        In this case, the currency of interest is the quote one.
+        """
+        self.bot.base_currency = "BTC"
+        self.bot.quote_currency = 'USDC'
+
+        # 2. ArbitrageOrder: Simulation of a Buy limit order, with interest in accumulating Quote currecy
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=1000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+
+        # 3. Place sub-orders on low-liquidity
+        sub_orders = [
+            {"mode": "place", "order": {"amount": 200.0}},  # Just an example
+            {"mode": "place", "order": {"amount": 800.0}},
+        ]
+        self.bot.place_sub_orders(sub_orders, arb_order)
+
+        # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
+        #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
+        self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
+        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0)
+        self.assertAlmostEqual(arb_order.traded_amount_high_liquidity, 220.0)
+        self.assertEqual(arb_order.profit.amount, -20)
+        self.assertEqual(arb_order.profit.currency, 'USDC')
+
+    @patch.object(BinanceProxy, 'new_order',
+                  return_value=test_api_constants.binance_successful_sell_market_order_response_base_no_profit)
+    @patch.object(BudaProxy, 'get_order_states',
+                  return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
+    @patch.object(BudaProxy, 'batch_creation',
+                  return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+    def test_synchronous_opposite_order_buy_limit_base_profit(self, batch_creation_mock, get_order_states_mock,
+                                                              binance_market_order_mock):
+        """
+        Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with actual profit
+        i.e., high_liquidity_exchange_price > low_liquidity_exchange_price.
+        In this case, the currency of interest is the base one.
+        """
+
+        self.bot.base_currency = "BTC"
+        self.bot.quote_currency = 'USDC'
+        self.bot.currency_of_interest = CurrencyOfInterest.BASE
+
+        # 2. ArbitrageOrder: Simulation of a Buy limit order, with interest in accumulating Quote currecy
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=1000.0,
+            currency_of_interest=CurrencyOfInterest.BASE,
+            order_type=OrderType.SELL_LIMIT
+        )
+
+        # 3. Place sub-orders on low-liquidity
+        sub_orders = [
+            {"mode": "place", "order": {"amount": 200.0}},
+            {"mode": "place", "order": {"amount": 800.0}},
+        ]
+        self.bot.place_sub_orders(sub_orders, arb_order)
+
+        # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
+        #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
+        self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
+        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0, places=4)
+        self.assertAlmostEqual(round(arb_order.traded_amount_high_liquidity, 1), 200.0, places=4)
+        self.assertAlmostEqual(arb_order.profit.amount, 0.0222199, places=4)
+        self.assertEqual(arb_order.profit.currency, 'BTC')
+
+    @patch.object(BinanceProxy, 'new_order',
+                  return_value=test_api_constants.binance_successful_sell_market_order_response_base)
+    @patch.object(BudaProxy, 'get_order_states',
+                  return_value=test_api_constants.sub_orders_to_execute_in_binance_states)
+    @patch.object(BudaProxy, 'batch_creation',
+                  return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance)
+    def test_synchronous_opposite_order_buy_limit_base_no_profit(self, batch_creation_mock, get_order_states_mock,
+                                                              binance_market_order_mock):
+        """
+        Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with actual profit
+        i.e., high_liquidity_exchange_price > low_liquidity_exchange_price.
+        In this case, the currency of interest is the base one.
+        """
+
+        self.bot.base_currency = "BTC"
+        self.bot.quote_currency = 'USDC'
+        self.bot.currency_of_interest = CurrencyOfInterest.BASE
+
+        # 2. ArbitrageOrder: Simulation of a Buy limit order, with interest in accumulating Quote currecy
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=1000.0,
+            currency_of_interest=CurrencyOfInterest.BASE,
+            order_type=OrderType.SELL_LIMIT
+        )
+
+        # 3. Place sub-orders on low-liquidity
+        sub_orders = [
+            {"mode": "place", "order": {"amount": 200.0}},
+            {"mode": "place", "order": {"amount": 800.0}},
+        ]
+        self.bot.place_sub_orders(sub_orders, arb_order)
+
+        # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
+        #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
+        self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 200.0)
+        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0, places=4)
+        self.assertAlmostEqual(round(arb_order.traded_amount_high_liquidity, 1), 200.0, places=4)
+        self.assertAlmostEqual(arb_order.profit.amount, -0.01819, places=4)
+        self.assertEqual(arb_order.profit.currency, 'BTC')
+
+
+    @patch.object(BinanceProxy, 'new_order',
+                  side_effect=[
+                      test_api_constants.binance_successful_sell_market_order_response_with_less_than_minimum_1,
+                      test_api_constants.binance_successful_sell_market_order_response_with_less_than_minimum_2])
+    @patch.object(BudaProxy, 'get_order_states',
+                  return_value=test_api_constants.sub_orders_to_execute_in_binance_states_with_one_less_than_minimum)
+    @patch.object(BudaProxy, 'batch_creation',
+                  return_value=test_a_bot_constans.placed_sub_orders_to_execute_in_binance_with_one_less_than_minimum)
+    def test_synchronous_opposite_order_buy_limit_quote_profit(self, batch_creation_mock, get_order_states_mock,
+                                                               binance_market_order_mock):
+        """
+        Simulate a successful market order (type: BUY_LIMIT) within `high_liquidity_exchange` with profit
+        i.e., high_liquidity_exchange_price > low_liquidity_exchange_price.
+        In this case, the currency of interest is the quote one.
+        """
+
+        self.bot.base_currency = "BTC"
+        self.bot.quote_currency = 'USDC'
+
+        # 2. ArbitrageOrder: Simulation of a Buy limit order, with interest in accumulating Quote currecy
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=1000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+
+        # 3. Place sub-orders on low-liquidity
+        sub_orders = [
+            {"mode": "place", "order": {"amount": 200.0}},  # Just an example
+            {"mode": "place", "order": {"amount": 800.0}},
+        ]
+        self.bot.place_sub_orders(sub_orders, arb_order)
+
+        # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
+        #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
+        self.assertAlmostEqual(arb_order.traded_quote_amount_low_liquidity, 1000.0)
+        self.assertAlmostEqual(arb_order.pending_amount_high_liquidity, 0.0)
+        self.assertAlmostEqual(arb_order.traded_amount_high_liquidity, 1100.0)
+        self.assertEqual(round(arb_order.profit.amount, 1), 100.0)
         self.assertEqual(arb_order.profit.currency, 'USDC')
