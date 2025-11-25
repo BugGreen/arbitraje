@@ -1,4 +1,4 @@
-from typing import Optional, Type, Dict, List, Any, Union
+from typing import Optional, Type, Dict, List, Any, Union, Tuple
 from concurrent.futures import ThreadPoolExecutor
 from src.exchange_api.exchange_factory import ExchangeFactory
 from src.arbitrage_bot.order import Order
@@ -62,7 +62,7 @@ class ArbitrageBot:
             raise ValueError(f"No minimum amount configured for market {market_name}")
         return min_amt
 
-    def get_price_difference(self, high_liquidity_price: float, arb_order: "ArbitrageOrder") -> float:
+    def get_price_difference(self, high_liquidity_price: float, arb_order: "ArbitrageOrder") -> Tuple[float, float]:
         """
         Retrieve the order book from the low-liquidity exchange and compute a price difference (%)
         relative to `high_liquidity_price`.
@@ -77,7 +77,8 @@ class ArbitrageBot:
 
         :param high_liquidity_price: The asset price on the high-liquidity exchange (float).
         :param arb_order: The `ArbitrageOrder` describing the operation type (BUY or SELL).
-        :return: A float representing the price difference in decimal form (e.g. 0.05 = 5%).
+        :return: A tuple of floats, the first one representing the price difference in decimal form (e.g. 0.05 = 5%),
+        and the second one the price reference according to the order type.
         :raises RuntimeError: If the order book is missing or invalid, or if top-level fields are missing.
         """
         logger.info(
@@ -119,19 +120,186 @@ class ArbitrageBot:
         order_type_name = arb_order.order_type
         if order_type_name in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
             # p_diff = (high_liquidity_price - lowest_exchange_lowest_ask) / lowest_exchange_lowest_ask
+            price_reference = lowest_ask
             p_diff = (high_liquidity_price - lowest_ask) / lowest_ask
         elif order_type_name in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
             # p_diff = (lowest_exchange_highest_bid - high_liquidity_price) / high_liquidity_price
+            price_reference = highest_bid
             p_diff = (highest_bid - high_liquidity_price) / high_liquidity_price
         else:
             logger.error("Unrecognized order type for price diff: %s", order_type_name)
-            return 0.0  # or raise an exception
+            return 0.0, 0.0  # or raise an exception
 
         logger.info(
             "Computed price diff=%.4f for order_type=%s (lowest_ask=%.4f, highest_bid=%.4f, high_price=%.4f)",
             p_diff, order_type_name, lowest_ask, highest_bid, high_liquidity_price
         )
-        return p_diff
+        return p_diff, price_reference
+
+    def _enforce_minimum_amounts(self, sub_orders: List[Dict[str, Any]], side: str) -> Any:
+        """
+        Enforces the minimum amount requirement for sub-orders.
+
+        1) If the total is below the market's minimum, return an error dict with a short code.
+        2) Otherwise, for each sub-order that is below the minimum:
+            - Merge it into the single "target" sub-order.
+              - For 'ask', merge into the sub-order with the lowest price.
+              - For 'bid', merge into the sub-order with the highest price.
+        3) If after merging, we still have no valid sub-orders, return an error dict.
+
+        :param sub_orders: List of sub-order dicts.
+        :param side: 'bid' or 'ask'.
+        :return: A list of valid sub-orders or an error dict.
+        """
+        min_required = self.get_min_amount_for_market()
+
+        total_amount = sum(so["order"]["amount"] for so in sub_orders)
+        if total_amount < min_required:
+            logger.warning(
+                "Total order amount %.8f is below the minimum %.8f for market %s",
+                total_amount, min_required, f"{self.base_currency}-{self.quote_currency}"
+            )
+            return {
+                "code": "ERROR_BELOW_MIN_TOTAL",
+                "msg": "Overall order amount is below the minimum."
+            }
+
+        # Identify the "target" sub-order for merging:
+        #    - For 'ask': sub-order with the lowest price
+        #    - For 'bid': sub-order with the highest price
+        if side == 'ask':
+            # Sort ascending by price
+            sub_orders_sorted = sorted(sub_orders, key=lambda x: x["order"]["limit"])
+            target_sub_order = sub_orders_sorted[0]
+            others = sub_orders_sorted[1:]
+        else:  # side == 'bid'
+            # Sort descending by price
+            sub_orders_sorted = sorted(sub_orders, key=lambda x: x["order"]["limit"], reverse=True)
+            target_sub_order = sub_orders_sorted[0]
+            others = sub_orders_sorted[1:]
+
+        valid_sub_orders = []
+        for so in others:
+            so_amount = so["order"]["amount"]
+            if so_amount < min_required:
+                # Merge into the target sub-order
+                target_sub_order["order"]["amount"] += so_amount
+                logger.debug(
+                    "Merged sub-order with amount=%.8f into target sub-order. New target amount=%.8f",
+                    so_amount, target_sub_order["order"]["amount"]
+                )
+            else:
+                valid_sub_orders.append(so)
+
+        # Always keep the target sub-order
+        valid_sub_orders.append(target_sub_order)
+
+        if side == 'ask':
+            valid_sub_orders = sorted(valid_sub_orders, key=lambda x: x["order"]["limit"])
+        else:
+            valid_sub_orders = sorted(valid_sub_orders, key=lambda x: x["order"]["limit"], reverse=True)
+
+        return valid_sub_orders
+
+    def split_order_into_suborders(self, order: ArbitrageOrder, reference_price: float, side: str,
+                                   delta: Optional[float] = None) -> Any:
+        """
+        Split the given `ArbitrageOrder`'s original_amount into multiple sub-orders,
+        taking `reference_price` as a base for setting limit prices.
+
+        :param order: An `ArbitrageOrder` instance whose `original_amount` will be splitted.
+        :param reference_price: The price to use as a base for calculation.
+        :param side: 'bid' or 'ask' - the side of the market.
+        :param delta: Optional delta to adjust the price.
+        :return: A list of dicts with the structure:
+                 [
+                    {"mode": "place", "order": {...}},
+                    {"mode": "place", "order": {...}},
+                    {"mode": "place", "order": {...}}
+                 ]
+        """
+
+        logger.info("Splitting order into sub-orders: order=%s, reference_price=%s, side=%s, delta=%s",
+                    order, reference_price, side, delta)
+
+        order_amount = order.pending_amount_low_liquidity
+
+        side = side.lower()
+        sub_orders_info = [{}, {}, {}]
+        # Calculate base price depending on side and delta
+
+        if side == 'ask':
+            if delta is not None:
+                sub_order_one_price = reference_price + delta
+            else:
+                sub_order_one_price = reference_price + self.price_diff_threshold
+            sub_order_two_price = sub_order_one_price * 1.001
+            sub_order_three_price = sub_order_one_price * 1.002
+        elif side == 'bid':
+            if delta is not None:
+                sub_order_one_price = reference_price - delta
+            else:
+                sub_order_one_price = reference_price - self.price_diff_threshold
+            sub_order_two_price = sub_order_one_price * 0.999
+            sub_order_three_price = sub_order_one_price * 0.998
+        else:
+            raise ValueError("Side must be either 'bid' or 'ask'.")
+
+        # Amount distribution
+        sub_order_one_amount = order_amount * 0.6
+        sub_order_two_amount = order_amount * 0.3
+        sub_order_three_amount = order_amount * 0.1
+
+        sub_orders_info[0]["price"] = sub_order_one_price
+        sub_orders_info[1]["price"] = sub_order_two_price
+        sub_orders_info[2]["price"] = sub_order_three_price
+        sub_orders_info[0]["amount"] = sub_order_one_amount
+        sub_orders_info[1]["amount"] = sub_order_two_amount
+        sub_orders_info[2]["amount"] = sub_order_three_amount
+
+        # Construct the orders structure
+        # Assuming a market_name pattern like "BASE-QUOTE", here we use the class attributes
+        market_name = f"{self.base_currency}-{self.quote_currency}"
+
+        def place_sub_order(sub_order_amount: float, sub_order_price: float, market: str, market_side: str) -> Dict:
+            """
+            Fills the sub_order template with a new sub_order's information.
+
+            :param sub_order_amount: amount to trade
+            :param sub_order_price: limit price
+            :param market: market name
+            :param market_side: side of the intended operation ('Bid' or 'Ask')
+            :return: the filled sub_order
+            """
+            sub_order_template = {
+                "mode": "place",
+                "order": {
+                    "amount": sub_order_amount,
+                    "limit": sub_order_price,
+                    "market_name": market,
+                    "price_type": "limit",
+                    "type": market_side
+                }
+            }
+
+            return sub_order_template
+
+        sub_orders = []
+
+        for sub_order in sub_orders_info:
+            sub_orders.append(place_sub_order(sub_order.get("amount"), sub_order.get("price"), market_name, side))
+
+        # Enforce minimum amounts. This ensures that there is not an attempt to create a sub/order with less than
+        # the minimum amount allowed.
+        result = self._enforce_minimum_amounts(sub_orders, side)
+
+        # If result is a dict with 'code', we treat it as an error
+        if isinstance(result, dict) and "code" in result:
+            logger.error("Enforcing min amounts failed: %s", result)
+            return result
+
+        logger.info("Created sub-orders after enforcing min amounts: %s", result)
+        return result
 
     def place_sub_orders(self, sub_orders: List[Dict[str, Any]], arb_order: ArbitrageOrder) -> \
             Union[List[Dict[str, Any]], Dict[str, Any]]:
@@ -307,6 +475,23 @@ class ArbitrageBot:
         logger.warning("Unknown structure for sub_order_responses: %s", sub_order_responses)
         return None
 
+    def check_sub_orders_status(self, sub_order_ids: List[str]) -> Dict[dict, Any]:
+        """
+        Check the status of a batch of sub-orders.
+
+        :param sub_order_ids: A list of sub-order IDs to check.
+        :return: A dict containing dicts with the sub_orders information.
+        """
+
+        orders_information = self.exchange_low_liquidity.get_order_states(self.base_currency, self.quote_currency)
+        sub_orders_info = {}
+        for order in orders_information.get("orders", []):
+            order_id_str = str(order.get("id"))
+            if order_id_str and order_id_str in sub_order_ids:
+                sub_orders_info[str(order.get("id"))] = order
+
+        return sub_orders_info
+
     def _wait_for_orders_to_leave_received(self, received_orders: List[Dict[str, Any]],
                                            arb_order: ArbitrageOrder, max_wait_seconds: int = 10) -> None:
         """
@@ -411,23 +596,6 @@ class ArbitrageBot:
             )
         # Possibly add more logic if new_state = 'canceled' or 'pending', etc.
 
-    def check_sub_orders_status(self, sub_order_ids: List[str]) -> Dict[dict, Any]:
-        """
-        Check the status of a batch of sub-orders.
-
-        :param sub_order_ids: A list of sub-order IDs to check.
-        :return: A dict containing dicts with the sub_orders information.
-        """
-
-        orders_information = self.exchange_low_liquidity.get_order_states(self.base_currency, self.quote_currency)
-        sub_orders_info = {}
-        for order in orders_information.get("orders", []):
-            order_id_str = str(order.get("id"))
-            if order_id_str and order_id_str in sub_order_ids:
-                sub_orders_info[str(order.get("id"))] = order
-
-        return sub_orders_info
-
     def execute_opposite_order_high_liquidity_exchange(self, arb_order: 'ArbitrageOrder') \
             -> Union[Dict[str, Any], Dict[str, Any]]:
         """
@@ -482,171 +650,6 @@ class ArbitrageBot:
         except Exception as e:
             logger.error("Error placing order on high-liquidity exchange: %s", e, exc_info=True)
             return {"code": -9999, "msg": str(e)}
-
-    def split_order_into_suborders(self, order: ArbitrageOrder, reference_price: float, side: str,
-                                   delta: Optional[float] = None) -> Any:
-        """
-        Split the given `ArbitrageOrder`'s original_amount into multiple sub-orders,
-        taking `reference_price` as a base for setting limit prices.
-
-        :param order: An `ArbitrageOrder` instance whose `original_amount` will be splitted.
-        :param reference_price: The price to use as a base for calculation.
-        :param side: 'bid' or 'ask' - the side of the market.
-        :param delta: Optional delta to adjust the price.
-        :return: A list of dicts with the structure:
-                 [
-                    {"mode": "place", "order": {...}},
-                    {"mode": "place", "order": {...}},
-                    {"mode": "place", "order": {...}}
-                 ]
-        """
-
-        logger.info("Splitting order into sub-orders: order=%s, reference_price=%s, side=%s, delta=%s",
-                    order, reference_price, side, delta)
-
-        order_amount = order.pending_amount_low_liquidity
-
-        side = side.lower()
-        sub_orders_info = [{}, {}, {}]
-        # Calculate base price depending on side and delta
-
-        if side == 'ask':
-            if delta is not None:
-                sub_order_one_price = reference_price + delta
-            else:
-                sub_order_one_price = reference_price + self.price_diff_threshold
-            sub_order_two_price = sub_order_one_price * 1.001
-            sub_order_three_price = sub_order_one_price * 1.002
-        elif side == 'bid':
-            if delta is not None:
-                sub_order_one_price = reference_price - delta
-            else:
-                sub_order_one_price = reference_price - self.price_diff_threshold
-            sub_order_two_price = sub_order_one_price * 0.999
-            sub_order_three_price = sub_order_one_price * 0.998
-        else:
-            raise ValueError("Side must be either 'bid' or 'ask'.")
-
-        # Amount distribution
-        sub_order_one_amount = order_amount * 0.6
-        sub_order_two_amount = order_amount * 0.3
-        sub_order_three_amount = order_amount * 0.1
-
-        sub_orders_info[0]["price"] = sub_order_one_price
-        sub_orders_info[1]["price"] = sub_order_two_price
-        sub_orders_info[2]["price"] = sub_order_three_price
-        sub_orders_info[0]["amount"] = sub_order_one_amount
-        sub_orders_info[1]["amount"] = sub_order_two_amount
-        sub_orders_info[2]["amount"] = sub_order_three_amount
-
-        # Construct the orders structure
-        # Assuming a market_name pattern like "BASE-QUOTE", here we use the class attributes
-        market_name = f"{self.base_currency}-{self.quote_currency}"
-
-        def place_sub_order(sub_order_amount: float, sub_order_price: float, market: str, market_side: str) -> Dict:
-            """
-            Fills the sub_order template with a new sub_order's information.
-
-            :param sub_order_amount: amount to trade
-            :param sub_order_price: limit price
-            :param market: market name
-            :param market_side: side of the intended operation ('Bid' or 'Ask')
-            :return: the filled sub_order
-            """
-            sub_order_template = {
-                "mode": "place",
-                "order": {
-                    "amount": sub_order_amount,
-                    "limit": sub_order_price,
-                    "market_name": market,
-                    "price_type": "limit",
-                    "type": market_side
-                }
-            }
-
-            return sub_order_template
-
-        sub_orders = []
-
-        for sub_order in sub_orders_info:
-            sub_orders.append(place_sub_order(sub_order.get("amount"), sub_order.get("price"), market_name, side))
-
-        # Enforce minimum amounts. This ensures that there is not an attempt to create a sub/order with less than
-        # the minimum amount allowed.
-        result = self._enforce_minimum_amounts(sub_orders, side)
-
-        # If result is a dict with 'code', we treat it as an error
-        if isinstance(result, dict) and "code" in result:
-            logger.error("Enforcing min amounts failed: %s", result)
-            return result
-
-        logger.info("Created sub-orders after enforcing min amounts: %s", result)
-        return result
-
-    def _enforce_minimum_amounts(self, sub_orders: List[Dict[str, Any]], side: str) -> Any:
-        """
-        Enforces the minimum amount requirement for sub-orders.
-
-        1) If the total is below the market's minimum, return an error dict with a short code.
-        2) Otherwise, for each sub-order that is below the minimum:
-            - Merge it into the single "target" sub-order.
-              - For 'ask', merge into the sub-order with the lowest price.
-              - For 'bid', merge into the sub-order with the highest price.
-        3) If after merging, we still have no valid sub-orders, return an error dict.
-
-        :param sub_orders: List of sub-order dicts.
-        :param side: 'bid' or 'ask'.
-        :return: A list of valid sub-orders or an error dict.
-        """
-        min_required = self.get_min_amount_for_market()
-
-        total_amount = sum(so["order"]["amount"] for so in sub_orders)
-        if total_amount < min_required:
-            logger.warning(
-                "Total order amount %.8f is below the minimum %.8f for market %s",
-                total_amount, min_required, f"{self.base_currency}-{self.quote_currency}"
-            )
-            return {
-                "code": "ERROR_BELOW_MIN_TOTAL",
-                "msg": "Overall order amount is below the minimum."
-            }
-
-        # Identify the "target" sub-order for merging:
-        #    - For 'ask': sub-order with the lowest price
-        #    - For 'bid': sub-order with the highest price
-        if side == 'ask':
-            # Sort ascending by price
-            sub_orders_sorted = sorted(sub_orders, key=lambda x: x["order"]["limit"])
-            target_sub_order = sub_orders_sorted[0]
-            others = sub_orders_sorted[1:]
-        else:  # side == 'bid'
-            # Sort descending by price
-            sub_orders_sorted = sorted(sub_orders, key=lambda x: x["order"]["limit"], reverse=True)
-            target_sub_order = sub_orders_sorted[0]
-            others = sub_orders_sorted[1:]
-
-        valid_sub_orders = []
-        for so in others:
-            so_amount = so["order"]["amount"]
-            if so_amount < min_required:
-                # Merge into the target sub-order
-                target_sub_order["order"]["amount"] += so_amount
-                logger.debug(
-                    "Merged sub-order with amount=%.8f into target sub-order. New target amount=%.8f",
-                    so_amount, target_sub_order["order"]["amount"]
-                )
-            else:
-                valid_sub_orders.append(so)
-
-        # Always keep the target sub-order
-        valid_sub_orders.append(target_sub_order)
-
-        if side == 'ask':
-            valid_sub_orders = sorted(valid_sub_orders, key=lambda x: x["order"]["limit"])
-        else:
-            valid_sub_orders = sorted(valid_sub_orders, key=lambda x: x["order"]["limit"], reverse=True)
-
-        return valid_sub_orders
 
     def funds_transfer(self, arb_order: 'ArbitrageOrder') -> bool:
         """
@@ -889,12 +892,7 @@ class ArbitrageBot:
 
     # TODO: Adapt `max_wait_seconds` according to the coin, bcs, some take longer than others
     @staticmethod
-    def _wait_for_asset_withdraw(
-            coin: str,
-            sender: Any,
-            withdraw_id: str,
-            max_wait_seconds: int = 60 * 6
-    ) -> bool:
+    def _wait_for_asset_withdraw(coin: str, sender: Any, withdraw_id: str, max_wait_seconds: int = 60 * 6) -> bool:
         """
         Wait for an asset withdrawal to be confirmed by polling the sender's
         withdraw history.
