@@ -668,6 +668,30 @@ class TestBudaProxyOrderBook(unittest.TestCase):
         }
         self.assertEqual(current, expected)
 
+    def test_get_current_order_book(self):
+        expected_order_book = {
+            'order_book': {
+                'asks': [['837753.25', '1.40724154'], ['837597.23', '0.13177617']],
+                'bids': [['836677.14', '0.447349'], ['837462.23', '1.43804963']]
+            }
+        }
+        self.proxy.order_book_snapshot = {
+            "asks": {
+                "837753.25": "1.40724154",
+                "837597.23": "0.13177617"
+            },
+            "bids": {
+                "836677.14": "0.447349",
+                "837462.23": "1.43804963"
+            }
+        }
+
+        # Act
+        result = self.proxy.get_current_order_book()
+
+        # Assert
+        self.assertEqual(result, expected_order_book)
+
     def test_update_order_book_state_add(self):
         # Start with empty state, add a positive change
         self.proxy.update_order_book_state("asks", "79559436.91", "0.00156315")

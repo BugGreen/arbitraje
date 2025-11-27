@@ -156,7 +156,7 @@ class BudaProxy(BaseLowLiquidityExchange):
         """
         logger.info("Attempting to reconnect to WebSocket...")
         time.sleep(0.1)  # Sleep before trying to reconnect
-        self.connect_to_order_book(self.base_currency, self.quote_currency, self.order_book_snapshot)
+        self.connect_to_order_book(self.base_currency, self.quote_currency)
 
     def process_order_book_update(self, data: dict) -> None:
         """
@@ -254,12 +254,24 @@ class BudaProxy(BaseLowLiquidityExchange):
 
     def get_current_order_book(self) -> dict:
         """
-        Thread-safely retrieves a copy of the current order book snapshot.
+        Thread-safely retrieves a copy of the current order book snapshot, formatted as a list of lists
+        for both asks and bids.
 
-        :return: A copy of the current order book snapshot.
+        :return: A dictionary with the 'order_book' structure:
+                 {'order_book': {'asks': [['price', 'amount'], ...], 'bids': [['price', 'amount'], ...]}}
         """
         with self.order_book_lock:
-            return self.order_book_snapshot.copy()
+            # Convert the snapshot dictionary to the desired list of lists format
+            asks_list = [[price, amount] for price, amount in self.order_book_snapshot.get("asks", {}).items()]
+            bids_list = [[price, amount] for price, amount in self.order_book_snapshot.get("bids", {}).items()]
+
+            # Return the formatted order book
+            return {
+                "order_book": {
+                    "asks": asks_list,
+                    "bids": bids_list
+                }
+            }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
         """
