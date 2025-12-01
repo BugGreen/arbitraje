@@ -8,6 +8,15 @@ class BaseExchange(ABC):
     """
 
     @abstractmethod
+    def get_balances(self, coin: Optional[str]) -> Dict[str, List]:
+        """
+        Get account's balance for each currency.
+
+        :param coin: If no currency is provided then all currencies are considered
+        :return: Account's balance.
+        """
+
+    @abstractmethod
     def get_withdraw_history(self, coin: Optional[str]) -> List[Dict]:
         """
         Get the withdrawal history of a given coin, or a given order.

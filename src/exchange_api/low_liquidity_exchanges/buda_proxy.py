@@ -1,5 +1,5 @@
 # exchange_api/buda_proxy.py
-from exchange_api.low_liquidity_exchanges.base_low_liquidity_exchange import BaseLowLiquidityExchange
+from src.exchange_api.low_liquidity_exchanges.base_low_liquidity_exchange import BaseLowLiquidityExchange
 from src.exchange_api.utils import load_api_keys, handle_api_response
 from typing import List, Dict, Optional, Union, Any
 import requests
@@ -41,7 +41,8 @@ class BudaProxy(BaseLowLiquidityExchange):
         "ADDRESS_ID": "/api/v2/currencies/{}/receive_addresses",
         "DEPOSIT_ADDRESS": "/api/v2/currencies/{}/receive_addresses/{}",
         "PRICE": "/api/v2/markets/{}/ticker",
-        "MARKETS": "/api/v2/markets/{}"
+        "MARKETS": "/api/v2/markets/{}",
+        "BALANCES": "/api/v2/balances/{}"
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -144,6 +145,29 @@ class BudaProxy(BaseLowLiquidityExchange):
             })
 
         return standardized_orders
+
+    def get_balances(self, coin: Optional[str] = "") -> Dict[str, List]:
+        """
+        Get account's balance for each currency.
+
+        :param coin: If no currency is provided then all currencies are considered
+        :return: Account's balance.
+        """
+        # Define the endpoint path for retrieving the order book
+        endpoint_path = self.ENDPOINTS["BALANCES"].format(coin.lower()).rstrip("/")
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Sign the request (assuming _sign_request can handle GET without body)
+        headers = self._sign_request(method="GET", path=endpoint_path)
+
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.get(url, headers=headers)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching balance information request from Buda: {e}")
+            raise
 
     def batch_creation(self, orders: List[Dict[str, Any]]) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """
@@ -515,7 +539,6 @@ class BudaProxy(BaseLowLiquidityExchange):
         except Exception as e:
             logger.error(f"{current_method_name} - Error fetching {coin} address request from Buda: {e}")
             raise
-
 
     def pay_ln_invoice(self, ln_invoice: str, amount: float, simulate: bool = False) -> Dict:
         """

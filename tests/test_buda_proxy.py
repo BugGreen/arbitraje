@@ -94,6 +94,19 @@ def test_get_market_info():
     assert market_info.get("id") == f'{base_currency}-{quote_currency}'
 
 
+def test_get_all_balances():
+    buda = BudaProxy()
+    market_info = buda.get_balances()
+    assert market_info.get("balances")
+
+
+def test_get_btc_balances():
+    buda = BudaProxy()
+    coin = "BTC"
+    market_info = buda.get_balances(coin)
+    assert market_info.get('balance', {}).get("id", "") == coin
+
+
 @patch("requests.post")
 def test_create_quote_currency_address(mock_post):
     """

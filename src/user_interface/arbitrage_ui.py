@@ -244,7 +244,7 @@ def welcome_menu() -> None:
         quote_currency=initialization_values.get("Quote Currency"),
         original_amount=initialization_values.get("Amount"),
         currency_of_interest=CurrencyOfInterest.QUOTE,
-        order_type=OrderType.BUY_LIMIT
+        order_type=OrderType.SELL_LIMIT
     )
 
     # Start the arbitrage flow

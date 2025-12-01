@@ -75,6 +75,14 @@ class BinanceProxy(BaseHighLiquidityExchange):
             logger.error(f"{current_method_name} - Error fetching sever time from Binance: {e}")
             raise
 
+    def get_balances(self, coin: Optional[str]) -> Dict[str, List]:
+        """
+
+        :param coin:
+        :return:
+        """
+        pass
+
     def check_datetime_differences(self) -> None:
         """
         Check if the local system clock is accurate by comparing it to Binance’s server time:
