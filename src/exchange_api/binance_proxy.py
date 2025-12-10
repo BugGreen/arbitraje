@@ -18,7 +18,6 @@ class BinanceProxy(BaseExchange):
     """
     Proxy class for interacting with the Binance API.
     """
-
     BASE_URL = "https://api.binance.com"
     ENDPOINTS = {
         "ALL_COINS_INFO": "/sapi/v1/capital/config/getall",
@@ -37,6 +36,7 @@ class BinanceProxy(BaseExchange):
         Initialize the BinanceProxy with API key and secret.
         """
         self.api_key, self.api_secret = load_api_keys("BINANCE")
+        self.name: str = "BINANCE"
 
     def _get_server_time(self) -> int:
         """

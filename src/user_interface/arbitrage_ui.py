@@ -27,17 +27,6 @@ class ArbitrageUI:
     def __init__(self):
         self.console = Console()
 
-        # Trade History Table (initially empty)
-        self.trade_history_table = Table(title="Trade History")
-        self.trade_history_table.add_column("Timestamp", justify="right", style="cyan")
-        self.trade_history_table.add_column("Order Type", justify="center", style="green")
-        self.trade_history_table.add_column("Price Diff (%)", justify="center", style="magenta")
-        self.trade_history_table.add_column("Profit", justify="center", style="bold yellow")
-        self.trade_history_table.add_column("Traded (Low Liquidity)", justify="center", style="blue")
-        self.trade_history_table.add_column("Traded (High Liquidity)", justify="center", style="blue")
-        self.trade_history_table.add_column("Low Liquidity Price", justify="center", style="cyan")
-        self.trade_history_table.add_column("High Liquidity Price", justify="center", style="cyan")
-
         # Market Data Panel (will be updated every second)
         self.market_data_panel = Panel("")
 
@@ -93,8 +82,8 @@ class ArbitrageUI:
         # Build a simple table for market data (we're not preserving history here)
         table = Table(show_header=True, header_style="bold magenta")
         table.add_column("Price Diff (%)", justify="center")
-        table.add_column("Low Liquidity Price", justify="center")
-        table.add_column("High Liquidity Price", justify="center")
+        table.add_column(f"{arb_order.low_liquidity_exchange} Price", justify="center")
+        table.add_column(f"{arb_order.high_liquidity_exchange} Price", justify="center")
         table.add_column("Progress (%)", justify="center")
 
         # Calculate progress as the percentage of (original - pending_low) / original.
@@ -112,24 +101,48 @@ class ArbitrageUI:
         # Display the market data panel
         self.console.print(self.market_data_panel)
 
-    def update_table(self, arb_order: ArbitrageOrder, update_history: bool = False) -> None:
+    def update_table(self, history_table: Table, arb_order: ArbitrageOrder, update_history: bool = False) -> None:
         """
         Updates the UI table with the latest information from the ArbitrageOrder.
 
+        :param history_table: The History Table
         :param arb_order: The current ArbitrageOrder containing updated order status and trading data.
         """
         if update_history:
-            self.append_trade_record(arb_order)
-        self.console.print(self.trade_history_table)
+            history_table = self.append_trade_record(history_table, arb_order)
+        self.console.print(history_table)
 
-    def append_trade_record(self, arb_order: "ArbitrageOrder") -> None:
+    @staticmethod
+    def create_trade_record_table(arb_order: ArbitrageOrder) -> Table:
+        """
+        Creates the Trade History Table (initially empty)
+        :param arb_order: The current ArbitrageOrder.
+        :return: The Trades History table.
+        """
+
+        trade_history_table = Table(title="Trade History")
+        trade_history_table.add_column("Timestamp", justify="right", style="cyan")
+        trade_history_table.add_column("Order Type", justify="center", style="green")
+        trade_history_table.add_column("Price Diff (%)", justify="center", style="magenta")
+        trade_history_table.add_column("Profit", justify="center", style="bold yellow")
+        trade_history_table.add_column(f"Traded ({arb_order.low_liquidity_exchange})", justify="center", style="blue")
+        trade_history_table.add_column(f"Traded ({arb_order.high_liquidity_exchange})", justify="center", style="blue")
+        trade_history_table.add_column(f"{arb_order.low_liquidity_exchange} Price", justify="center", style="cyan")
+        trade_history_table.add_column(f"{arb_order.high_liquidity_exchange} Price", justify="center", style="cyan")
+
+        return trade_history_table
+
+    @staticmethod
+    def append_trade_record(history_table: Table, arb_order: "ArbitrageOrder") -> Table:
         """
         Appends a new trade record to the trade history table.
 
+        :param history_table: The Trades History table.
         :param arb_order: The current ArbitrageOrder.
+        :return: The updated Trades History table.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.trade_history_table.add_row(
+        history_table.add_row(
             timestamp,
             str(arb_order.order_type),
             f"{arb_order.price_difference * 100:.2f}%",
@@ -142,6 +155,7 @@ class ArbitrageUI:
         )
         # Redraw the trade history table
         # self.console.print(self.trade_history_table)
+        return history_table
 
     def update_progress(self, arb_order: ArbitrageOrder) -> None:
         """
@@ -156,11 +170,11 @@ class ArbitrageUI:
         progress_percentage = (completed / total) * 100 if total > 0 else 0
         self.progress.update(self.progress_task, completed=progress_percentage)
         progress_info = Panel(
-            f"Progress: {completed:.2f} / {total:.2f} {arb_order.quote_currency} traded. ",
+            self.progress,
+            subtitle=f"Progress: {completed:.2f} / {total:.2f} {arb_order.quote_currency} traded. ",
             title="Arbitrage Progress",
         )
         self.console.print(progress_info)
-        self.console.print(self.progress)
 
     def display_ui(self, arb_order: "ArbitrageOrder") -> None:
         """
@@ -175,6 +189,7 @@ class ArbitrageUI:
         # Start command listener in a separate thread.
         command_thread = threading.Thread(target=self.listen_for_commands, daemon=True)
         command_thread.start()
+        history_table = self.create_trade_record_table(arb_order)
 
         while True:
             time.sleep(1)  # Update market data every second
@@ -184,9 +199,9 @@ class ArbitrageUI:
                     break
                 if not self._pause_requested:
                     self.console.clear()
-                    self.update_market_data(arb_order)
-                    self.update_table(arb_order, False)
+                    self.update_table(history_table, arb_order, True)
                     self.update_progress(arb_order)
+                    self.update_market_data(arb_order)
                     # The trade history table is updated only when append_trade_record is called by the arbitrage flow.
 
         with self.lock:

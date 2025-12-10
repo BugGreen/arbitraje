@@ -18,6 +18,9 @@ class ArbitrageOrder(Order):
         status: str = 'pending',
         trades: Optional[List[Dict]] = None,
         original_amount: float = 0.0,
+        low_liquidity_exchange: str = "BUDA",
+        high_liquidity_exchange: str = "BINANCE"
+
     ):
         super().__init__(base_currency, quote_currency, amount, price, status, trades, order_type)
 
@@ -59,6 +62,8 @@ class ArbitrageOrder(Order):
         self.price_difference: float = 0
         self.low_liquidity_price: float = 0
         self.high_liquidity_price: float = 0
+        self.low_liquidity_exchange: str = low_liquidity_exchange
+        self.high_liquidity_exchange: str = high_liquidity_exchange
 
         # Optionally, define a callback that gets invoked whenever pending_amount_high_liquidity changes.
         # e.g. def on_pending_high_liquidity_update(arb_order, delta): ...

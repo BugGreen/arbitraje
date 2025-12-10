@@ -24,6 +24,7 @@ class BudaProxy(BaseExchange):
         Initialize the BudaProxy with API key and secret.
         """
         self.api_key, self.api_secret = load_api_keys("BUDA")
+        self.name: str = "BUDA"
 
     BASE_URL = "https://www.buda.com"
     ENDPOINTS = {
