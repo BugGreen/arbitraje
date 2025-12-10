@@ -314,3 +314,7 @@ class BinanceProxy(BaseExchange):
     def batch_cancellation(self, orders: List[Dict]) -> Dict:
         # ToDo
         pass
+
+    def get_price(self, base_currency: str, quote_currency: str) -> Dict:
+        # ToDo
+        return 9

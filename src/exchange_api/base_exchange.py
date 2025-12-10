@@ -107,3 +107,14 @@ class BaseExchange(ABC):
         :param orders: A list of orders to be canceled, where each order is a dictionary containing 'order_id' or 'client_id'.
         :return: The response from the exchange API indicating whether the batch cancelation was successful.
         """
+
+    @abstractmethod
+    def get_price(self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Get the order price of orders in a given market.
+
+        :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
+        :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
+
+        :return: The response from the exchange API as a dictionary.
+        """

@@ -348,3 +348,6 @@ class BudaProxy(BaseExchange):
         # Return the response as a dictionary
         return response.json()
 
+    def get_price(self, base_currency: str, quote_currency: str) -> Dict:
+        # ToDo
+        return 10
