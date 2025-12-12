@@ -1231,6 +1231,7 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(arb_order.traded_quote_amount_low_liquidity, arb_order.traded_quote_amount_low_liquidity)
         self.assertEqual(arb_order.traded_amount_base_high_liquidity, arb_order.traded_amount_quote_high_liquidity)
 
+
     @patch.object(BudaProxy, 'create_lightning_invoice',
                   return_value=test_api_constants.buda_ln_invoice_001)
     @patch.object(BinanceProxy, 'create_withdraw_request',
@@ -1264,6 +1265,56 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order.traded_quote_amount_low_liquidity = 20
 
         assert self.bot.funds_transfer(arb_order)
+        self.assertEqual(arb_order.pending_amount_low_liquidity, arb_order.original_amount)
+        self.assertEqual(arb_order.traded_quote_amount_low_liquidity, arb_order.traded_quote_amount_low_liquidity)
+        self.assertEqual(arb_order.traded_amount_base_high_liquidity, arb_order.traded_amount_quote_high_liquidity)
+
+    @patch.object(BudaProxy, 'create_lightning_invoice',
+                  return_value=test_api_constants.buda_ln_invoice_001)
+    @patch.object(BinanceProxy, 'create_withdraw_request',
+                  return_value=test_api_constants.binance_withdrawal_response)
+    @patch.object(BinanceProxy, 'get_withdraw_history',
+                  return_value=test_api_constants.binance_withdrawal_history)
+    @patch.object(BudaProxy, 'create_withdraw_request',
+                   return_value=test_api_constants.buda_withdrawal_usdc_response)
+    @patch.object(BudaProxy, 'get_withdraw_history',
+                  return_value=test_api_constants.buda_usdc_withdrawal_history)
+    def test_funds_transfer_sell_order_multiple(self,
+                                       buda_invoice_creation_mock,
+                                       binance_withdrawal_response_mock,
+                                       binance_withdrawal_history_mock,
+                                       buda_withdrawal_response_mock,
+                                       buda_withdrawal_history_usdc):
+        """
+        Suppose we have a SELL_LIMIT scenario with 0.000095 BTC traded on the low-liquidity side.
+        We expect a BTC transfer from the high-liquidity side, and a USDC transfer from the low-liquidity side.
+        """
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=24000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        arb_order.pending_amount_low_liquidity = 10
+        arb_order.traded_base_amount_low_liquidity = 0.000095
+        arb_order.traded_quote_amount_low_liquidity = 20
+
+        arb_order_2 = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=24000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        arb_order_2.pending_amount_low_liquidity = 10
+        arb_order_2.traded_base_amount_low_liquidity = 0.000095
+        arb_order_2.traded_quote_amount_low_liquidity = 25
+
+        assert self.bot.funds_transfer([arb_order_2, arb_order])
+        self.assertEqual(arb_order_2.pending_amount_low_liquidity, arb_order_2.original_amount)
+        self.assertEqual(arb_order_2.traded_quote_amount_low_liquidity, arb_order_2.traded_quote_amount_low_liquidity)
+        self.assertEqual(arb_order_2.traded_amount_base_high_liquidity, arb_order_2.traded_amount_quote_high_liquidity)
         self.assertEqual(arb_order.pending_amount_low_liquidity, arb_order.original_amount)
         self.assertEqual(arb_order.traded_quote_amount_low_liquidity, arb_order.traded_quote_amount_low_liquidity)
         self.assertEqual(arb_order.traded_amount_base_high_liquidity, arb_order.traded_amount_quote_high_liquidity)

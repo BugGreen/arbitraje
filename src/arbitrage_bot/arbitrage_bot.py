@@ -240,7 +240,7 @@ class ArbitrageBot:
 
                 # 5) Check completion
                 order_completion = self.arbitrage_order_completion(arb_order)
-                if order_completion:
+                if arb_order.order_completed:
                     # If fully done => funds_transfer
                     success_transfer = self.funds_transfer(arb_order)
                     if success_transfer:
@@ -1271,46 +1271,69 @@ class ArbitrageBot:
                          "instead: {}".format(paid_fee_currency))
             return 0, 0
 
-    def funds_transfer(self, arb_order: 'ArbitrageOrder') -> bool:
+    def funds_transfer(self, arb_orders: Union['ArbitrageOrder', List['ArbitrageOrder']]) -> bool:
         """
-        Execute both btc_transfer and quote_currency_transfer in parallel, so they don't block each other.
-        If both succeed, return True, else False.
+        Execute both btc_transfer and quote_currency_transfer for one or more ArbitrageOrder instances in parallel.
+        For each order, the two transfers are executed concurrently. Returns True only if all transfers for all orders succeed.
 
-        :param arb_order: The ArbitrageOrder object, containing the relevant
-                          traded amounts and order type.
-        :return: True if both BTC and quote currency transfers succeed, False otherwise.
+        :param arb_orders: A single ArbitrageOrder or a list of ArbitrageOrder objects, each containing the relevant
+                           traded amounts and order type.
+        :return: True if funds transfers for all orders succeed, False otherwise.
+        """
+        # Ensure arb_orders is a list
+        if not isinstance(arb_orders, list):
+            arb_orders = [arb_orders]
+
+        overall_success = True
+        order_futures = {}
+        # Launch a thread for each order's funds transfer
+        with ThreadPoolExecutor(max_workers=len(arb_orders)) as order_executor:
+            for order in arb_orders:
+                future = order_executor.submit(self._funds_transfer_single, order)
+                order_futures[order] = future
+
+            for order, future in order_futures.items():
+                try:
+                    success = future.result()
+                    if not success:
+                        overall_success = False
+                except Exception as e:
+                    logger.error("Error transferring funds for order %s: %s", order, e)
+                    overall_success = False
+
+        return overall_success
+
+    def _funds_transfer_single(self, arb_order: 'ArbitrageOrder') -> bool:
+        """
+        Execute both btc_transfer and quote_currency_transfer concurrently for a single ArbitrageOrder.
+
+        :param arb_order: An ArbitrageOrder instance.
+        :return: True if both transfers succeed, False otherwise.
         """
         logger.info("Initiating parallel funds transfer for order_type=%s", arb_order.order_type.name)
 
-        # We'll define local functions so we can pass them to threads
-        def do_btc_transfer():
-            logger.debug("Starting btc_transfer...")
+        def do_btc_transfer() -> bool:
+            logger.debug("Starting btc_transfer for order %s...", arb_order)
             return self.btc_transfer(arb_order)
 
-        def do_quote_transfer():
-            logger.debug("Starting quote_currency_transfer...")
+        def do_quote_transfer() -> bool:
+            logger.debug("Starting quote_currency_transfer for order %s...", arb_order)
             return self.quote_currency_transfer(arb_order)
 
         # Use two threads: one for BTC, one for quote currency
         with ThreadPoolExecutor(max_workers=2) as executor:
             btc_future = executor.submit(do_btc_transfer)
             quote_future = executor.submit(do_quote_transfer)
-
-            logger.debug("Both transfers submitted; waiting for results...")
-
-            # Wait for both tasks to complete, then gather success flags
             btc_success = btc_future.result()
             quote_success = quote_future.result()
 
-        # Combine results
         if btc_success and quote_success:
-            logger.info("All funds transferred successfully (BTC + quote).")
-            logger.info("Reset order attributes.")
-
+            logger.info("All funds transferred successfully (BTC + quote) for order %s", arb_order)
             arb_order.reset_values(order_completion=True)
             return True
         else:
-            logger.warning("Some transfer(s) failed. btc_success=%s, quote_success=%s", btc_success, quote_success)
+            logger.warning("Some transfers failed for order %s: btc_success=%s, quote_success=%s", arb_order,
+                           btc_success, quote_success)
             return False
 
     def arbitrage_order_completion(self, arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]]) -> bool:
