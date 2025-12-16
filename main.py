@@ -30,7 +30,8 @@ def main() -> None:
         order_type = 'MARKET'
         order_id = 33188802974
 
-
+        print(binance.get_withdraw_history())
+        print(binance.get_deposit_history())
         #coin_info = binance.supports_lightning_network(coin)
         #withdraw_request = binance.create_withdraw_request(coin=coin, address=ln_invoice, amount=sats_amount)
         #print(json.dumps(withdraw_request, indent=2))
@@ -97,9 +98,13 @@ def main() -> None:
         #new_order = buda.new_order(base_currency, quote_currency, side, order_type, order_amount, price=price)
         binance_ln_invoice = 'lnbc20u1pn57w8spp5tte7449lywmexq0e5zrukh97d3r797t2h38hc7znnwfpmlpywjfqdqqcqzysxqrrsssp5nmydq5cy9vjlht5nuekrk9h2y52lyd5sfwn7kj3upq2euja3h9ks9qxpqysgqsdlf0c5dnq60ffu3n2kvyg9fwv4zq738l54efex5jxf949tr28vyy4y70tfv86ua7wtaazq4yd3uuhrz3rlfwz638s09sr0lqgyp6egqn5qcrs'
         #withdrawal_request = buda.create_withdraw_request(coin=coin, address=binance_ln_invoice, amount=0.00002)
-        lightning_invoice = buda.create_lightning_invoice(amount=0.01)
-        print(json.dumps(lightning_invoice, indent=2))
-        #print(json.dumps(new_order, indent=2))
+        # lightning_invoice = buda.create_lightning_invoice(amount=0.01)
+        # print(json.dumps(lightning_invoice, indent=2))
+        payment_response = buda.pay_ln_invoice(ln_invoice=binance_ln_invoice, amount=0.001, simulate=True)
+        print(json.dumps(payment_response, indent=2))
+        print(buda.get_withdraw_history("BTC"))
+        print(buda.get_deposit_history("BTC"))
+
         #order_canceled = buda.cancel_order(base_currency, quote_currency, order_id)
         #print(json.dumps(order_canceled, indent=2))
         #order_states = buda.get_order_states(base_currency, quote_currency)

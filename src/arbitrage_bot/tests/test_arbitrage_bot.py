@@ -892,3 +892,43 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertAlmostEqual(arb_order.traded_amount_quote_high_liquidity, 1100.0)
         self.assertEqual(round(arb_order.profit.amount, 1), 100.0)
         self.assertEqual(arb_order.profit.currency, 'USDC')
+
+    def test_btc_transfer_buy(self):
+        """
+        Suppose we have a BUY_LIMIT scenario with 0.017 BTC traded on the low-liquidity side.
+        We expect it to be split into 2 chunks: 0.009999, 0.007001.
+        """
+
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="COP",
+            amount=1.0,
+            original_amount=24000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+        arb_order.traded_base_amount_low_liquidity = 0.017
+
+        self.bot.btc_transfer(arb_order)
+
+        # We verify logs or calls:
+        # The mock exchange receiver's create_deposit_address is called for each chunk
+        # The mock exchange sender's create_withdraw_request is called for each chunk
+
+    def test_btc_transfer_sell(self):
+        """
+        Another scenario: SELL_LIMIT with 0.005 BTC, fits in single chunk, no splitting.
+        """
+
+        arb_order = ArbitrageOrder(
+            base_currency="ETH",
+            quote_currency="COP",
+            amount=1.0,
+            original_amount=24000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+        arb_order.traded_base_amount_low_liquidity = 0.005
+
+        self.bot.btc_transfer(arb_order)
+        # Expect a single chunk of 0.005, one deposit address creation, one withdraw request

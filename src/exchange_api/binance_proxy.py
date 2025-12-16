@@ -9,6 +9,7 @@ from typing import List, Dict, Optional
 from src.exchange_api.base_exchange import BaseExchange
 from src.exchange_api.utils import load_api_keys
 import logging
+from src.exchange_api import constants
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,9 @@ class BinanceProxy(BaseExchange):
         "WITHDRAW_REQUEST": "/sapi/v1/capital/withdraw/apply",
         "TIME": "/api/v3/time",
         'NEW_ORDER': '/api/v3/order',
-        'CANCEL_ORDER': '/api/v3/order'
+        'CANCEL_ORDER': '/api/v3/order',
+        'WITHDRAW_HISTORY': '/sapi/v1/capital/withdraw/history',
+        "DEPOSIT_HISTORY": "/sapi/v1/capital/deposit/hisrec"
     }
 
     def __init__(self) -> None:
@@ -104,6 +107,66 @@ class BinanceProxy(BaseExchange):
                     if "lightning" in network.get("network", "").lower():
                         return network.get("withdrawEnable", False)
         return False
+
+    def get_withdraw_history(self, coin: Optional[str] = None, withdraw_order_id: Optional[str] = None) -> List[Dict]:
+        """
+        Get the withdrawal history of a given coin, or a given order.
+
+        :param coin: Coin of interest
+        :param withdraw_order_id: id of a specific order
+        :return: Withdrawal history
+        """
+        url = f"{self.BASE_URL}{self.ENDPOINTS['WITHDRAW_HISTORY']}"
+        headers = {"X-MBX-APIKEY": self.api_key}
+
+        params = {
+            "coin": coin,
+            "timestamp": int(time.time() * 1000),
+            } if coin else {}
+
+        if withdraw_order_id:
+            params['withdrawOrderId']
+
+        params = self._sign_request(params)
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        response = response.json()
+        for withdraw in response:
+            status = withdraw['status']
+            state = constants.binance_withdrawal_states.get(status)
+            withdraw['state'] = state
+        return response
+
+    def get_deposit_history(self, coin: Optional[str] = None, withdraw_order_id: Optional[str] = None) -> List[Dict]:
+        """
+        Get the deposit history of a given coin, or a given order.
+
+        :param coin: Coin of interest
+        :param withdraw_order_id: id of a specific order
+        :return: Deposit history
+        """
+        url = f"{self.BASE_URL}{self.ENDPOINTS['DEPOSIT_HISTORY']}"
+        headers = {"X-MBX-APIKEY": self.api_key}
+
+        params = {
+            "includeSource": True,
+            "timestamp": int(time.time() * 1000),
+            }
+
+        if coin:
+            params['coin'] = coin
+        if withdraw_order_id:
+            params['withdrawOrderId'] = coin
+
+        params = self._sign_request(params)
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        response = response.json()
+        for deposit in response:
+            status = deposit['status']
+            state = constants.binance_deposit_states.get(status)
+            deposit['state'] = state
+        return response
 
     def create_deposit_address(self, coin: str, network: Optional[str] = "LIGHTNING",
                                amount: Optional[float] = 0.00002) -> Dict:
@@ -216,6 +279,26 @@ class BinanceProxy(BaseExchange):
             return response.json()
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
+
+    def pay_ln_invoice(self, ln_invoice: str, amount: float,
+                       wallet_type: Optional[int] = 0, **kwargs) -> Dict:
+        """
+        Submit a withdrawal request in Binance for BTC, via Lightning Network.
+
+        :param ln_invoice: The destination address for the withdrawal (Lightning Network Invoice).
+        :param amount: The withdrawal amount (in fractions of BTC).
+        :param wallet_type: The wallet type for withdraw，0-spot wallet ，1-funding wallet.
+        :param kwargs: Additional optional parameters (e.g., withdrawOrderId, addressTag, transactionFeeFlag, name).
+        :return: A dictionary containing the withdrawal request ID.
+        :raises Exception: If the request fails or the response contains an error.
+        """
+        coin = "BTC"
+        network = "LIGHTNING"
+        return self.create_withdraw_request(coin=coin,
+                                            address=ln_invoice,
+                                            amount=amount,
+                                            wallet_type=wallet_type,
+                                            network=network)
 
     def new_order(self, base_currency: str, quote_currency: str, side: str, order_type: str,
                   timestamp: Optional[int] = None,

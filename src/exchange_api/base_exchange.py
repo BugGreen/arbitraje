@@ -17,7 +17,7 @@ class BaseExchange(ABC):
         pass
 
     @abstractmethod
-    def get_order_book (self, base_currency: str, quote_currency: str) -> Dict:
+    def get_order_book(self, base_currency: str, quote_currency: str) -> Dict:
         """
         Retrieve the current order book for a specified market.
 
@@ -34,6 +34,26 @@ class BaseExchange(ABC):
 
         :param coin: The symbol of the coin (e.g., 'BTC').
         :return: True if supported, False otherwise.
+        """
+        pass
+
+    @abstractmethod
+    def get_withdraw_history(self, coin: Optional[str]) -> List[Dict]:
+        """
+        Get the withdrawal history of a given coin, or a given order.
+
+        :param coin: Coin of interest
+        :return: Withdrawal history
+        """
+        pass
+
+    @abstractmethod
+    def get_deposit_history(self, coin: Optional[str]) -> List[Dict]:
+        """
+        Get the deposit history of a given coin, or a given order.
+
+        :param coin: Coin of interest
+        :return: Deposit history
         """
         pass
 

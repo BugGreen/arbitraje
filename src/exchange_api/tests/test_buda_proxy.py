@@ -47,6 +47,20 @@ def test_create_withdraw_request_btc():
     assert withdrawal_response["withdrawal_data"]['payment_request'] == expired_invoice
 
 
+def test_pay_ln_invoice():
+    """
+    Test BTC Lightning Network withdrawal request.
+    """
+
+    buda_proxy = ExchangeFactory.get_exchange('buda')
+    expired_invoice = 'lnbc50u1pn5f8ljpp5dc6y936p79j9dfqs59vdkz6dfurxcgzvsren4mtahdrva9paqxhsdq8w3jhxaqcqzzsxqyz5vqsp5yp9j2fghxfw4dvxnkcu5lyldykew7ymuq27f8jpay8ms7q9kwe9s9qxpqysgqqczpcedj6ry8t8z5emqvz9mvjr263fsv7p64st6j5pyxfcdmm9hparffkgfsxv883kh6hkczfgpktlevn3rldcskqv392fk8n7ad3lcp6yx88t'
+
+    response = buda_proxy.pay_ln_invoice(ln_invoice=expired_invoice, amount=0.00002, simulate=True)
+    withdrawal_id = response["id"]
+
+    assert not withdrawal_id
+
+
 def test_create_withdraw_request_ltc():
     """
     Test BTC Lightning Network withdrawal request.
@@ -364,6 +378,44 @@ def test_get_order_states(mock_get):
 
     assert isinstance(response['orders'], list)
     assert response['orders'][0]['market_id'] == "ETH-COP"
+
+
+@patch("requests.get")
+def test_get_withdraw_history(mock_get):
+    expected_response = constants.buda_withdrawal_history
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"withdrawals": expected_response}
+    mock_get.return_value = mock_response
+
+    # Instance of BudaProxy
+    buda = BudaProxy()
+    buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
+
+    response = buda.get_withdraw_history(coin='btc')
+
+    assert isinstance(response, list)
+    assert response[0]['id'] == "EwjxVM"
+
+
+@patch("requests.get")
+def test_get_deposit_history(mock_get):
+    expected_response = constants.buda_deposit_history
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"deposits": expected_response}
+    mock_get.return_value = mock_response
+
+    # Instance of BudaProxy
+    buda = BudaProxy()
+    buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
+
+    response = buda.get_deposit_history(coin='btc')
+
+    assert isinstance(response, list)
+    assert response[0]['id'] == "lNxKKG"
 
 
 @patch("requests.post")

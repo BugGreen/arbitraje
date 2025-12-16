@@ -36,6 +36,7 @@ class BudaProxy(BaseExchange):
         "BATCH_ORDERS": "/api/v2/orders",
         "CRYPTO_WITHDRAWAL": "/api/v2/currencies/{currency}/withdrawals",
         "ORDER_BOOK": "/api/v2/markets/{}/order_book",
+        "WITHDRAW_HISTORY": "/api/v2/currencies/{}/{}"
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -209,6 +210,54 @@ class BudaProxy(BaseExchange):
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
 
+    def get_withdraw_or_deposit_history(self, coin: str, direction: str) -> Dict[str, List[Dict]]:
+        """
+        Get the Deposit/Withdrawal history of a given coin, or a given order.
+
+        :param coin: Coin of interest
+        :param direction: deposits/withdrawals
+        :return: Deposit/Withdrawal history
+        """
+        coin = coin.upper()
+
+        # Define the endpoint path for retrieving the order book
+        endpoint_path = self.ENDPOINTS["WITHDRAW_HISTORY"].format(coin, direction)
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Sign the request (assuming _sign_request can handle GET without body)
+        headers = self._sign_request(method="GET", path=endpoint_path)
+
+        # Make the API call to retrieve the order book
+        response = requests.get(url, headers=headers)
+
+        # Check for successful response
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception(f"Error {response.status_code}: {response.text}")
+
+    def get_withdraw_history(self, coin: str) -> List[Dict]:
+        """
+        Get the withdrawal history of a given coin, or a given order.
+
+        :param coin: Coin of interest
+        :return: Deposit/Withdrawal history
+        """
+        direction = "withdrawals"
+        withdraw_history = self.get_withdraw_or_deposit_history(coin=coin, direction=direction).get(direction)
+        return withdraw_history
+
+    def get_deposit_history(self, coin: str) -> List[Dict]:
+        """
+        Get the deposit history of a given coin, or a given order.
+
+        :param coin: Coin of interest
+        :return: Deposit history
+        """
+        direction = "deposits"
+        withdraw_history = self.get_withdraw_or_deposit_history(coin=coin, direction=direction).get(direction)
+        return withdraw_history
+
     def create_deposit_address(self, coin: str = "BTC", network: Optional[str] = "lightning",
                                amount_satoshis: Optional[int] = 0, memo: Optional[str] = None,
                                expiry_seconds: Optional[int] = 0) -> Dict:
@@ -270,11 +319,6 @@ class BudaProxy(BaseExchange):
         coin = 'BTC'
         network = "lightning"
         amount_sats = amount * 100000000
-
-        if coin != "BTC":
-            raise ValueError("Lightning Network invoices are only supported for BTC.")
-        if network and network.lower() != "lightning":
-            raise ValueError("This method only supports the Lightning Network.")
 
         # Define the endpoint path
         endpoint_path = self.ENDPOINTS["LIGHTNING_INVOICE"]
@@ -364,6 +408,22 @@ class BudaProxy(BaseExchange):
             return response.json()
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
+
+    def pay_ln_invoice(self, ln_invoice: str, amount: float, simulate: bool = False) -> Dict:
+        """
+        Submit a withdrawal request for BTC, via Lightning Network.
+
+        :param ln_invoice: The payment request (Lightning Network Invoice).
+        :param amount: The withdrawal amount (in fractions of BTC).
+        :param simulate: Optional flag to simulate the payment request without executing it.
+        :return: A dictionary containing the details of the withdrawal request.
+        :raises ValueError: If the coin is unsupported or if incorrect parameters are provided.
+        :raises Exception: If the request fails or the response contains an error.
+        """
+
+        coin = 'BTC'
+        withdraw_info = self.create_withdraw_request(coin=coin, address=ln_invoice, amount=amount, simulate=simulate)
+        return {"id": withdraw_info["withdrawal"].get("id")}
 
     def new_order(self, base_currency: str, quote_currency: str, side: str, order_type: str, amount: float,
                   price: Optional[float] = None,
