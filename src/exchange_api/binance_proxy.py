@@ -1,10 +1,11 @@
 # exchange_api/binance_proxy.py
+import json
 import requests
 import time
 import hmac
 import hashlib
 from urllib.parse import urlencode
-from typing import List, Dict
+from typing import List, Dict, Optional
 from src.exchange_api.base_exchange import BaseExchange
 from src.exchange_api.utils import load_api_keys
 
@@ -17,6 +18,7 @@ class BinanceProxy(BaseExchange):
     BASE_URL = "https://api.binance.com"
     ENDPOINTS = {
         "ALL_COINS_INFO": "/sapi/v1/capital/config/getall",
+        "DEPOSIT_ADDRESS": "/sapi/v1/capital/deposit/address"
     }
 
     def __init__(self) -> None:
@@ -68,7 +70,44 @@ class BinanceProxy(BaseExchange):
         coins_info = self.get_coin_info()
         for coin_info in coins_info:
             if coin_info.get("coin") == coin:
+                # print(json.dumps(coin_info, indent=2)) Uncomment to display the response
                 for network in coin_info.get("networkList", []):
                     if "lightning" in network.get("network", "").lower():
                         return network.get("withdrawEnable", False)
         return False
+
+    def create_deposit_address(self, coin: str, network: Optional[str] = "LIGHTNING",
+                               amount: Optional[float] = 0.00002) -> Dict:
+        """
+        Fetch a deposit address for a specific coin and network.
+
+        :param coin: The symbol of the cryptocurrency (e.g., 'BTC').
+        :param network: The network to use for the deposit (e.g., 'BTC', 'LIGHTNING'). If not provided, the default network is used.
+        :param amount: The amount to deposit (only required for LIGHTNING network).
+        :return: A dictionary containing the deposit address and related details.
+        :raises Exception: If the request fails or the response contains an error.
+        """
+        network = network.upper()
+
+        params = {
+            "coin": coin,
+            "timestamp": int(time.time() * 1000),
+        }
+
+        if network:
+            params["network"] = network
+        if amount and network and network == "LIGHTNING":
+            params["amount"] = amount
+
+        # Sign the request
+        signed_params = self._sign_request(params)
+
+        # Make the API request
+        url = f"{self.BASE_URL}{self.ENDPOINTS['DEPOSIT_ADDRESS']}"
+        headers = {"X-MBX-APIKEY": self.api_key}
+        response = requests.get(url, headers=headers, params=signed_params)
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception(f"Error {response.status_code}: {response.text}")

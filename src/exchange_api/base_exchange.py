@@ -25,3 +25,14 @@ class BaseExchange(ABC):
         :return: True if supported, False otherwise.
         """
         pass
+
+    @abstractmethod
+    def create_deposit_address(self, coin: str, network: str = None) -> Dict:
+        """
+        Abstract method for creating a deposit address.
+
+        :param coin: The symbol of the cryptocurrency.
+        :param network: The network for the deposit.
+        :return: A dictionary with deposit address details.
+        """
+        pass

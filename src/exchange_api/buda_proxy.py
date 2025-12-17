@@ -74,3 +74,6 @@ class BudaProxy(BaseExchange):
                     if "lightning" in network.get("name", "").lower():
                         return network.get("withdraw_enabled", False)
         return False
+
+    def create_deposit_address(self, coin: str, network: str = None) -> Dict:
+        pass

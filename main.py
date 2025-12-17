@@ -1,3 +1,5 @@
+import json
+
 from src.exchange_api.exchange_factory import ExchangeFactory
 
 
@@ -9,8 +11,8 @@ def main() -> None:
     try:
         binance = ExchangeFactory.get_exchange("binance")
         coin = "BTC"
-        is_supported = binance.supports_lightning_network(coin)
-        print(f"Binance BTC Lightning Support: {is_supported}")
+        lightning_address = binance.create_deposit_address(coin)
+        print(json.dumps(lightning_address, indent=2))
     except Exception as e:
         print(f"Error with Binance: {e}")
 

@@ -62,3 +62,37 @@ def test_binance_supports_lightning_network():
 
     with patch.object(binance, 'get_coin_info', return_value=mock_coin_info_no_lightning):
         assert binance.supports_lightning_network("BTC") == False
+
+
+def test_create_deposit_address():
+    """
+    Test the create_deposit_address method of BinanceProxy.
+    """
+    binance = BinanceProxy()
+
+    # Mock the expected API response
+    expected_response = {
+        "address": "1HPn8Rx2y6nNSfagQBKy27GB99Vbzg89wv",
+        "coin": "BTC",
+        "tag": "",
+        "url": "https://btc.com/1HPn8Rx2y6nNSfagQBKy27GB99Vbzg89wv"
+    }
+
+    # Mock the requests.get method
+    with patch('requests.get') as mock_get:
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = expected_response
+        mock_get.return_value = mock_response
+
+        # Call the method
+        deposit_address = binance.create_deposit_address(coin="BTC", network="BTC")
+
+        # Assertions
+        assert deposit_address == expected_response
+        mock_get.assert_called_once()
+        mock_get.assert_called_with(
+            f"{binance.BASE_URL}{binance.ENDPOINTS['DEPOSIT_ADDRESS']}",
+            headers={"X-MBX-APIKEY": binance.api_key},
+            params=mock_get.call_args[1]["params"]  # Ensure params match the call
+        )
