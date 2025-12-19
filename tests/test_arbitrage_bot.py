@@ -1147,17 +1147,23 @@ class TestArbitrageBot(unittest.TestCase):
         assert isinstance(btc_price_high_liq_exchange, float)
         self.assertEqual(btc_price_high_liq_exchange, 104738.01000000)
 
-    # def test_run_arbitrage_flow(self):
-    #     """
-    #     Test the arbitrage flow, on a first iteration condition
-    #     """
-    #
-    #     arb_order = ArbitrageOrder(
-    #         base_currency="BTC",
-    #         quote_currency="USDC",
-    #         amount=100.0,
-    #         original_amount=100,
-    #         currency_of_interest=CurrencyOfInterest.QUOTE,
-    #         order_type=OrderType.SELL_LIMIT
-    #     )
-    #     self.bot.run_arbitrage_flow(arb_order=arb_order)
+    @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.place_sub_orders_sell_limit_flow)
+    @patch.object(BudaProxy, 'batch_cancellation', return_value=test_a_bot_constans.batch_cancellation_sell_limit_flow)
+    @patch.object(BinanceProxy, 'new_order', return_value=test_a_bot_constans.new_order_binance_sell_limit_flow)
+    def test_run_arbitrage_flow(self,
+                                mock_buda_place_sub_orders,
+                                mock_buda_batch_cancellation,
+                                mock_binance_new_order):
+        """
+        Test the arbitrage flow, on a first iteration condition
+        """
+
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=100.0,
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        self.bot.run_arbitrage_flow(arb_order=arb_order)
