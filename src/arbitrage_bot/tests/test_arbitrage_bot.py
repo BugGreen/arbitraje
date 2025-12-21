@@ -1082,3 +1082,37 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(arb_order.pending_amount_low_liquidity, arb_order.original_amount)
         self.assertEqual(arb_order.traded_quote_amount_low_liquidity, arb_order.traded_quote_amount_low_liquidity)
         self.assertEqual(arb_order.traded_amount_base_high_liquidity, arb_order.traded_amount_quote_high_liquidity)
+
+    @patch.object(BudaProxy, 'get_order_book',
+                  return_value=test_api_constants.buda_order_book_response)
+    def test_get_price_difference_buy_limit(self, buda_order_book_mock):
+        # For a BUY, p_diff = (highest_bid - high_liquidity_price)/high_liquidity_price
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=1.0,
+            original_amount=24000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+        # Suppose high_liquidity_price=837000.0
+        # highest_bid=836677.14 => p_diff = (836677.14 - 837000)/837000 = ~-0.000385
+        p_diff = self.bot.get_price_difference(837000.0, arb_order)
+        self.assertAlmostEqual(p_diff, -0.00071, places=5)
+
+    @patch.object(BudaProxy, 'get_order_book',
+                  return_value=test_api_constants.buda_order_book_response)
+    def test_get_price_difference_buy_limit(self, buda_order_book_mock):
+        # For a BUY, p_diff = (highest_bid - high_liquidity_price)/high_liquidity_price
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=1.0,
+            original_amount=24000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        # Suppose high_liquidity_price=837000.0
+        # highest_bid=836677.14 => p_diff = (836677.14 - 837000)/837000 = ~-0.000385
+        p_diff = self.bot.get_price_difference(837000.0, arb_order)
+        self.assertAlmostEqual(p_diff, 0.00055, places=5)

@@ -30,8 +30,8 @@ def main() -> None:
         order_type = 'MARKET'
         order_id = 33188802974
 
-        usdc_deposit_addres = binance.create_deposit_address(coin=coin, network='ETH')
-        print(json.dumps(usdc_deposit_addres, indent=2))
+        #usdc_deposit_addres = binance.create_deposit_address(coin=coin, network='ETH')
+        #print(json.dumps(usdc_deposit_addres, indent=2))
         # print(binance.get_withdraw_history('BTC'))
         # print(binance.get_deposit_history())
 
@@ -56,7 +56,7 @@ def main() -> None:
         # print(json.dumps(new_market_order, indent=2))
         #cancel_order = binance.cancel_order(base_currency, quote_currency, order_id)
         #print(json.dumps(cancel_order, indent=2))
-        lightning_address = binance.create_lightning_invoice(.01)
+        #lightning_address = binance.create_lightning_invoice(.01)
         # print(json.dumps(lightning_address, indent=2))
         binance.check_datetime_differences()
         #print(json.dumps(coin_info, indent=2))
@@ -108,15 +108,15 @@ def main() -> None:
         # print(json.dumps(payment_response, indent=2))
         # print(buda.get_withdraw_history("BTC"))
         # print(buda.get_deposit_history("BTC"))
-        print(json.dumps(buda.create_quote_currency_address('usdc')))
+        # print(json.dumps(buda.create_quote_currency_address('usdc')))
         #order_canceled = buda.cancel_order(base_currency, quote_currency, order_id)
         #print(json.dumps(order_canceled, indent=2))
         #order_states = buda.get_order_states(base_currency, quote_currency)
         #print(json.dumps(order_states, indent=2))
         #ltc_withdrawal = buda.create_withdraw_request(coin='ltc', amount=0.00702, address=ltc_address, simulate=True)
         #print(json.dumps(ltc_withdrawal, indent=2))
-        #order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')
-        #print(json.dumps(order_book, indent=2))
+        order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')
+        print(json.dumps(order_book, indent=2))
     except Exception as e:
         print(f"Error with BUDA: {e}")
 

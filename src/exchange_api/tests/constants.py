@@ -1,6 +1,20 @@
 from typing import Dict, List
 import json
 
+
+buda_order_book_response = {
+                    "order_book": {
+                        "asks": [
+                            ["837753.25", "1.40724154"],  # lowest ask
+                            ["837597.23", "0.13177617"]
+                        ],
+                        "bids": [
+                            ["836677.14", "0.447349"],    # highest bid
+                            ["837462.23", "1.43804963"]
+                        ]
+                    }
+                }
+
 successful_batch_order = [
             {
                 "mode": "place",
@@ -1079,7 +1093,6 @@ binance_successful_sell_market_order_response_after_cancelaion_profit = {
   "selfTradePreventionMode": "EXPIRE_MAKER"
 }
 
-
 binance_ln_invoice_001 = {
   "coin": "BTC",
   "address": "lnbc10m1pncjjq2pp5xr8w2ze0es7atjwkzaqzxtc9plx7dgywu9kppynys49c6dewx80qdqqcqzysxqrrsssp5sgj026j0znjd5a92zadhf73qmyl6synu6ch8zjuxznuqmqyymfqq9qxpqysgqres705w8el7g2s6u5629hylc9g00p822kyflsh7jm5cfn745qkz894djv59psejw4w5rf4jq5pgy74cfudtnq2e9aj37gmeullam6vspr43m7j",
@@ -1106,7 +1119,6 @@ binance_standardized_ln_invoice_00995 = {
     'invoice': 'lnbc9950u1pncjk4zpp5ynumada7kt9j484ad08uxdgauttqmcjuu6hpeh7p4srjck06uyfqdqqcqzysxqrrsssp54z0z8222dkfkvgx8d4prhg9twphm3njs9u75v2ztmzexwdrvkpcq9qxpqysgqzrfcx8xwkn2and0xpj2zs9hmqfnz3cchhngyl7nyx33upjq93glrcmzew7rcjhxjrgmnlmd5qas0shf760ahedgfcn92twpz77sgsjqqp5z438',
     'amount': 0.00995
 }
-
 
 binance_standardized_ln_invoice_0075 = {
     'coin': 'BTC',
@@ -1206,7 +1218,6 @@ binance_deposit_history: List[Dict] = [
     }
 ]
 
-
 buda_withdrawal_history: List[Dict] = [
     {
         'id': 'EwjxVM',
@@ -1298,7 +1309,6 @@ buda_deposit_history: List[Dict] = [
         'fee': ['0.0', 'BTC']}
     ]
 
-
 buda_withdrawal_response = {
             'id': 'VWBwmE',
             'uuid': '9803d6c9-2aa1-459e-8b27-bec08c35709a',
@@ -1326,7 +1336,6 @@ buda_withdrawal_response = {
             'usd_amount': ['10.46', 'USD']
         }
 
-
 binance_withdrawal_response = {
     "id": "156e566fe1d04820a4b6b46d53a96570"
 }
@@ -1334,7 +1343,6 @@ binance_withdrawal_response = {
 binance_withdrawal_usdc_response = {
     'id': '7b32ca91132c45ca929ded6cdcf8ac74'
 }
-
 
 buda_withdrawal_usdc_response = {
     'id': 'bgRpYj',

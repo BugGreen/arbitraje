@@ -47,16 +47,22 @@ Retrieve the minimum required amount for the current market (`base_currency-quot
 ---
 
 ### 3. `get_price_difference() -> float`
-Calculates the **price difference** between the two exchanges in percentage. (Currently **pending** further logic 
-refinement.)
+Retrieve the order book from the low-liquidity exchange and compute a price difference (%)
+        relative to `high_liquidity_price`.
 
-- **Parameters**  
-  - *(none)*
-- **Returns**  
-  - A `float` representing the difference in percentage (e.g. 0.5 for 0.5%).
+Workflow:
+  - 1) Call `get_order_book(...)` on the low-liquidity exchange; parse the resulting asks/bids.
+  - 2) If `arb_order.order_type` in [BUY_LIMIT, BUY_MARKET], use:
+       p_diff = (high_liquidity_price - lowest_ask) / lowest_ask
+     If `arb_order.order_type` in [SELL_LIMIT, SELL_MARKET], use:
+       p_diff = (highest_bid - high_liquidity_price) / high_liquidity_price
+  - 3) Return p_diff as a decimal fraction. For example, 0.05 means 5%.
 
-> **Note**: This method is **incomplete**; its calculation logic remains to be refined or updated based on actual 
-> pricing data from each exchange.
+  - **Parameters**  
+    - *`high_liquidity_price`*: The asset price on the high-liquidity exchange (float).
+    - *`arb_order`*: The `ArbitrageOrder` describing the operation type (BUY or SELL).
+  - **Returns**  
+    - A `float` representing the difference in percentage (e.g. 0.5 for 0.5%).
 
 ---
 

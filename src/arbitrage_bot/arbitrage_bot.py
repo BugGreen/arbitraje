@@ -62,19 +62,76 @@ class ArbitrageBot:
             raise ValueError(f"No minimum amount configured for market {market_name}")
         return min_amt
 
-    def get_price_difference(self) -> float:
+    def get_price_difference(self, high_liquidity_price: float, arb_order: "ArbitrageOrder") -> float:
         """
-        Calculates the price difference between the two exchanges in percentage.
+        Retrieve the order book from the low-liquidity exchange and compute a price difference (%)
+        relative to `high_liquidity_price`.
 
-        :return: The price difference in percentage.
+        Workflow:
+          1) Call `get_order_book(...)` on the low-liquidity exchange; parse the resulting asks/bids.
+          2) If `arb_order.order_type` in [BUY_LIMIT, BUY_MARKET], use:
+               p_diff = (highest_bid - high_liquidity_price) / high_liquidity_price
+             If `arb_order.order_type` in [SELL_LIMIT, SELL_MARKET], use:
+               p_diff = (high_liquidity_price - lowest_ask) / lowest_ask
+          3) Return p_diff as a decimal fraction. For example, 0.05 means 5%.
+
+        :param high_liquidity_price: The asset price on the high-liquidity exchange (float).
+        :param arb_order: The `ArbitrageOrder` describing the operation type (BUY or SELL).
+        :return: A float representing the price difference in decimal form (e.g. 0.05 = 5%).
+        :raises RuntimeError: If the order book is missing or invalid, or if top-level fields are missing.
         """
+        logger.info(
+            "Computing price difference with high_liquidity_price=%.6f for order_type=%s",
+            high_liquidity_price, arb_order.order_type.name
+        )
 
-        # ToDo: Adapt to real API calls
-        price_a = self.exchange_high_liquidity.get_price(self.base_currency, self.quote_currency)
-        price_b = self.exchange_low_liquidity.get_price(self.base_currency, self.quote_currency)
+        # 1) Fetch the order book from the low-liquidity exchange
+        response_data: Dict[str, Any] = self.exchange_low_liquidity.get_order_book()
+        if "order_book" not in response_data or not response_data["order_book"]:
+            raise RuntimeError("Missing 'order_book' in low-liquidity response.")
+        order_book = response_data["order_book"]
 
-        price_diff = abs(price_a - price_b) / min(price_a, price_b) * 100
-        return price_diff
+        asks = order_book.get("asks", [])
+        bids = order_book.get("bids", [])
+
+        if not asks or not bids:
+            raise RuntimeError("Order book is missing asks/bids data.")
+
+        # 2) Convert all asks/bids to floats, ensuring positivity
+        #    Then find the minimum ask, maximum bid
+        try:
+            float_asks = [float(ask[0]) for ask in asks]
+            float_bids = [float(bid[0]) for bid in bids]
+        except (ValueError, IndexError) as e:
+            logger.error("Failed to parse order book prices: %s", e)
+            raise RuntimeError("Invalid order book data: cannot parse asks/bids as floats.")
+
+        # Confirm all are > 0
+        if any(price <= 0 for price in float_asks + float_bids):
+            raise RuntimeError("Found non-positive price in the order book, which is invalid.")
+
+        # The true lowest ask is min(...)
+        lowest_ask = min(float_asks)
+        # The true highest bid is max(...)
+        highest_bid = max(float_bids)
+
+        # 3) Decide formula based on order_type
+        order_type_name = arb_order.order_type
+        if order_type_name in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
+            # p_diff = (high_liquidity_price - lowest_exchange_lowest_ask) / lowest_exchange_lowest_ask
+            p_diff = (high_liquidity_price - lowest_ask) / lowest_ask
+        elif order_type_name in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
+            # p_diff = (lowest_exchange_highest_bid - high_liquidity_price) / high_liquidity_price
+            p_diff = (highest_bid - high_liquidity_price) / high_liquidity_price
+        else:
+            logger.error("Unrecognized order type for price diff: %s", order_type_name)
+            return 0.0  # or raise an exception
+
+        logger.info(
+            "Computed price diff=%.4f for order_type=%s (lowest_ask=%.4f, highest_bid=%.4f, high_price=%.4f)",
+            p_diff, order_type_name, lowest_ask, highest_bid, high_liquidity_price
+        )
+        return p_diff
 
     def place_sub_orders(self, sub_orders: List[Dict[str, Any]], arb_order: ArbitrageOrder) -> \
             Union[List[Dict[str, Any]], Dict[str, Any]]:
@@ -644,10 +701,10 @@ class ArbitrageBot:
         :return: None (raises or logs if there's an issue).
         """
         # 1. Decide sender / receiver
-        if arb_order.order_type.name in ("BUY_LIMIT", "BUY_MARKET"):
+        if arb_order.order_type in (OrderType.BUY_LIMIT, OrderType.BUY_MARKET):
             sender = self.exchange_low_liquidity
             receiver = self.exchange_high_liquidity
-        elif arb_order.order_type.name in ("SELL_LIMIT", "SELL_MARKET"):
+        elif arb_order.order_type in (OrderType.SELL_LIMIT, OrderType.SELL_MARKET):
             sender = self.exchange_high_liquidity
             receiver = self.exchange_low_liquidity
         else:
@@ -756,10 +813,10 @@ class ArbitrageBot:
         :return: Bool indicating success/failure of the entire operation.
         """
         # 1. Decide sender / receiver
-        if arb_order.order_type.name in ("BUY_LIMIT", "BUY_MARKET"):
+        if arb_order.order_type in (OrderType.BUY_LIMIT, OrderType.BUY_MARKET):
             sender = self.exchange_high_liquidity
             receiver = self.exchange_low_liquidity
-        elif arb_order.order_type.name in ("SELL_LIMIT", "SELL_MARKET"):
+        elif arb_order.order_type in (OrderType.SELL_LIMIT, OrderType.SELL_MARKET):
             sender = self.exchange_low_liquidity
             receiver = self.exchange_high_liquidity
         else:
