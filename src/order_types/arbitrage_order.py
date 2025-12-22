@@ -1,6 +1,7 @@
 from src.order_types.order import Order
 import logging
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Callable
+from src.order_types.encoders import Profit, OrderType, CurrencyOfInterest
 
 logger = logging.getLogger(__name__)
 
@@ -11,33 +12,114 @@ class ArbitrageOrder(Order):
         base_currency: str,
         quote_currency: str,
         amount: float,
+        currency_of_interest: CurrencyOfInterest,
+        order_type: OrderType,
         price: Optional[float] = None,
         status: str = 'pending',
         trades: Optional[List[Dict]] = None,
-        order_type: Optional[str] = None,
-        original_amount: float = 0.0
+        original_amount: float = 0.0,
     ):
         super().__init__(base_currency, quote_currency, amount, price, status, trades, order_type)
 
-        # The original total amount we aim to arbitrage
-        self.original_amount = original_amount or amount
-        # dynamic attributes for low-liquidity side
-        self.traded_amount_low_liquidity = 0.0
-        self.pending_amount_low_liquidity = self.original_amount  # Initially the entire original amount is pending
         # TODO: Se puede adicionar otro atributo que guarde lo que se tradeo en fiat, usando la respuesta
         # TODO: de get_order_states con la llave "exchanged_amount"
-        # Potential future logic for high-liquidity side if needed
-        # self.traded_amount_high_liquidity = 0.0
-        # self.pending_amount_high_liquidity = self.original_amount
-        # Dynamic tracking of how much we traded on each exchange
-        self.traded_amount_high_liquidity = 0.0
 
-    def update_low_liquidity_traded(self, traded_delta: float) -> None:
+        # The original total amount we aim to arbitrage
+        self.original_amount = original_amount or amount
+
+        # Dynamic attributes Low-liquidity side
+        self.pending_amount_low_liquidity = self.original_amount  # Initially the entire original amount is pending
+        self.traded_quote_amount_low_liquidity: float = 0.0
+        # This is how much has actually been traded (sub-orders filled) on the low-liquidity exchange
+
+        # High-liquidity side
+        self.traded_amount_high_liquidity: float = 0.0
+        # This accumulates how much has actually been executed on the high-liquidity side
+
+        # This is the portion that is "ready to be offset" on the high-liquidity side
+        # after it was successfully traded on the low-liquidity side:
+        self._pending_quote_amount_high_liquidity: float = 0.0
+        self._pending_base_amount_high_liquidity: float = 0.0
+
+        # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
+        self.currency_of_interest = currency_of_interest
+
+        self.order_type = order_type
+
+        if self.currency_of_interest == CurrencyOfInterest.QUOTE:
+            self.profit = Profit(0, self.quote_currency)
+        if self.currency_of_interest == CurrencyOfInterest.BASE:
+            self.profit = Profit(0, self.base_currency)
+
+        # Optionally, define a callback that gets invoked whenever pending_amount_high_liquidity changes.
+        # e.g. def on_pending_high_liquidity_update(arb_order, delta): ...
+        self.on_pending_high_liquidity_updated: Optional[Callable[['ArbitrageOrder', float], None]] = None
+
+    @property
+    def pending_amount_high_liquidity(self) -> float:
+        return self._pending_quote_amount_high_liquidity
+
+    def update_low_liquidity_traded(self, traded_quote_delta: float, traded_base_delta: float) -> None:
         """
-        Add the traded_delta to the 'traded_amount_low_liquidity'.
-        Could be called after each partial fill or sub-order fill on the low-liquidity exchange.
+        Called whenever a sub-order on the low-liquidity exchange is traded or partially traded.
+
+        Add traded_quote_delta to self.traded_amount_low_liquidity,
+        and also set the same traded_quote_delta to `_pending_quote_amount_high_liquidity`,
+        and set  traded_base_delta to `_pending_base_amount_high_liquidity`.
+        meaning that exact portion is now ready to be offset on the high-liquidity side.
         """
-        self.traded_amount_low_liquidity += traded_delta
+        self.traded_quote_amount_low_liquidity += traded_quote_delta
+        self.pending_amount_low_liquidity -= traded_quote_delta
+        # Move that same traded_delta to pending
+        self._pending_quote_amount_high_liquidity += traded_quote_delta
+        self._pending_base_amount_high_liquidity += traded_base_delta
+
+        if self.on_pending_high_liquidity_updated is not None:
+            self.on_pending_high_liquidity_updated(self, traded_quote_delta)
+
+    def get_pending_quote_amount_high_liquidity(self):
+        return self._pending_quote_amount_high_liquidity
+
+    def get_pending_base_amount_high_liquidity(self):
+        return self._pending_base_amount_high_liquidity
+
+    def fulfill_high_liquidity(self, traded_quote_delta: float, traded_base_delta: float) -> None:
+        """
+        Called after the high-liquidity side is traded. We reduce the pending amounts (expressed in quote and base
+        currencies) by 'traded_quote_delta' and "traded_base_delta'.
+        Then increase self.traded_amount_high_liquidity by the same.
+        """
+        # Suppose we do not allow partial pending to remain.
+        # But if partial is possible, you'd do a min operation
+        self._pending_quote_amount_high_liquidity -= traded_quote_delta
+        self._pending_base_amount_high_liquidity -= traded_base_delta
+
+        self.traded_amount_high_liquidity += traded_quote_delta
+
+    def update_profit(self) -> None:
+        """
+        Calculates the profit based on the order type and the amount of interest.
+        WARNING: ALWAYS use after `fulfill_high_liquidity` method.
+        NOTE: An order can be either profitable or non-profitable, therefore attribute `profit` might have neg values
+        """
+        pending_quote_amount = self._pending_quote_amount_high_liquidity
+        pending_base_amount = self._pending_base_amount_high_liquidity
+        if self.order_type == OrderType.BUY_LIMIT:
+            if self.currency_of_interest == CurrencyOfInterest.QUOTE:
+                self.profit = Profit(self.profit.amount - pending_quote_amount, self.quote_currency)
+
+            elif self.currency_of_interest == CurrencyOfInterest.BASE:
+                self.profit = Profit(self.profit.amount + pending_base_amount, self.base_currency)
+
+            self._pending_quote_amount_high_liquidity, self._pending_base_amount_high_liquidity = 0, 0
+
+        elif self.order_type == OrderType.SELL_LIMIT:
+            if self.currency_of_interest == CurrencyOfInterest.QUOTE:
+                pass
+            if self.currency_of_interest == CurrencyOfInterest.BASE:
+                pass
+
+        # TODO: Extend to SELL_MARKET and BUY _MARKET
 
     def update_high_liquidity_traded(self, traded_delta: float) -> None:
         """
@@ -51,7 +133,7 @@ class ArbitrageOrder(Order):
         are close (within `threshold`) to the original_amount.
         """
         # Example criterion: each side is at least (original_amount - threshold)
-        if (abs(self.traded_amount_low_liquidity - self.original_amount) <= threshold and
+        if (abs(self.traded_quote_amount_low_liquidity - self.original_amount) <= threshold and
             abs(self.traded_amount_high_liquidity - self.original_amount) <= threshold):
             return True
         return False

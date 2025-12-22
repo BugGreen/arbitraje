@@ -3,8 +3,9 @@ from src.exchange_api.exchange_factory import ExchangeFactory
 from src.arbitrage_bot.order import Order
 from src.exchange_api.binance_proxy import BinanceProxy
 from src.exchange_api.buda_proxy import BudaProxy
-from src.arbitrage_bot.constants import MIN_AMOUNT_REQUIREMENTS
+from src.arbitrage_bot.constants import MIN_AMOUNT_REQUIREMENTS, MIN_AMOUNT_BINANCE_REQUIREMENTS
 from src.order_types.arbitrage_order import ArbitrageOrder
+from src.order_types.encoders import OrderType, CurrencyOfInterest
 import logging
 import time
 
@@ -33,6 +34,7 @@ class ArbitrageBot:
         self.base_currency = base_currency
         self.quote_currency = quote_currency
         self.amount = amount
+        self.currency_of_interest = CurrencyOfInterest.QUOTE  # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
 
     @staticmethod
     def _create_exchange(exchange_name: str) -> Type[BinanceProxy or BudaProxy]:
@@ -118,6 +120,7 @@ class ArbitrageBot:
                 "message": str(e)
             }
 
+    # TODO: Ajustar a la nueva firma de _update_arbitrage_order_on_fill
     def place_sub_order_cancellations(self, sub_orders: List[Dict[str, Any]], arb_order: 'ArbitrageOrder') -> \
             List[Dict[str, Any]]:
         """
@@ -148,16 +151,11 @@ class ArbitrageBot:
         cancelled_orders_id = [order_id.get('order_id') for order_id in cancel_response['orders_diff']]
         logger.info("Exchange sub-order cancellation response: %s", cancel_response)
 
-        # For demonstration, we assume it returns a dict with "orders_diff" describing canceled orders.
-        # e.g. { "orders_diff": [ { "mode": "cancel", "order_id": 12345 }, ... ] }
-
-        # 3. (Optional) Re-check final states. Some sub-orders might become 'canceled_and_traded'.
-        #    We'll do a single call to get_order_states or we could poll until states are stable.
         states_response = self.exchange_low_liquidity.get_order_states(self.base_currency, self.quote_currency)
         all_states = states_response.get("orders", [])
 
-        # 4. If any sub-order is 'canceled_and_traded' or partial, update the ArbitrageOrder object
-        #    using our existing `_update_arbitrage_order_on_fill` logic or a variation.
+        # 3. If any sub-order is 'canceled_and_traded' or partial, update the ArbitrageOrder object
+        #    using `_update_arbitrage_order_on_fill`
         standardized_cancel_responses = []
         for st in all_states:
             st_id = st.get("id")
@@ -180,7 +178,6 @@ class ArbitrageBot:
                 }
                 standardized_cancel_responses.append(sub_order_cancelled)
 
-        # 5. Return the cancel instructions for reference
         return standardized_cancel_responses
 
     @staticmethod
@@ -297,12 +294,14 @@ class ArbitrageBot:
                             # Potentially the exchange server might return a 'traded_amount' field or similar
                             # to indicate how much was actually traded in this sub-order fill.
                             # We'll fetch that and update `arb_order`.
-                            traded_amount = float(st.get("traded_amount", 0.0)[0])
+                            base_currency_traded_amount = float(st.get("traded_amount", 0.0)[0])
+                            quote_currency_traded_amount = float(st.get("total_exchanged", 0.0)[0])
 
                             self._update_arbitrage_order_on_fill(
                                 sub_order_dict=ro,
                                 new_state=st_state,
-                                traded_amount=traded_amount,
+                                traded_base_amount=base_currency_traded_amount,
+                                traded_quote_amount=quote_currency_traded_amount,
                                 arb_order=arb_order
                             )
 
@@ -313,32 +312,35 @@ class ArbitrageBot:
                 logger.info("All 'received' sub-orders transitioned to another state.")
                 break
 
-    @staticmethod
-    def _update_arbitrage_order_on_fill(sub_order_dict: Dict[str, Any], new_state: str,
-                                        traded_amount: float, arb_order: 'ArbitrageOrder') -> None:
+    def _update_arbitrage_order_on_fill(self, sub_order_dict: Dict[str, Any], new_state: str,
+                                        traded_base_amount: float, traded_quote_amount: float,
+                                        arb_order: 'ArbitrageOrder') -> None:
         """
         Update the ArbitrageOrder's dynamic attributes (e.g. traded_amount_low_liquidity,
         pending_amount_low_liquidity) whenever a sub-order transitions to a 'traded' state.
 
         :param sub_order_dict: The sub-order that changed states.
         :param new_state: The new state (e.g., 'traded', 'canceled_and_traded', 'partially_traded').
-        :param traded_amount: The float indicating how much was actually traded on the low-liquidity side.
+        :param traded_base_amount: The float indicating how much was actually traded on the low-liquidity side
+        of the base currency.
+        :param traded_quote_amount: The float indicating how much was actually traded on the low-liquidity side
+        of the qupte currency.
         :param arb_order: The ArbitrageOrder object to update.
         """
-        # For demonstration, we check if the new_state is in a set of "traded" states
-        # and then update the traded_amount.
+
+        traded_amount = traded_quote_amount  # The traded amount is expressed in quote_currency, bcs usually it is FIAT
         if new_state in ("traded", "canceled_and_traded", "pending") and traded_amount > 0:
             logger.info(
                 "Sub-order %s changed state to %s with traded_amount=%.4f. Updating ArbitrageOrder.",
                 sub_order_dict.get("id"), new_state, traded_amount
             )
             # Increase the traded_amount_low_liquidity
-            arb_order.traded_amount_low_liquidity += traded_amount
-
             # Recompute pending_amount_low_liquidity = original_amount - traded_amount_low_liquidity
-            arb_order.pending_amount_low_liquidity = arb_order.original_amount - arb_order.traded_amount_low_liquidity
-
+            # Update the pending amount to trade in the high liquidity exchange
+            arb_order.update_low_liquidity_traded(traded_quote_delta=traded_quote_amount,
+                                                  traded_base_delta=traded_base_amount)
             # If partial, we keep trying. If fully filled, we might see if pending_amount is close to zero.
+            self.execute_opposite_order_high_liquidity_exchange(arb_order)  # TODO: El side se debe actualizar automaticamente
 
         else:
             logger.info(
@@ -363,6 +365,63 @@ class ArbitrageBot:
                 sub_orders_info[str(order.get("id"))] = order
 
         return sub_orders_info
+
+    def execute_opposite_order_high_liquidity_exchange(self, arb_order: 'ArbitrageOrder') \
+            -> Union[Dict[str, Any], Dict[str, Any]]:
+        """
+        Synchronously place a MARKET order on the high-liquidity exchange for the
+        arb_order.pending_amount_high_liquidity, then call arb_order.fulfill_high_liquidity(...)
+        with the executed quantity.
+        """
+        symbol = arb_order.base_currency.upper() + arb_order.quote_currency.upper()
+
+        to_trade_quote_currency = arb_order.get_pending_quote_amount_high_liquidity()
+        to_trade_base_currency = arb_order.get_pending_base_amount_high_liquidity()  # Pending amount, in base currency
+
+        if arb_order.order_type in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
+            side = "SELL"
+        elif arb_order.order_type in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
+            side = "BUY"
+        if to_trade_quote_currency <= MIN_AMOUNT_BINANCE_REQUIREMENTS.get(symbol, 0.0):
+            logger.info("No pending amount to trade in the high-liquidity side.")
+            return {"msg": "No pending amount to trade."}
+
+        logger.info("Placing MARKET order on high-liquidity exchange: side=%s, qty=%.4f", side, to_trade_quote_currency)
+        try:
+            if self.currency_of_interest == CurrencyOfInterest.QUOTE:  # Want to accumulate quote currency
+                order_resp = self.exchange_high_liquidity.new_order(
+                    base_currency=self.base_currency,
+                    quote_currency=self.quote_currency,
+                    side=side.upper(),  # TODO: AUTOMATE with an attribute from ArbitrageOrder
+                    order_type='MARKET',
+                    quantity=round(to_trade_base_currency, 5),  # Amount expressed in base currency
+                )
+            elif self.currency_of_interest == CurrencyOfInterest.BASE:  # Want to accumulate base currency
+                order_resp = self.exchange_high_liquidity.new_order(
+                    base_currency=self.base_currency,
+                    quote_currency=self.quote_currency,
+                    side=side.upper(),  # Must be either `SELL` or `BUY`
+                    order_type='MARKET',
+                    quote_order_qty=to_trade_quote_currency,  # Amount expressed in quote currency
+                )
+
+            if "code" in order_resp and order_resp["code"] < 0:
+                logger.error("High-liquidity exchange error: %s", order_resp)
+                return order_resp
+
+            # Suppose successful response has "executedQty"
+            # TODO: Esto debe cambiar dependiendo de si se quiere ganar mas quote currency o base currency
+            executed_base_qty = float(order_resp.get("executedQty", 0.0))
+            execution_price = float(order_resp.get("fills", [0.0])[0].get("price", 0.0))
+            executed_quote_qty = round(executed_base_qty * execution_price, 5)  # Turn it back to quote currency
+            arb_order.fulfill_high_liquidity(executed_quote_qty, executed_base_qty)
+            arb_order.update_profit()
+
+            return order_resp
+
+        except Exception as e:
+            logger.error("Error placing order on high-liquidity exchange: %s", e, exc_info=True)
+            return {"code": -9999, "msg": str(e)}
 
     @staticmethod
     def execute_opposite_order_on_target_exchange(amount: float, side: str, price: float) -> Dict[str, Any]:

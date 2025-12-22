@@ -99,3 +99,76 @@ expected_sub_orders_cancelled_response = [
             }
         ]
 
+placed_sub_orders_to_execute_in_binance = [
+            {
+                "id": 130000,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.2",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "5.0",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "200.0",
+                    "USDC"
+                ]
+            },
+            {
+                "id": 130001,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.8",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "0.0",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "0.0",
+                    "USDC"
+                ]
+            }
+        ]
+
+placed_sub_orders_to_execute_in_binance_multiple_profit = [
+            {
+                "id": 130000,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.5",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "0.5",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "500.0",
+                    "USDC"
+                ]
+            },
+            {
+                "id": 130001,
+                "status": "traded",
+                "error_message": "null",
+                "amount": [
+                    "0.5",
+                    "BTC"
+                ],
+                "traded_amount": [
+                    "0.5",
+                    "BTC"
+                ],
+                "total_exchanged": [
+                    "500.0",
+                    "USDC"
+                ]
+            }
+        ]

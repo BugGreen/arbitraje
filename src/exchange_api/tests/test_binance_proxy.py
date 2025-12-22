@@ -1,5 +1,7 @@
 from src.exchange_api.binance_proxy import BinanceProxy
+from src.exchange_api.tests import constants
 from unittest.mock import patch, Mock
+from json import dumps as jprint
 
 
 def test_binance_proxy_initialization():
@@ -167,6 +169,7 @@ def test_new_order_success(mock_post):
     mock_response.json.return_value = expected_response
     mock_post.return_value = mock_response
 
+
     # Call the new_order function
     response = binance.new_order(
         base_currency=base_currency,
@@ -177,6 +180,7 @@ def test_new_order_success(mock_post):
         quantity=quantity,
         time_in_force=time_in_force
     )
+    print(jprint(response, indent=2))
 
     # Test if the response contains the expected values
     assert response["symbol"] == symbol
@@ -186,6 +190,90 @@ def test_new_order_success(mock_post):
     assert float(response["origQty"]) == quantity
     assert response["status"] == "NEW"
     assert response["timeInForce"] == time_in_force
+
+    # Ensure the API was called correctly
+    mock_post.assert_called_once()
+
+
+@patch("requests.post")
+def test_new_order_market_success(mock_post):
+
+    # Set up the Binance instance or class
+    binance = BinanceProxy()
+
+    binance.api_key = "test_api_key"
+    binance.api_secret = "test_api_secret"
+
+    # Sample order parameters
+    base_currency = 'BTC'
+    quote_currency = 'USDC'
+    symbol = base_currency + quote_currency
+    side = 'BUY'
+    order_type = 'MARKET'
+    quote_order_qty = 9
+
+    # Mock response from Binance API
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = constants.binance_successful_market_order_mock_response
+    mock_post.return_value = mock_response
+
+    # Call the new_order function for a `MAKER` type order
+    response = binance.new_order(base_currency=base_currency,
+                                 quote_currency=quote_currency,
+                                 side=side,
+                                 order_type=order_type,
+                                 quote_order_qty=quote_order_qty)
+
+    # Test if the response contains the expected values
+    assert response["symbol"] == symbol
+    assert response["side"] == side
+    assert response["type"] == order_type
+    assert response["origQuoteOrderQty"] == f"{quote_order_qty}.00000000"
+    assert response["status"] == "FILLED"
+
+    # Ensure the API was called correctly
+    mock_post.assert_called_once()
+
+
+@patch("requests.post")
+def test_new_sell_order_market_success(mock_post):
+
+    # This market order is created using quantity instead of quote_order_qty
+    binance = BinanceProxy()
+
+    binance.api_key = "test_api_key"
+    binance.api_secret = "test_api_secret"
+
+    # Sample order parameters
+    base_currency = 'BTC'
+    quote_currency = 'USDC'
+    symbol = base_currency + quote_currency
+    side = 'SELL'
+    order_type = 'MARKET'
+    quote_order_qty = round(12 / 98000, 5)
+
+    # Mock response from Binance API
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = constants.binance_successful_sell_market_order_mock_response
+    mock_post.return_value = mock_response
+
+    # Call the new_order function for a `MAKER` type order
+    response = binance.new_order(base_currency=base_currency,
+                                 quote_currency=quote_currency,
+                                 side=side,
+                                 order_type=order_type,
+                                 quantity=quote_order_qty)
+
+    # Test if the response contains the expected values
+    assert response["symbol"] == symbol
+    assert response["side"] == side
+    assert response["type"] == order_type
+    assert response["origQty"] == f"{quote_order_qty}000"
+    assert response["status"] == "FILLED"
 
     # Ensure the API was called correctly
     mock_post.assert_called_once()
