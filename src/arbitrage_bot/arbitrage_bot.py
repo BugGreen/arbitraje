@@ -404,10 +404,11 @@ class ArbitrageBot:
                 if price_difference >= self.low_liquidity_taker_fee + self.price_diff_threshold:
                     return price  # Creation of profitable market order
                 else:
-                    if arb_order.order_type is OrderType.SELL_LIMIT:
-                        return price * ((1 + 0.001) / (1 + self.price_diff_threshold))
-                    elif arb_order.order_type is OrderType.BUY_LIMIT:
-                        return price * ((1 - 0.001) / (1 - self.price_diff_threshold))
+                    if cumulative_volume >= min_volume:
+                        if arb_order.order_type is OrderType.SELL_LIMIT:
+                            return price * ((1 + 0.001) / (1 + self.price_diff_threshold))
+                        elif arb_order.order_type is OrderType.BUY_LIMIT:
+                            return price * ((1 - 0.001) / (1 - self.price_diff_threshold))
 
             elif cumulative_volume >= min_volume:
                 return price
