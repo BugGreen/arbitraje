@@ -1007,3 +1007,71 @@ class TestArbitrageBot(unittest.TestCase):
         # Check that LN invoice was created once
         # binance_withdrawal_history_mock.assert_called_once()
         assert transfer_completion
+
+    @patch.object(BinanceProxy, 'create_lightning_invoice',
+                  return_value=test_api_constants.binance_standardized_ln_invoice_00995)
+    @patch.object(BudaProxy, 'create_withdraw_request',
+                  return_value=test_api_constants.buda_withdrawal_response)
+    @patch.object(BudaProxy, 'get_withdraw_history',
+                  return_value=test_api_constants.buda_withdrawal_history)
+    @patch.object(BinanceProxy, 'create_withdraw_request',
+                  return_value=test_api_constants.binance_withdrawal_usdc_response)
+    @patch.object(BinanceProxy, 'get_withdraw_history',
+                  return_value=test_api_constants.binance_withdrawal_history_USDC)
+    def test_funds_transfer_buy_order(self,
+                            binance_invoice_creation_mock,
+                            buda_withdrawal_response_mock,
+                            buda_withdrawal_history_mock,
+                            binance_withdrawal_response_mock,
+                            binance_withdrawal_history_mock):
+        """
+        Suppose we have a BUY_LIMIT scenario with 0.000095 BTC traded on the low-liquidity side.
+        We expect a BTC transfer from the low-liquidity side, and a USDC transfer from the high-liquidity side.
+        """
+
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=1.0,
+            original_amount=24000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+        arb_order.traded_base_amount_low_liquidity = 0.000095
+        arb_order.traded_quote_amount_low_liquidity = 20
+
+        assert self.bot.funds_transfer(arb_order)
+
+    @patch.object(BudaProxy, 'create_lightning_invoice',
+                  return_value=test_api_constants.buda_ln_invoice_001)
+    @patch.object(BinanceProxy, 'create_withdraw_request',
+                  return_value=test_api_constants.binance_withdrawal_response)
+    @patch.object(BinanceProxy, 'get_withdraw_history',
+                  return_value=test_api_constants.binance_withdrawal_history)
+    @patch.object(BudaProxy, 'create_withdraw_request',
+                   return_value=test_api_constants.buda_withdrawal_usdc_response)
+    @patch.object(BudaProxy, 'get_withdraw_history',
+                  return_value=test_api_constants.buda_usdc_withdrawal_history)
+    def test_funds_transfer_sell_order(self,
+                                       buda_invoice_creation_mock,
+                                       binance_withdrawal_response_mock,
+                                       binance_withdrawal_history_mock,
+                                       buda_withdrawal_response_mock,
+                                       buda_withdrawal_history_usdc):
+        """
+        Suppose we have a SELL_LIMIT scenario with 0.000095 BTC traded on the low-liquidity side.
+        We expect a BTC transfer from the high-liquidity side, and a USDC transfer from the low-liquidity side.
+        """
+
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=1.0,
+            original_amount=24000.0,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        arb_order.traded_base_amount_low_liquidity = 0.000095
+        arb_order.traded_quote_amount_low_liquidity = 20
+
+        assert self.bot.funds_transfer(arb_order)

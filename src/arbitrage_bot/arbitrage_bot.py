@@ -1,4 +1,5 @@
 from typing import Optional, Type, Dict, List, Any, Union
+from concurrent.futures import ThreadPoolExecutor
 from src.exchange_api.exchange_factory import ExchangeFactory
 from src.arbitrage_bot.order import Order
 from src.exchange_api.binance_proxy import BinanceProxy
@@ -750,8 +751,47 @@ class ArbitrageBot:
                     "status": "sub_orders_canceled"
                 }
 
+    def funds_transfer(self, arb_order: 'ArbitrageOrder') -> bool:
+        """
+        Execute both btc_transfer and quote_currency_transfer in parallel, so they don't block each other.
+        If both succeed, return True, else False.
+
+        :param arb_order: The ArbitrageOrder object, containing the relevant
+                          traded amounts and order type.
+        :return: True if both BTC and quote currency transfers succeed, False otherwise.
+        """
+        logger.info("Initiating parallel funds transfer for order_type=%s", arb_order.order_type.name)
+
+        # We'll define local functions so we can pass them to threads
+        def do_btc_transfer():
+            logger.debug("Starting btc_transfer...")
+            return self.btc_transfer(arb_order)
+
+        def do_quote_transfer():
+            logger.debug("Starting quote_currency_transfer...")
+            return self.quote_currency_transfer(arb_order)
+
+        # Use two threads: one for BTC, one for quote currency
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            btc_future = executor.submit(do_btc_transfer)
+            quote_future = executor.submit(do_quote_transfer)
+
+            logger.debug("Both transfers submitted; waiting for results...")
+
+            # Wait for both tasks to complete, then gather success flags
+            btc_success = btc_future.result()
+            quote_success = quote_future.result()
+
+        # Combine results
+        if btc_success and quote_success:
+            logger.info("All funds transferred successfully (BTC + quote).")
+            return True
+        else:
+            logger.warning("Some transfer(s) failed. btc_success=%s, quote_success=%s", btc_success, quote_success)
+            return False
+
     # TODO: Busacar la manera de paralelizar el proceso por cada chunk
-    def btc_transfer(self, arb_order: 'ArbitrageOrder') -> bool:
+    def btc_transfer(self, arb_order: ArbitrageOrder) -> bool:
         """
         Synchronously transfer BTC between exchanges based on the arbitrage order's type.
         If order_type in [BUY_LIMIT, BUY_MARKET], we transfer from low-liquidity to high-liquidity.
@@ -843,7 +883,7 @@ class ArbitrageBot:
             logger.error("Some BTC chunks failed to transfer or confirm.")
         return all_success
 
-    def quote_currency_transfer(self, arb_order: 'ArbitrageOrder') -> bool:
+    def quote_currency_transfer(self, arb_order: ArbitrageOrder) -> bool:
         """
         Synchronously transfer the quote currency between exchanges based on the arbitrage order's type.
         If order_type in [BUY_LIMIT, BUY_MARKET], we transfer from high-liquidity to low-liquidity.
