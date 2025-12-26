@@ -54,7 +54,6 @@ class ArbitrageOrder(Order):
         if self.currency_of_interest == CurrencyOfInterest.BASE:
             self.profit = Profit(0, self.base_currency)
 
-        # For testing purposes now:
         self.price_difference: float = 0
         self.low_liquidity_price: float = 0
         self.high_liquidity_price: float = 0
@@ -65,6 +64,7 @@ class ArbitrageOrder(Order):
         self.sub_orders_info = None  # Info about the sub_orders that conforms the amount to trade
         self.sub_orders_ids: List[str] = []
         self.order_completed: bool = False
+        self.order_number: int = 1  # The number of the current order (Add one when completed)
 
     def update_sub_orders_info(self, sub_orders_info: dict):
         """
@@ -160,6 +160,7 @@ class ArbitrageOrder(Order):
         """
         if order_completion:
             # Global attributes
+            self.order_number += 1  # Star a new order
             self.sub_orders_info: List = []
             self.sub_orders_ids: List = []
             self.order_completed: bool = False

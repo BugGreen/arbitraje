@@ -35,13 +35,20 @@ class ArbitrageUI:
         # Panel for live market data
         self.market_data_panel = Panel("")
 
-        # Progress bar for arbitrage order progress
-        self.progress = Progress(
+        # Progress bar for arbitrage orders progress
+        self.progress_one = Progress(
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%")
         )
-        self.progress_task = self.progress.add_task("Order Progress", total=100)
+        self.progress_task_one = self.progress_one.add_task("Order Progress", total=100)
+
+        self.progress_two = Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%")
+        )
+        self.progress_task_two = self.progress_two.add_task("Order Progress", total=100)
 
         # Control flags for UI/flow
         self._stop_requested: bool = False
@@ -128,7 +135,7 @@ class ArbitrageUI:
         self.market_data_panel = Panel(table, title="Market Data")
         self.console.print(self.market_data_panel)
 
-    def update_progress(self, arb_order: ArbitrageOrder) -> None:
+    def update_progress(self, arb_order: ArbitrageOrder, progress: Progress, progress_task) -> None:
         """
         Update the progress bar to show the arbitrage order completion progress.
 
@@ -137,23 +144,23 @@ class ArbitrageUI:
         total = arb_order.original_amount
         completed = arb_order.original_amount - arb_order.pending_amount_low_liquidity
         progress_percentage = (completed / total) * 100 if total > 0 else 0.0
-        self.progress.update(self.progress_task, completed=progress_percentage)
-        progress_panel = Panel(self.progress, title="Arbitrage Progress",
-                               subtitle=f"{completed:.2f} / {total:.2f} {arb_order.quote_currency} traded.")
+        progress.update(progress_task, completed=progress_percentage)
+        progress_panel = Panel(progress, title=f"{arb_order.order_type.name} No. {arb_order.order_number}",
+                               subtitle=f"{completed:.2f} of {total:.2f} {arb_order.quote_currency} traded.")
         self.console.print(progress_panel)
 
-    def display_ui(self, arb_order: ArbitrageOrder) -> None:
+    def display_ui(self, arb_orders: List[ArbitrageOrder]) -> None:
         """
         Continuously update the UI with market data and trade history, and listen for user commands.
         Market data and progress are updated every second; trade history is updated whenever new trade events occur.
 
-        :param arb_order: The current ArbitrageOrder instance.
+        :param arb_orders: The current ArbitrageOrder instance.
         """
 
-        trade_history_table: Table = self.create_trade_record_table_placeholder(arb_order)
+        trade_history_table: Table = self.create_trade_record_table_placeholder(arb_orders[0])
 
         with self.lock:
-            self.arb_order = arb_order
+            self.arb_order = arb_orders
 
         # Start the command listener in a separate thread.
         command_thread = threading.Thread(target=self.listen_for_commands, daemon=True)
@@ -168,11 +175,16 @@ class ArbitrageUI:
                 if not self._pause_requested:
                     self.console.clear()
                     # Update market data panel and progress bar
-                    self.update_market_data(arb_order)
-                    self.update_progress(arb_order)
+                    self.update_market_data(arb_orders[0])
+
                     # Process trade events and update trade history table
                     self.process_trade_events(trade_history_table)
                     self.console.print(trade_history_table)
+                    if len(arb_orders) == 2:
+                        self.update_progress(arb_orders[0], self.progress_one, self.progress_task_one)
+                        self.update_progress(arb_orders[1], self.progress_two, self.progress_task_two)
+                    else:
+                        self.update_progress(arb_orders[0], self.progress_one, self.progress_task_one)
                     self.console.print(
                         "Enter command (s: stop or p: pause).")
 

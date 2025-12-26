@@ -128,8 +128,13 @@ class ArbitrageBot:
                 arb_order=arb_order
             )
 
-    def run_arbitrage_flow(self, arb_orders: ArbitrageOrder, mode: str = "infinite_loop", debug_mode: bool = False,
-                           sleep_interval: float = 0.8) -> None:
+    def run_arbitrage_flow(
+            self,
+            arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]],
+            mode: str = "infinite_loop",
+            debug_mode: bool = False,
+            sleep_interval: float = 0.8
+    ) -> None:
         """
         Execute the arbitrage flow using REST calls to fetch the high-liquidity price.
         The flow is:
@@ -159,7 +164,7 @@ class ArbitrageBot:
         first_iteration: bool = True
         # Start the UI in a separate thread if debug_mode is off
         if not debug_mode:
-            ui_thread = threading.Thread(target=self.ui.display_ui, args=(arb_orders[0],))
+            ui_thread = threading.Thread(target=self.ui.display_ui, args=(arb_orders,))
             ui_thread.daemon = True  # Ensures it ends when the main program ends
             ui_thread.start()
 
