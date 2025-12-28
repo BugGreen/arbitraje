@@ -411,3 +411,55 @@ placed_sub_orders_to_execute_in_binance_with_one_less_than_minimum = [
                 ]
             }
         ]
+
+place_sub_orders_sell_limit_flow = [
+    {
+        'id': 1366131842,
+        'status': 'pending',
+        'error_message': None,
+        'amount': ['0.00066094', 'BTC'],
+        'traded_amount': ['0.0', 'BTC'],
+        'total_exchanged': ['0.0', 'USDC']
+    },
+    {
+        'id': 1366131843,
+        'status': 'pending',
+        'error_message': None,
+        'amount': ['0.00028306', 'BTC'],
+        'traded_amount': ['0.0', 'BTC'],
+        'total_exchanged': ['0.0', 'USDC']
+    }
+]
+
+batch_cancellation_sell_limit_flow = {
+    'orders_diff': [{'mode': 'cancel', 'order_id': 1366137957},
+                    {'mode': 'cancel', 'order_id': 1366137959}]
+}
+
+new_order_binance_sell_limit_flow = {
+    'symbol': 'BTCUSDC',
+    'orderId': 3956645155,
+    'orderListId': -1,
+    'clientOrderId': 'w21bG9cLBFlxsex9njFofN',
+    'transactTime': 1738257610589,
+    'price': '0.00000000',
+    'origQty': '0.00010000',
+    'executedQty': '0.00010000',
+    'origQuoteOrderQty': '0.00000000',
+    'cummulativeQuoteQty': '10.53887700',
+    'status': 'FILLED',
+    'timeInForce': 'GTC',
+    'type': 'MARKET',
+    'side': 'BUY',
+    'workingTime': 1738257610589,
+    'fills': [
+        {
+            'price': '105388.77000000',
+            'qty': '0.00010000',
+            'commission': '0.00000010',
+            'commissionAsset': 'BTC',
+            'tradeId': 133136175
+        }
+    ],
+    'selfTradePreventionMode': 'EXPIRE_MAKER'
+}
