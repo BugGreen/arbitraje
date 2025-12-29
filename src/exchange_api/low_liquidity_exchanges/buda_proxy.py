@@ -1,14 +1,16 @@
 # exchange_api/buda_proxy.py
-import base64
+from exchange_api.low_liquidity_exchanges.base_low_liquidity_exchange import BaseLowLiquidityExchange
+from src.exchange_api.utils import load_api_keys, handle_api_response
+from typing import List, Dict, Optional, Union, Any
 import requests
+import logging
+import hashlib
+import inspect
+import base64
+import json
 import time
 import hmac
-import hashlib
-from typing import List, Dict, Optional, Union, Any
-from exchange_api.low_liquidity_exchanges.base_low_liquidity_exchange import BaseLowLiquidityExchange
-from src.exchange_api.utils import load_api_keys
-import json
-import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -205,13 +207,15 @@ class BudaProxy(BaseLowLiquidityExchange):
         headers = self._sign_request(method="GET", path=endpoint_path)
 
         # Make the API call to retrieve the order book
-        response = requests.get(url, headers=headers)
 
-        # Check for successful response
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.get(url, headers=headers)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching order book request from Buda: {e}")
+            raise
 
     def get_market_info(self, base_currency: str, quote_currency: str) -> Dict:
         """
@@ -231,14 +235,14 @@ class BudaProxy(BaseLowLiquidityExchange):
         # Sign the request (assuming _sign_request can handle GET without body)
         headers = self._sign_request(method="GET", path=endpoint_path)
 
-        # Make the API call to retrieve the order book
-        response = requests.get(url, headers=headers)
-
-        # Check for successful response
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.get(url, headers=headers)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching market information request from Buda: {e}")
+            raise
 
     def _get_withdraw_or_deposit_history(self, coin: str, direction: str) -> Dict[str, List[Dict]]:
         """
@@ -257,14 +261,14 @@ class BudaProxy(BaseLowLiquidityExchange):
         # Sign the request (assuming _sign_request can handle GET without body)
         headers = self._sign_request(method="GET", path=endpoint_path)
 
-        # Make the API call to retrieve the order book
-        response = requests.get(url, headers=headers)
-
-        # Check for successful response
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.get(url, headers=headers)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching withdraw/deposit history request from Buda: {e}")
+            raise
 
     def get_withdraw_history(self, coin: str) -> List[Dict]:
         """
@@ -335,15 +339,17 @@ class BudaProxy(BaseLowLiquidityExchange):
         else:
             raise ValueError(f"Error coin {coin.upper()} is not supported")
 
-        # Handle the response
-        if response.status_code in [200, 201]:
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response: Dict = handle_api_response(response)
             if coin == 'btc':
-                response = response.json().get("invoice", {})
+                response = response.get("invoice", {})
             else:
-                response = response.json()
+                response = response
             return response
-        else:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching deposit address request from Buda: {e}")
+            raise
 
     def _create_altcoin_address(self, coin: str) -> str:
         """
@@ -357,13 +363,16 @@ class BudaProxy(BaseLowLiquidityExchange):
         # Authenticate the request
         headers = self._sign_request(method="POST", path=endpoint_path)
 
-        # Make the API call
-        response = requests.post(url, headers=headers)
         # Handle the response
-        if response.status_code in [200, 201]:
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.post(url, headers=headers)
+            # Use the standard response handler to handle errors and responses
+            handle_api_response(response)
             return response
-        else:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching {coin} address request from Buda: {e}")
+            raise
 
     def create_quote_currency_address(self,
                                       coin: str,
@@ -427,11 +436,16 @@ class BudaProxy(BaseLowLiquidityExchange):
         headers = self._sign_request(method="POST", path=endpoint_path, body=payload if payload else "")
 
         # Make the API call
-        response = requests.post(url, headers=headers, json=payload)
 
         # Handle the response
-        if response.status_code in [200, 201]:
-            invoice_info = response.json().get("invoice", {})
+
+        # Handle the response
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            # Use the standard response handler to handle errors and responses
+            response: Dict = handle_api_response(response)
+            invoice_info = response.get("invoice", {})
             coin = invoice_info.get("currency")
             invoice = invoice_info.get("encoded_payment_request")
             standardized_response = {
@@ -439,10 +453,10 @@ class BudaProxy(BaseLowLiquidityExchange):
                 'invoice': invoice,
                 'amount': amount
             }
-
             return standardized_response
-        else:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching ln invoice creation request from Buda: {e}")
+            raise
 
     def create_withdraw_request(self, coin: str, address: str, amount: float,
                                 simulate: Optional[bool] = False, network: Optional[bool] = False,
@@ -491,14 +505,17 @@ class BudaProxy(BaseLowLiquidityExchange):
         headers = self._sign_request(method="POST", path=endpoint_path, body=payload)
 
         # Make the API call
-        response = requests.post(url, headers=headers, json=payload)
-
         # Handle the response
-        if response.status_code in [200, 201]:
-            response = response.json().get("withdrawal")
-            return response
-        else:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            # Use the standard response handler to handle errors and responses
+            response: Dict = handle_api_response(response)
+            return response.get("withdrawal")
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching {coin} address request from Buda: {e}")
+            raise
+
 
     def pay_ln_invoice(self, ln_invoice: str, amount: float, simulate: bool = False) -> Dict:
         """
@@ -561,10 +578,15 @@ class BudaProxy(BaseLowLiquidityExchange):
         headers = self._sign_request(method="POST", path=endpoint_path, body=payload)
 
         # Make the API call
-        response = requests.post(url, headers=headers, json=payload)
-
-        # Return the response as a dictionary
-        return response.json()
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching new order request from Buda: {e} \n "
+                         f"Payload: {payload}")
+            raise
 
     def cancel_order(self, base_currency: str, quote_currency: str, order_id: int) -> Dict:
         """
@@ -591,10 +613,18 @@ class BudaProxy(BaseLowLiquidityExchange):
         headers = self._sign_request(method="PUT", path=endpoint_path, body=payload)
 
         # Make the API call to cancel the order
-        response = requests.put(url, headers=headers, json=payload)
 
         # Return the response as a dictionary
-        return response.json()
+        # Make the API call
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.put(url, headers=headers, json=payload)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching cancel order request from Buda: {e} \n "
+                         f"Payload: {payload}")
+            raise
 
     def get_order_states(self, base_currency: str, quote_currency: str) -> Dict:
         """
@@ -616,11 +646,15 @@ class BudaProxy(BaseLowLiquidityExchange):
         # Sign the request
         headers = self._sign_request(method="GET", path=endpoint_path)
 
-        # Make the API call to cancel the order
-        response = requests.get(url, headers=headers)
-
         # Return the response as a dictionary
-        return response.json()
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.get(url, headers=headers)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching cancel order request from Buda: {e}")
+            raise
 
     def batch_cancellation(self, orders: List[Dict]) -> Dict:
         """
@@ -653,11 +687,17 @@ class BudaProxy(BaseLowLiquidityExchange):
 
         # Sign the request
         headers = self._sign_request(method="POST", path=endpoint_path, body=payload)
-
         # Make the API call to cancel the batch orders
-        response = requests.post(url, headers=headers, json=payload)
 
-        # Return the response as a dictionary
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching batch cancellation request from Buda: {e} \n "
+                         f"Payload: {payload}")
+            raise
         return response.json()
 
     def get_price(self, base_currency: str, quote_currency: str) -> Dict:
@@ -674,10 +714,11 @@ class BudaProxy(BaseLowLiquidityExchange):
         # Define the endpoint path
         endpoint_path = self.ENDPOINTS["PRICE"].format(symbol)
         url = f"{self.BASE_URL}{endpoint_path}"
-        response = requests.get(url)
-        # Check for successful response
-        if response.status_code == 200:
-            response = response.json()
+        # Return the response as a dictionary
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.get(url)
+            response: Dict = handle_api_response(response)
             info = response.get('ticker')
             symbol: str = info.get("market_id")
             last_price: str = info.get("last_price")[0]
@@ -687,5 +728,7 @@ class BudaProxy(BaseLowLiquidityExchange):
                 'price': last_price
             }
             return price_info
-        else:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching price information ({symbol}) request from Buda: {e}")
+            raise
+

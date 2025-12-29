@@ -20,7 +20,7 @@ def main() -> None:
     # Example usage with Binance
 
     try:
-        # welcome_menu()
+        welcome_menu()
         # bot = ArbitrageBot(
         #     exchange_high_liquidity='binance',
         #     exchange_low_liquidity='buda',
@@ -53,7 +53,7 @@ def main() -> None:
         order_id = 33188802974
 
         #print(binance.get_price('btc', "usdc"))
-        json_print(binance.get_market_info(base_currency, quote_currency))
+        # json_print(binance.get_market_info(base_currency, quote_currency))
 
         #usdc_deposit_addres = binance.create_deposit_address(coin=coin, network='ETH')
         #print(json.dumps(usdc_deposit_addres, indent=2))

@@ -1,3 +1,5 @@
+import json
+from unittest import TestCase
 from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
 from src.exchange_api.exchange_factory import ExchangeFactory
 from tests import exchange_constants as constants
@@ -6,6 +8,7 @@ from json import dumps as jprint
 from typing import List, Dict
 
 binance: BinanceProxy = ExchangeFactory.get_exchange('binance')
+
 
 def test_binance_proxy_initialization():
     """
@@ -23,7 +26,7 @@ def test_binance_get_coin_info():
     """
     Test the get_coin_info method of BinanceProxy.
     """
-    expected_response = [{"coin": "BTC", "networkList": []}]
+    expected_response = json.dumps([{"coin": "BTC", "networkList": []}])
 
     with patch('requests.get') as mock_get:
         mock_response = Mock()
@@ -346,36 +349,34 @@ def test_new_sell_order_market_success(mock_post):
     mock_post.assert_called_once()
 
 
-@patch("requests.post")
-def test_new_order_fail(mock_post):
-    # Setup the Binance instance or class
-    binance.api_key, binance.api_secret = 'test_api_key', 'test_api_secret'
+class BinanceTestCase(TestCase):
+    @patch("requests.post")
+    def test_new_order_fail(self, mock_post):
+        # Setup the Binance instance or class
+        binance.api_key, binance.api_secret = 'test_api_key', 'test_api_secret'
 
-    # Simulate an error response from Binance (e.g., invalid API key or other issues)
-    mock_error_response = {"code": -1003, "msg": "Invalid API Key"}
+        # Simulate an error response from Binance (e.g., invalid API key or other issues)
+        mock_error_response = {"code": -1003, "msg": "Invalid API Key"}
 
-    mock_response = Mock()
-    mock_response.status_code = 400
-    mock_response.json.return_value = mock_error_response
-    mock_post.return_value = mock_response
+        mock_response = Mock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = mock_error_response
+        mock_post.return_value = mock_response
 
-    # Call the new_order function
-    response = binance.new_order(
-        base_currency='BTC',
-        quote_currency='USDT',
-        side='SELL',
-        order_type='LIMIT',
-        price=95000,
-        quantity=5,
-        time_in_force='GTC'
-    )
+        # Call the new_order function
+        with self.assertRaises(Exception):  # Use self.assertRaises
+            binance.new_order(
+                base_currency='BTC',
+                quote_currency='USDT',
+                side='SELL',
+                order_type='LIMIT',
+                price=95000,
+                quantity=5,
+                time_in_force='GTC'
+            )
 
-    # Assert that the error message is as expected
-    assert response["msg"] == "Invalid API Key"
-    assert response["code"] == -1003
-
-    # Ensure the API call was made
-    mock_post.assert_called_once()
+        # Ensure the API call was made
+        mock_post.assert_called_once()
 
 
 @patch('requests.delete')

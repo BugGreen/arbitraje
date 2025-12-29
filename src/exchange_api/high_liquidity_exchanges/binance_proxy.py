@@ -1,15 +1,16 @@
 # exchange_api/binance_proxy.py
 import json
+from exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
+from src.exchange_api.utils import load_api_keys, handle_api_response
+from exchange_api.high_liquidity_exchanges import encoders
+from typing import List, Dict, Optional, Union
+from urllib.parse import urlencode
 import requests
+import hashlib
+import logging
+import inspect
 import time
 import hmac
-import hashlib
-from urllib.parse import urlencode
-from typing import List, Dict, Optional, Union
-from exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
-from src.exchange_api.utils import load_api_keys
-import logging
-from exchange_api.high_liquidity_exchanges import encoders
 
 logger = logging.getLogger(__name__)
 
@@ -40,18 +41,6 @@ class BinanceProxy(BaseHighLiquidityExchange):
         self.api_key, self.api_secret = load_api_keys("BINANCE")
         self.name: str = "BINANCE"
 
-    def _get_server_time(self) -> int:
-        """
-        Fetch the current server time from Binance.
-        :return: Server time in milliseconds.
-        """
-        url = f"{self.BASE_URL}{self.ENDPOINTS['TIME']}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            return response.json()["serverTime"]
-        else:
-            raise Exception(f"Error fetching server time: {response.status_code} {response.text}")
-
     def _sign_request(self, params: Dict[str, str]) -> Dict[str, str]:
         """
         Sign the API request with HMAC SHA256.
@@ -71,6 +60,21 @@ class BinanceProxy(BaseHighLiquidityExchange):
         params["signature"] = signature
         return params
 
+    def _get_server_time(self) -> int:
+        """
+        Fetch the current server time from Binance.
+        :return: Server time in milliseconds.
+        """
+        url = f"{self.BASE_URL}{self.ENDPOINTS['TIME']}"
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.get(url)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)["serverTime"]
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching sever time from Binance: {e}")
+            raise
+
     def check_datetime_differences(self) -> None:
         """
         Check if the local system clock is accurate by comparing it to Binance’s server time:
@@ -89,22 +93,28 @@ class BinanceProxy(BaseHighLiquidityExchange):
         :param coin: str representing the name of the coin.
         :return: List of dictionaries containing coin information.
         """
+        current_method_name = inspect.currentframe().f_code.co_name
+
         url = f"{self.BASE_URL}{self.ENDPOINTS['ALL_COINS_INFO']}"
         headers = {"X-MBX-APIKEY": self.api_key}
         params = self._sign_request({})
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
+        try:
+            response = requests.get(url, headers=headers, params=params)
+            # Use the standard response handler to handle errors and responses
+            response = handle_api_response(response)
+            if coin:
+                coins_info = response
+                for coin_info in coins_info:
+                    if coin_info.get("coin") == coin.upper():
+                        # Uncomment to display the response
+                        # print(json.dumps(coin_info, indent=2))
+                        return coin_info
+            else:
+                return response
 
-        if coin:
-            coins_info = response.json()
-            for coin_info in coins_info:
-                if coin_info.get("coin") == coin.upper():
-                    # Uncomment to display the response
-                    print(json.dumps(coin_info, indent=2))
-                    return coin_info
-
-        else:
-            return response.json()
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching cpin information from Binance: {e}")
+            raise
 
     def supports_lightning_network(self, coin: str) -> bool:
         """
@@ -117,7 +127,7 @@ class BinanceProxy(BaseHighLiquidityExchange):
         for coin_info in coins_info:
             if coin_info.get("coin") == coin:
                 # Uncomment to display the response
-                print(json.dumps(coin_info, indent=2))
+                # print(json.dumps(coin_info, indent=2))
                 for network in coin_info.get("networkList", []):
                     if "lightning" in network.get("network", "").lower():
                         return network.get("withdrawEnable", False)
@@ -131,6 +141,8 @@ class BinanceProxy(BaseHighLiquidityExchange):
         :param withdraw_order_id: id of a specific order
         :return: Withdrawal history
         """
+        current_method_name = inspect.currentframe().f_code.co_name
+
         url = f"{self.BASE_URL}{self.ENDPOINTS['WITHDRAW_HISTORY']}"
         headers = {"X-MBX-APIKEY": self.api_key}
 
@@ -144,14 +156,18 @@ class BinanceProxy(BaseHighLiquidityExchange):
 
         params['timestamp'] = int(time.time() * 1000)
         params = self._sign_request(params)
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        response = response.json()
-        for withdraw in response:
-            status = withdraw['status']
-            state = constants.binance_withdrawal_states.get(status)
-            withdraw['state'] = state
-        return response
+        try:
+            response = requests.get(url, headers=headers, params=params)
+            # Use the standard response handler to handle errors and responses
+            response = handle_api_response(response)
+            for withdraw in response:
+                status = withdraw['status']
+                state = encoders.binance_withdrawal_states.get(status)
+                withdraw['state'] = state
+            return response
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching withdrawal history from Binance: {e}")
+            raise
 
     def get_deposit_history(self, coin: Optional[str] = None) -> List[Dict]:
         """
@@ -172,17 +188,26 @@ class BinanceProxy(BaseHighLiquidityExchange):
             params['coin'] = coin
 
         params = self._sign_request(params)
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        response = response.json()
-        for deposit in response:
-            status = deposit['status']
-            state = constants.binance_deposit_states.get(status)
-            deposit['state'] = state
-        return response
 
-    def create_deposit_address(self, coin: str, network: str,
-                               amount: Optional[float] = None) -> Dict:
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.get(url, headers=headers, params=params)
+            # Use the standard response handler to handle errors and responses
+            response = handle_api_response(response)
+            for deposit in response:
+                status = deposit['status']
+                state = encoders.binance_deposit_states.get(status)
+                deposit['state'] = state
+            return response
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching deposit history from Binance: {e}")
+            raise
+
+    def create_deposit_address(
+            self,
+            coin: str,
+            network: str,
+            amount: Optional[float] = None) -> Dict:
         """
         Fetch a deposit address for a specific coin and network.
 
@@ -210,17 +235,20 @@ class BinanceProxy(BaseHighLiquidityExchange):
         # Make the API request
         url = f"{self.BASE_URL}{self.ENDPOINTS['DEPOSIT_ADDRESS']}"
         headers = {"X-MBX-APIKEY": self.api_key}
-        response = requests.get(url, headers=headers, params=signed_params)
 
-        if response.status_code == 200:
-            response = response.json()
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.get(url, headers=headers, params=signed_params)
+            # Use the standard response handler to handle errors and responses
+            response = handle_api_response(response)
             if self._validate_deposit_availability(coin, network_name=network):
                 return response
             else:
                 logger.error(f"Deposit address is not available, got this response:")
                 raise Exception(f"Error for deposit address {response.status_code}: {response.text}")
-        else:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching deposit address from Binance: {e}")
+            raise
 
     def _validate_deposit_availability(self, coin: str, network_name: str) -> bool:
         """
@@ -252,8 +280,10 @@ class BinanceProxy(BaseHighLiquidityExchange):
         response = self.create_deposit_address(coin=coin, network=network)
         return {"address": response.get('address')}
 
-    def create_lightning_invoice(self,
-                                 amount: float) -> Dict:
+    def create_lightning_invoice(
+            self,
+            amount: float
+    ) -> Dict:
         """
         Create a lightning invoice for a given amount.
 
@@ -320,12 +350,15 @@ class BinanceProxy(BaseHighLiquidityExchange):
         # Make the API request
         url = f"{self.BASE_URL}{self.ENDPOINTS['WITHDRAW_REQUEST']}"
         headers = {"X-MBX-APIKEY": self.api_key}
-        response = requests.post(url, headers=headers, params=signed_params)
 
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.post(url, headers=headers, params=signed_params)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching withdrawal request from Binance: {e}")
+            raise
 
     def pay_ln_invoice(self, ln_invoice: str, amount: float,
                        wallet_type: Optional[int] = 0, **kwargs) -> Dict:
@@ -428,10 +461,15 @@ class BinanceProxy(BaseHighLiquidityExchange):
         # Make the API request
         url = f"{self.BASE_URL}{self.ENDPOINTS['NEW_ORDER']}"
         headers = {"X-MBX-APIKEY": self.api_key}
-        response = requests.post(url, headers=headers, params=signed_params)
 
-        # Return the response as a dictionary
-        return response.json()
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.post(url, headers=headers, params=signed_params)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching new order request from Binance: {e}")
+            raise
 
     def cancel_order(self, base_currency: str, quote_currency: str, order_id: int) -> Dict:
         """
@@ -457,10 +495,14 @@ class BinanceProxy(BaseHighLiquidityExchange):
         # Make the API request
         url = f"{self.BASE_URL}{self.ENDPOINTS['NEW_ORDER']}"
         headers = {"X-MBX-APIKEY": self.api_key}
-        response = requests.delete(url, headers=headers, params=signed_params)
-
-        # Return the response as a dictionary
-        return response.json()
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.delete(url, headers=headers, params=signed_params)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching cancel order request from Binance: {e}")
+            raise
 
     def get_price(self, base_currency: str, quote_currency: str) -> Dict:
         """
@@ -475,13 +517,15 @@ class BinanceProxy(BaseHighLiquidityExchange):
 
         # Make the API request
         url = f"{self.BASE_URL_PUBLIC}{self.ENDPOINTS['PRICE'].format(symbol)}"
-        response = requests.get(url)
 
-        # Check for successful response
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.get(url)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching asset price from Binance: {e}")
+            raise
 
     def get_market_info(self, base_currency: str, quote_currency: str) -> Dict:
         """
@@ -495,10 +539,12 @@ class BinanceProxy(BaseHighLiquidityExchange):
 
         # Make the API request
         url = f"{self.BASE_URL_PUBLIC}{self.ENDPOINTS['MARKET'].format(symbol)}"
-        response = requests.get(url)
 
-        # Check for successful response
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+        current_method_name = inspect.currentframe().f_code.co_name
+        try:
+            response = requests.get(url)
+            # Use the standard response handler to handle errors and responses
+            return handle_api_response(response)
+        except Exception as e:
+            logger.error(f"{current_method_name} - Error fetching market info  from Binance: {e}")
+            raise
