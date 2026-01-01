@@ -1313,21 +1313,25 @@ class ArbitrageBot:
             logger.warning("Some transfer(s) failed. btc_success=%s, quote_success=%s", btc_success, quote_success)
             return False
 
-    def arbitrage_order_completion(self, arb_order: ArbitrageOrder) -> bool:
+    def arbitrage_order_completion(self, arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]]) -> bool:
         """
         Checks if an arbitrage order has been completed. This is True when ArbitrageOrder's attribute
         `traded_quote_amount_low_liquidity` is larger or equal than the 98.5 % of `original_amount` attribute.
         It is not exactly equal, because of fees and rounding errors.
 
-        :param arb_order: The ArbitrageOrder to check.
+        :param arb_orders: The ArbitrageOrder to check.
         :return: Boolean value defining the completion state of the order
         """
 
-        reference_price: float = arb_order.price_reference
-        min_notional_low_liquidity_quote = self.minimum_notional_low_liquidity * reference_price * 1.1
+        if not isinstance(arb_orders, list):
+            arb_orders = [arb_orders]
 
-        return arb_order.traded_quote_amount_low_liquidity \
-               >= (arb_order.original_amount - min_notional_low_liquidity_quote)
+        for arb_order in arb_orders:
+            reference_price: float = arb_order.price_reference
+            min_notional_low_liquidity_quote = self.minimum_notional_low_liquidity * reference_price * 1.1
+
+            arb_order.order_completed: bool = arb_order.traded_quote_amount_low_liquidity \
+                                              >= (arb_order.original_amount - min_notional_low_liquidity_quote)
 
     # TODO: Busacar la manera de paralelizar el proceso por cada chunk
     def btc_transfer(self, arb_order: ArbitrageOrder) -> bool:

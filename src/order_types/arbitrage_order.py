@@ -64,6 +64,7 @@ class ArbitrageOrder(Order):
         self.price_reference = None  # Store price reference here
         self.sub_orders_info = None  # Info about the sub_orders that conforms the amount to trade
         self.sub_orders_ids: List[str] = []
+        self.order_completed: bool = False
 
     def update_sub_orders_info(self, sub_orders_info: dict):
         """
@@ -161,6 +162,7 @@ class ArbitrageOrder(Order):
             # Global attributes
             self.sub_orders_info: List = []
             self.sub_orders_ids: List = []
+            self.order_completed: bool = False
             # Dynamic attributes Low-liquidity side
             self.pending_amount_low_liquidity = self.original_amount  # Initially the entire original amount is pending
             self.traded_base_amount_low_liquidity: float = 0.0
