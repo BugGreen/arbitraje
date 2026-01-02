@@ -1,4 +1,4 @@
-from src.exchange_api.binance_proxy import BinanceProxy
+from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
 from tests import exchange_constants as constants
 from unittest.mock import patch, Mock
 from json import dumps as jprint
@@ -8,7 +8,8 @@ def test_binance_proxy_initialization():
     """
     Test the initialization of BinanceProxy.
     """
-    with patch('src.exchange_api.binance_proxy.load_api_keys') as mock_load_api_keys:
+    with patch('src.exchange_api.high_liquidity_exchanges.binance_proxy.load_api_keys') as mock_load_api_keys:
+        from src.exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
         mock_load_api_keys.return_value = ('test_api_key', 'test_api_secret')
         binance = BinanceProxy()
         assert binance.api_key == 'test_api_key'

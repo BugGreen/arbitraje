@@ -4,9 +4,8 @@ import requests
 import time
 import hmac
 import hashlib
-from urllib.parse import urlencode
 from typing import List, Dict, Optional, Union, Any
-from src.exchange_api.base_exchange import BaseExchange
+from exchange_api.low_liquidity_exchanges.base_low_liquidity_exchange import BaseLowLiquidityExchange
 from src.exchange_api.utils import load_api_keys
 import json
 import logging
@@ -14,7 +13,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class BudaProxy(BaseExchange):
+class BudaProxy(BaseLowLiquidityExchange):
     """
     Proxy class for interacting with the BUDA API.
     """
@@ -444,12 +443,6 @@ class BudaProxy(BaseExchange):
             return standardized_response
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
-
-    def get_coin_info(self) -> List[Dict]:
-        pass
-
-    def supports_lightning_network(self, coin: str) -> bool:
-        pass
 
     def create_withdraw_request(self, coin: str, address: str, amount: float,
                                 simulate: Optional[bool] = False, network: Optional[bool] = False,

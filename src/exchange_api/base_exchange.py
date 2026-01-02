@@ -8,36 +8,6 @@ class BaseExchange(ABC):
     """
 
     @abstractmethod
-    def get_coin_info(self) -> List[Dict]:
-        """
-        Fetch information about all coins available for deposit and withdrawal.
-
-        :return: A list of dictionaries containing coin information.
-        """
-        pass
-
-    @abstractmethod
-    def get_order_book(self, base_currency: str, quote_currency: str) -> Dict:
-        """
-        Retrieve the current order book for a specified market.
-
-        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
-        :param quote_currency: The quote currency of the trading pair (e.g., 'USD').
-        :return: A dictionary containing 'asks' and 'bids' lists from the order book.
-        """
-        pass
-
-    @abstractmethod
-    def supports_lightning_network(self, coin: str) -> bool:
-        """
-        Check if the exchange supports the Lightning Network for a specific coin.
-
-        :param coin: The symbol of the coin (e.g., 'BTC').
-        :return: True if supported, False otherwise.
-        """
-        pass
-
-    @abstractmethod
     def get_withdraw_history(self, coin: Optional[str]) -> List[Dict]:
         """
         Get the withdrawal history of a given coin, or a given order.
@@ -111,35 +81,6 @@ class BaseExchange(ABC):
         """
 
     @abstractmethod
-    def get_order_states(self, base_currency: str, quote_currency: str) -> Dict:
-        """
-        Get the states of orders in a given market.
-
-        :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
-        :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
-
-        :return: The response from the exchange API as a dictionary.
-        """
-
-    @abstractmethod
-    def batch_creation(self, orders: List[Dict]) -> Dict:
-        """
-        Create new orders in batch on the exchange.
-
-        :param orders: A list of orders to be created, where each order is a dictionary containing order details.
-        :return: The response from the exchange API indicating whether the batch creation was successful.
-        """
-
-    @abstractmethod
-    def batch_cancellation(self, orders: List[Dict]) -> Dict:
-        """
-        Cancel orders in batch on the exchange.
-
-        :param orders: A list of orders to be canceled, where each order is a dictionary containing 'order_id' or 'client_id'.
-        :return: The response from the exchange API indicating whether the batch cancelation was successful.
-        """
-
-    @abstractmethod
     def get_price(self, base_currency: str, quote_currency: str) -> Dict:
         """
         Get the order price of orders in a given market.
@@ -148,4 +89,43 @@ class BaseExchange(ABC):
         :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
 
         :return: The response from the exchange API as a dictionary.
+        """
+
+    @abstractmethod
+    def _sign_request(self, params: Dict[str, str]) -> Dict[str, str]:
+        """
+        Sign the API request.
+
+        :param params: Dictionary of query parameters.
+        :return: Dictionary of signed query parameters.
+        """
+
+    @abstractmethod
+    def create_quote_currency_address(self, coin: str, network: Optional[str] = None) -> Dict:
+        """
+        Create a deposit address for any available alt_coin.
+
+        :param coin: The cryptocurrency symbol.
+        :param network: The network for the deposit.
+        """
+
+    @abstractmethod
+    def create_lightning_invoice(self, amount: float, **kwargs) -> Dict:
+        """
+        Create a lightning invoice for a given amount.
+
+        :param amount: The amount to deposit (in BTC fractions).
+        :param kwargs: Optional parameters, e.g., memo, expiry_seconds.
+        :return: A dictionary containing the deposit address and related details.
+        """
+
+    @abstractmethod
+    def pay_ln_invoice(self, ln_invoice: str, amount: float, **kwargs) -> Dict:
+        """
+        Submit a withdrawal request in Binance for BTC, via Lightning Network.
+
+        :param ln_invoice: The destination address for the withdrawal (Lightning Network Invoice).
+        :param amount: The withdrawal amount (in fractions of BTC).
+        :param kwargs: Additional optional parameters.
+        :return: A dictionary containing the withdrawal request ID.
         """

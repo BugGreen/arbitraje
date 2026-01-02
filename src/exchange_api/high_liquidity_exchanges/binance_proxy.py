@@ -6,15 +6,15 @@ import hmac
 import hashlib
 from urllib.parse import urlencode
 from typing import List, Dict, Optional
-from src.exchange_api.base_exchange import BaseExchange
+from exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
 from src.exchange_api.utils import load_api_keys
 import logging
-from src.exchange_api import constants
+from exchange_api.high_liquidity_exchanges import constants
 
 logger = logging.getLogger(__name__)
 
 
-class BinanceProxy(BaseExchange):
+class BinanceProxy(BaseHighLiquidityExchange):
     """
     Proxy class for interacting with the Binance API.
     """
@@ -448,18 +448,6 @@ class BinanceProxy(BaseExchange):
         # Return the response as a dictionary
         return response.json()
 
-    def get_order_states(self, base_currency: str, quote_currency: str) -> Dict:
-        # ToDo
-        pass
-
-    def batch_creation(self, orders: List[Dict]) -> Dict:
-        # ToDo
-        pass
-
-    def batch_cancellation(self, orders: List[Dict]) -> Dict:
-        # ToDo
-        pass
-
     def get_price(self, base_currency: str, quote_currency: str) -> Dict:
         """
         Retrieve the price of an asset in a specified market.
@@ -480,7 +468,3 @@ class BinanceProxy(BaseExchange):
             return response.json()
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
-
-    def get_order_book(self, base_currency: str, quote_currency: str) -> Dict:
-        # ToDo
-        pass

@@ -1,7 +1,7 @@
 from src.arbitrage_bot.arbitrage_bot import ArbitrageBot
 from src.order_types.arbitrage_order import ArbitrageOrder
-from src.exchange_api.buda_proxy import BudaProxy
-from src.exchange_api.binance_proxy import BinanceProxy
+from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
+from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
 from unittest.mock import patch, MagicMock
 import unittest
 from typing import List, Dict, Any, Union, Optional

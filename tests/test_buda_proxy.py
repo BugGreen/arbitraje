@@ -1,6 +1,6 @@
 from unittest.mock import patch, Mock, MagicMock
 import unittest
-from src.exchange_api.buda_proxy import BudaProxy
+from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
 from src.exchange_api.exchange_factory import ExchangeFactory
 import pytest
 import requests

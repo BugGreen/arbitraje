@@ -1,12 +1,7 @@
 import json
 from src.exchange_api.exchange_factory import ExchangeFactory
-from src.exchange_api.buda_proxy import BudaProxy
-import requests
+from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
 import logging
-from src.arbitrage_bot.arbitrage_bot import ArbitrageBot
-from src.order_types.arbitrage_order import ArbitrageOrder
-from src.order_types.encoders import CurrencyOfInterest, OrderType
-from src.user_interface.arbitrage_ui import welcome_menu
 
 logging.basicConfig(
     level=logging.WARNING,  # Set to DEBUG to capture all levels of log messages

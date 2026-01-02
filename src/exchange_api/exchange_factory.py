@@ -1,5 +1,5 @@
-from src.exchange_api.binance_proxy import BinanceProxy
-from src.exchange_api.buda_proxy import BudaProxy
+from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
+from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
 from typing import Any
 
 

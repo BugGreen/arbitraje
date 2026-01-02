@@ -4,11 +4,10 @@ from src.order_types.encoders import OrderType, CurrencyOfInterest
 from typing import Optional, Type, Dict, List, Any, Union, Tuple
 from src.exchange_api.exchange_factory import ExchangeFactory
 from src.order_types.arbitrage_order import ArbitrageOrder
-from src.exchange_api.binance_proxy import BinanceProxy
+from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
 from src.user_interface.arbitrage_ui import ArbitrageUI
 from concurrent.futures import ThreadPoolExecutor
-from src.exchange_api.buda_proxy import BudaProxy
-from src.arbitrage_bot.order import Order
+from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
 from datetime import datetime
 import threading
 import logging
