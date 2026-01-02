@@ -32,11 +32,14 @@ class BudaProxy(BaseLowLiquidityExchange):
         self.name: str = "BUDA"
         self.base_currency: str = None
         self.quote_currency: str = None
+        self.ws_order_states: websocket = None
+        self.ws_order_book: websocket = None
         self.order_book_snapshot: dict = {"asks": {}, "bids": {}}  # Shared order book state (e.g., {'asks': {...}, 'bids': {...}})
         self.order_book_lock = Lock()  # Lock to protect order book updates
         self.max_order_states_length: int = 25
         self.order_states_snapshot = {"orders": []}  # Structure to hold order states
         self.order_states_snapshot_lock = Lock()
+        self.pubsub_key: str = self.get_account_info().get('user').get('pubsub_key')
 
     BASE_URL = "https://www.buda.com"
     ENDPOINTS = {
@@ -162,15 +165,14 @@ class BudaProxy(BaseLowLiquidityExchange):
         Connects to the order state WebSocket channel for the specified market pair.
         :param initial_snapshot: Optional initial snapshot from REST.
         """
-        pubsub_key: str = self.get_account_info().get('user').get('pubsub_key')
-        socket_url = f"wss://realtime.buda.com/sub?channel=orders%40{pubsub_key}"
+        socket_url = f"wss://realtime.buda.com/sub?channel=orders%40{self.pubsub_key}"
 
         # Initialize snapshot if provided
         if initial_snapshot is not None:
             self.set_initial_order_states(initial_snapshot)
 
         websocket.enableTrace(False)
-        self.ws = websocket.WebSocketApp(
+        self.ws_order_states = websocket.WebSocketApp(
             socket_url,
             on_message=self.on_message_order_state,
             on_open=self.on_open_order_state,
@@ -179,7 +181,7 @@ class BudaProxy(BaseLowLiquidityExchange):
         )
 
         # Running the WebSocket connection in a separate thread
-        thread = Thread(target=self.ws.run_forever, kwargs={"ping_interval": 10})
+        thread = Thread(target=self.ws_order_states.run_forever, kwargs={"ping_interval": 10})
         thread.daemon = True
         thread.start()
 
@@ -199,14 +201,14 @@ class BudaProxy(BaseLowLiquidityExchange):
             ]
         return {"orders": transformed_orders}
 
-    def on_open_order_state(self, ws):
+    @staticmethod
+    def on_open_order_state(ws):
         """
         Called when the WebSocket connection is established for order states.
 
         :param ws: WebSocket instance.
         """
         logger.info("WebSocket connected to order states.")
-        self.reconnect_to_order_states()
 
     def on_error_order_state(self, ws, error):
         """
@@ -223,11 +225,10 @@ class BudaProxy(BaseLowLiquidityExchange):
         Tries to reconnect to the order book WebSocket.
         """
         logger.info("[ORDER STATES] -- Attempting to reconnect to WebSocket...")
-        time.sleep(0.1)  # Sleep before trying to reconnect
+        time.sleep(.5)  # Sleep before trying to reconnect
         self.connect_to_order_states(self.order_states_snapshot)
 
-    @staticmethod
-    def on_close_order_state(ws, close_status_code, close_msg):
+    def on_close_order_state(self, ws, close_status_code, close_msg):
         """
         Called when the WebSocket connection is closed for order states.
 
@@ -235,7 +236,8 @@ class BudaProxy(BaseLowLiquidityExchange):
         :param close_status_code: Close status code.
         :param close_msg: Close message.
         """
-        logger.info(f"WebSocket closed with status code: {close_status_code} and message: {close_msg}")
+        logger.warning(f"WebSocket closed with status code: {close_status_code} and message: {close_msg}")
+        self.reconnect_to_order_states()
 
     def set_initial_order_states(self, snapshot: dict):
         """
@@ -313,7 +315,7 @@ class BudaProxy(BaseLowLiquidityExchange):
             self.set_initial_order_book(initial_snapshot)
 
         websocket.enableTrace(False)
-        self.ws = websocket.WebSocketApp(
+        self.ws_order_book = websocket.WebSocketApp(
             socket_url,
             on_message=self.on_message_order_book,
             on_open=self.on_open_order_book,
@@ -322,7 +324,7 @@ class BudaProxy(BaseLowLiquidityExchange):
         )
 
         # Running the WebSocket connection in a separate thread
-        thread = Thread(target=self.ws.run_forever, kwargs={"ping_interval": 10})
+        thread = Thread(target=self.ws_order_book.run_forever, kwargs={"ping_interval": 10})
         thread.daemon = True
         thread.start()
 

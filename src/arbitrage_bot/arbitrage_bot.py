@@ -258,7 +258,7 @@ class ArbitrageBot:
                 for arb_order in arb_orders:
                     completed_order: List[ArbitrageOrder] = []
                     if arb_order.order_completed:
-                        completed_order.append()  # TODO: Complete this logic to do multiple transfers at once
+                        # completed_order.append()  # TODO: Complete this logic to do multiple transfers at once
                         # If fully done => funds_transfer
                         success_transfer = self.funds_transfer(arb_order)
                         if success_transfer:
@@ -1050,7 +1050,7 @@ class ArbitrageBot:
                     "Some sub-orders remained 'received' after %d seconds: %s",
                     max_wait_seconds, received_ids
                 )
-                # break
+                # break SE QUEDA EN UN LOOP INFINITO
 
             # Sleep briefly
             time.sleep(0.2)

@@ -30,6 +30,7 @@ def main() -> None:
 
         welcome_menu()
         buda_proxy = BudaProxy()
+        buda_proxy.get_order_states('a','b')
         acc_info: dict = buda_proxy.get_account_info()
         print(json.dumps(acc_info, indent=2))
         # Connect to the WebSocket for BTC/USDT market
