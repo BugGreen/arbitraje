@@ -168,8 +168,8 @@ class BudaProxy(BaseLowLiquidityExchange):
         socket_url = f"wss://realtime.buda.com/sub?channel=orders%40{self.pubsub_key}"
 
         # Initialize snapshot if provided
-        if initial_snapshot is not None:
-            self.set_initial_order_states(initial_snapshot)
+        if initial_snapshot is None:
+            self.set_initial_order_states()
 
         websocket.enableTrace(False)
         self.ws_order_states = websocket.WebSocketApp(
@@ -226,7 +226,7 @@ class BudaProxy(BaseLowLiquidityExchange):
         """
         logger.info("[ORDER STATES] -- Attempting to reconnect to WebSocket...")
         time.sleep(.5)  # Sleep before trying to reconnect
-        self.connect_to_order_states(self.order_states_snapshot)
+        self.connect_to_order_states()
 
     def on_close_order_state(self, ws, close_status_code, close_msg):
         """
@@ -239,15 +239,19 @@ class BudaProxy(BaseLowLiquidityExchange):
         logger.warning(f"WebSocket closed with status code: {close_status_code} and message: {close_msg}")
         self.reconnect_to_order_states()
 
-    def set_initial_order_states(self, snapshot: dict):
+    def set_initial_order_states(self):
         """
         Sets the initial order states snapshot (from REST) in a thread-safe manner.
-
-        :param snapshot: The initial snapshot with structure:
-                         {'orders': List[Dict[str, Any]]}
         """
+        lastest_order_states: Dict[str, List[Dict[str, Any]]] = self.get_order_states(
+            self.base_currency,
+            self.quote_currency
+        )
         with self.order_states_snapshot_lock:
-            self.order_states_snapshot = snapshot
+            transformed_orders: List[Dict[str, Dict[str, Any]]] = [
+                {"order": order_entry} for order_entry in lastest_order_states.get("orders", [])
+            ]
+            self.order_states_snapshot: Dict[str, List[Dict[str, Dict[str, Any]]]] = {"orders": transformed_orders}
         logger.info("Initial order states snapshot set.")
 
     def set_initial_order_book(self, snapshot: dict) -> None:
