@@ -992,10 +992,14 @@ class ArbitrageBot:
         :return: A list of order states after the cancellation attempts, or None if successful.
         """
         retry_count = 0
-        all_orders_cancelled: bool = False
-        while not all_orders_cancelled:
+        while retry_count < max_retry_attempts:
             # Fetch the latest states of the orders
-            time.sleep(.9)  # Wait before calling states
+            sleep_time: float = .9
+            if retry_count == max_retry_attempts - 2:
+                sleep_time = 60 * 10  # 10 minutes
+            elif retry_count == max_retry_attempts - 1:
+                sleep_time = 60 * 30  # 30 minutes
+            time.sleep(sleep_time)  # Wait before calling states
             if not self.websocket_mode:
                 states_response: Dict[str, List[Dict[str, Any]]] = self.exchange_low_liquidity.get_order_states(
                     base_currency,
@@ -1012,7 +1016,7 @@ class ArbitrageBot:
                     if state in ["canceled", "canceled_and_traded", "traded"]:
                         logger.info(f"Order {st['id']} has been successfully canceled or traded. State: {state}")
                     elif state == "pending":
-                        logger.error(f"Order {st['id']} is still in pending state. Retrying cancellation...")
+                        logger.info(f"Order {st['id']} is still in pending state. Retrying cancellation...")
                         self.exchange_low_liquidity.cancel_order(base_currency, quote_currency, st["id"])
                     else:
                         logger.error(f"Order {st['id']} is in an unexpected state: {state}. Aborting cancellation.")
@@ -1025,8 +1029,6 @@ class ArbitrageBot:
 
             # Retry cancellation if necessary
             retry_count += 1
-            if retry_count % 1000 == 0:
-                logger.error(f"[ensure_cancellation_state] Probably into an infinite loop. Retry_count: {retry_count}")
 
         # If we've reached the max retries, raise an error
         logger.error(f"Failed to cancel orders after {max_retry_attempts} attempts.")
