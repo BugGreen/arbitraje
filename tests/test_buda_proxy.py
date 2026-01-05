@@ -649,6 +649,8 @@ class TestBudaProxyOrderBook(unittest.TestCase):
     def setUp(self):
         self.proxy = BudaProxy()
         self.proxy.order_book_snapshot = {"asks": {}, "bids": {}}
+        self.proxy.quote_currency: str = 'usdc'
+        self.proxy.base_currency: str = 'btc'
 
     def test_set_initial_order_book(self):
         snapshot = {
@@ -697,3 +699,31 @@ class TestBudaProxyOrderBook(unittest.TestCase):
         self.proxy.update_order_book_state("asks", "79559436.91", "-0.0011")
         current = self.proxy.get_current_order_book()
         self.assertNotIn("79559436.91", current["asks"])
+
+    @patch("websocket.WebSocketApp")
+    def test_reconnect_on_error(self, MockWebSocketApp):
+        # Mock the WebSocketApp to simulate disconnection
+        mock_ws = MagicMock()
+        MockWebSocketApp.return_value = mock_ws
+
+        # Simulate a connection error
+        self.proxy.on_error_order_book(mock_ws, "Error: Broken pipe")
+
+        # Verify that reconnect_to_order_book was called
+        self.proxy.reconnect_to_order_book = MagicMock()
+        self.proxy.on_error_order_book(mock_ws, "Error: Broken pipe")
+        self.proxy.reconnect_to_order_book.assert_called_once()
+
+    @patch("websocket.WebSocketApp")
+    def test_reconnect_on_close(self, MockWebSocketApp):
+        # Mock the WebSocketApp to simulate connection closure
+        mock_ws = MagicMock()
+        MockWebSocketApp.return_value = mock_ws
+
+        # Simulate WebSocket closure
+        self.proxy.on_close_order_book(mock_ws, 1000, "Normal closure")
+
+        # Verify that reconnect_to_order_book was called
+        self.proxy.reconnect_to_order_book = MagicMock()
+        self.proxy.on_close_order_book(mock_ws, 1000, "Normal closure")
+        self.proxy.reconnect_to_order_book.assert_called_once_with()

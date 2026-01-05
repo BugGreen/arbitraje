@@ -28,7 +28,9 @@ class BudaProxy(BaseLowLiquidityExchange):
         """
         self.api_key, self.api_secret = load_api_keys("BUDA")
         self.name: str = "BUDA"
-        self.order_book_snapshot = {"asks": {}, "bids": {}}  # Shared order book state (e.g., {'asks': {...}, 'bids': {...}})
+        self.base_currency: str = None
+        self.quote_currency: str = None
+        self.order_book_snapshot: dict = {"asks": {}, "bids": {}}  # Shared order book state (e.g., {'asks': {...}, 'bids': {...}})
         self.order_book_lock = Lock()  # Lock to protect order book updates
 
     BASE_URL = "https://www.buda.com"
@@ -99,8 +101,7 @@ class BudaProxy(BaseLowLiquidityExchange):
 
     def connect_to_order_book(self, base_currency: str, quote_currency: str, initial_snapshot: dict = None) -> None:
         """
-        Connects to the order book channel of the specified market pair using WebSocket.
-        Optionally accepts an initial snapshot to set the internal state before starting the stream.
+        Connects to the order book channel of the specified market pair (base-quote) using WebSocket.
 
         :param base_currency: Base currency (e.g., BTC).
         :param quote_currency: Quote currency (e.g., USDT).
@@ -108,6 +109,8 @@ class BudaProxy(BaseLowLiquidityExchange):
         """
         market_id = f"{base_currency.lower()}{quote_currency.lower()}"
         socket_url = f"wss://realtime.buda.com/sub?channel=book%40{market_id}"
+        self.base_currency: str = base_currency
+        self.quote_currency: str = quote_currency
 
         if initial_snapshot is not None:
             self.set_initial_order_book(initial_snapshot)
@@ -116,11 +119,44 @@ class BudaProxy(BaseLowLiquidityExchange):
         self.ws = websocket.WebSocketApp(
             socket_url,
             on_message=self.on_message_order_book,
-            on_open=self.on_open_order_book
+            on_open=self.on_open_order_book,
+            on_error=self.on_error_order_book,
+            on_close=self.on_close_order_book
         )
+
+        # Running the WebSocket connection in a separate thread
         thread = Thread(target=self.ws.run_forever, kwargs={"ping_interval": 10})
         thread.daemon = True
         thread.start()
+
+    def on_error_order_book(self, ws, error):
+        """
+        Called when there's an error with the WebSocket connection.
+
+        :param ws: WebSocket instance.
+        :param error: Error message.
+        """
+        logger.error(f"WebSocket error occurred: {error}")
+        self.reconnect_to_order_book()
+
+    def on_close_order_book(self, ws, close_status_code, close_msg):
+        """
+        Called when the WebSocket connection is closed.
+
+        :param ws: WebSocket instance.
+        :param close_status_code: Close status code.
+        :param close_msg: Close message.
+        """
+        logger.info(f"WebSocket closed with status code: {close_status_code} and message: {close_msg}")
+        self.reconnect_to_order_book()
+
+    def reconnect_to_order_book(self):
+        """
+        Tries to reconnect to the order book WebSocket.
+        """
+        logger.info("Attempting to reconnect to WebSocket...")
+        time.sleep(0.1)  # Sleep before trying to reconnect
+        self.connect_to_order_book(self.base_currency, self.quote_currency, self.order_book_snapshot)
 
     def process_order_book_update(self, data: dict) -> None:
         """
