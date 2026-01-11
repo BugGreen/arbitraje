@@ -1,7 +1,7 @@
 from src.order_types.order import Order
 import logging
 from typing import Optional, List, Dict, Callable
-from src.order_types.encoders import Profit, OrderType, CurrencyOfInterest
+from src.order_types.encoders import Profit, OrderType, CurrencyOfInterest, PROFIT_ROUNDING_DECIMALS
 
 logger = logging.getLogger(__name__)
 
@@ -154,55 +154,77 @@ class ArbitrageOrder(Order):
 
     def update_profit(self, price_difference: float) -> None:
         """
-        Calculates the profit based on the order type and the amount of interest.
+        Calculates the profit based on the order type and the amount of interest, including fees.
+
         WARNING: ALWAYS use after `fulfill_high_liquidity` method.
-        NOTE: An order can be either profitable or non-profitable, therefore attribute `profit` might have neg values
+        NOTE: An order can be either profitable or non-profitable, therefore the `profit` attribute may have negative values.
 
         :param price_difference: The real price difference between the low and high liquidity exchanges.
         """
         currency_of_interest = self.currency_of_interest
         order_type = self.order_type
-        # PAID FEES
-        total_fees_base_currency = \
-            self.paid_fee_base_currency_low_liquidity + self.paid_fee_base_currency_high_liquidity
-        total_fees_quote_currency = \
-            self.paid_fee_quote_currency_low_liquidity + self.paid_fee_quote_currency_high_liquidity
 
-        # Percentage of executed amount
-        base_amount_traded_both_exchanges = \
-            abs(self.traded_amount_base_high_liquidity / self.traded_base_amount_low_liquidity )
-        quote_amount_traded_both_exchanges = \
-            abs(self.traded_amount_quote_high_liquidity / self.traded_quote_amount_low_liquidity)
+        # Total paid fees for both base and quote currencies across both exchanges
+        total_fees_base_currency = self.paid_fee_base_currency_low_liquidity + self.paid_fee_base_currency_high_liquidity
+        total_fees_quote_currency = self.paid_fee_quote_currency_low_liquidity + self.paid_fee_quote_currency_high_liquidity
 
+        # Calculate the percentage of executed amount
+        base_amount_traded_percentage = abs(
+            self.traded_amount_base_high_liquidity / self.traded_base_amount_low_liquidity)
+        quote_amount_traded_percentage = abs(
+            self.traded_amount_quote_high_liquidity / self.traded_quote_amount_low_liquidity)
+
+        # Compute profit based on the currency of interest
         if currency_of_interest == CurrencyOfInterest.QUOTE:
-            if order_type in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
-                profit_quote_amount = \
-                    base_amount_traded_both_exchanges * self.traded_quote_amount_low_liquidity * price_difference
-
-                self._pending_quote_amount_high_liquidity = 0
-            elif order_type in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
-                profit_quote_amount = \
-                    quote_amount_traded_both_exchanges * self.traded_quote_amount_low_liquidity * price_difference
-
-                self._pending_base_amount_high_liquidity = 0
-            self.profit = Profit(round(profit_quote_amount - total_fees_quote_currency, 7), self.quote_currency)
+            profit_quote_amount = self._calculate_profit_quote(order_type, price_difference,
+                                                               base_amount_traded_percentage,
+                                                               quote_amount_traded_percentage)
+            self.profit = Profit(round(profit_quote_amount - total_fees_quote_currency, PROFIT_ROUNDING_DECIMALS),
+                                 self.quote_currency)
         elif currency_of_interest == CurrencyOfInterest.BASE:
-            if order_type in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
-                profit_base_amount =\
-                    base_amount_traded_both_exchanges * self.traded_base_amount_low_liquidity * price_difference
-
-                self._pending_quote_amount_high_liquidity = 0
-            elif order_type in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
-                profit_base_amount =\
-                    quote_amount_traded_both_exchanges * self.traded_base_amount_low_liquidity * price_difference
-
-                self._pending_base_amount_high_liquidity = 0
-
-            self.profit = Profit(round(profit_base_amount - total_fees_base_currency, 7), self.base_currency)
+            profit_base_amount = self._calculate_profit_base(order_type, price_difference,
+                                                             base_amount_traded_percentage,
+                                                             quote_amount_traded_percentage)
+            self.profit = Profit(round(profit_base_amount - total_fees_base_currency, PROFIT_ROUNDING_DECIMALS),
+                                 self.base_currency)
         else:
             logger.warning(f"No logic for order_type: {self.order_type}")
 
-        # TODO: Extend to SELL_MARKET and BUY _MARKET
+    def _calculate_profit_quote(self, order_type: 'OrderType', price_difference: float,
+                                base_amount_traded_percentage: float, quote_amount_traded_percentage: float) -> float:
+        """
+        Helper method to calculate profit in quote currency.
+        :param order_type: The type of the order (BUY/SELL).
+        :param price_difference: The price difference in decimal form (e.g., 0.05 = 5%).
+        :param base_amount_traded_percentage: The percentage of the base currency traded.
+        :param quote_amount_traded_percentage: The percentage of the quote currency traded.
+        :return: The calculated profit in quote currency.
+        """
+        if order_type in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
+            profit = base_amount_traded_percentage * self.traded_quote_amount_low_liquidity * price_difference
+            self._pending_quote_amount_high_liquidity = 0
+        elif order_type in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
+            profit = quote_amount_traded_percentage * self.traded_quote_amount_low_liquidity * price_difference
+            self._pending_base_amount_high_liquidity = 0
+        return profit
+
+    def _calculate_profit_base(self, order_type: 'OrderType', price_difference: float,
+                               base_amount_traded_percentage: float, quote_amount_traded_percentage: float) -> float:
+        """
+        Helper method to calculate profit in base currency.
+        :param order_type: The type of the order (BUY/SELL).
+        :param price_difference: The price difference in decimal form (e.g., 0.05 = 5%).
+        :param base_amount_traded_percentage: The percentage of the base currency traded.
+        :param quote_amount_traded_percentage: The percentage of the quote currency traded.
+        :return: The calculated profit in base currency.
+        """
+        if order_type in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
+            profit = base_amount_traded_percentage * self.traded_base_amount_low_liquidity * price_difference
+            self._pending_quote_amount_high_liquidity = 0
+        elif order_type in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
+            profit = quote_amount_traded_percentage * self.traded_base_amount_low_liquidity * price_difference
+            self._pending_base_amount_high_liquidity = 0
+        return profit
 
     def update_high_liquidity_traded(self, traded_delta: float) -> None:
         """

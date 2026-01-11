@@ -3,6 +3,8 @@ from enum import Enum
 
 Profit = namedtuple('Profit', 'amount, currency')  # Point has members `amount` and `currency`
 
+PROFIT_ROUNDING_DECIMALS = 7
+
 
 class OrderType(Enum):
     BUY_LIMIT = 0  # Limit order (buy) in low_liquidity exchange, market order (sell) in high_liquidity exchange
