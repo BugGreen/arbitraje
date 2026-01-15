@@ -24,13 +24,8 @@ def main() -> None:
     # Example usage with Binance
 
     try:
-        def send_message_async():
-            telegram_bot_instance = TelegramAlert()
-            asyncio.run(telegram_bot_instance.send_error_alert("Hola"))
 
-        # Call the function
-        send_message_async()
-        # welcome_menu()
+        welcome_menu()
         # bot = ArbitrageBot(
         #     exchange_high_liquidity='binance',
         #     exchange_low_liquidity='buda',
@@ -67,8 +62,8 @@ def main() -> None:
 
         #usdc_deposit_addres = binance.create_deposit_address(coin=coin, network='ETH')
         #print(json.dumps(usdc_deposit_addres, indent=2))
-        # print(binance.get_withdraw_history('BTC'))
-        # print(binance.get_deposit_history())
+        print(binance.get_withdraw_history('BTC'))
+        print(binance.get_deposit_history())
 
         # coin_info = binance.get_coin_info(base_currency)
         # print(json.dumps(coin_info, indent=2))

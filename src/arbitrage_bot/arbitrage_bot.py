@@ -1,11 +1,8 @@
-import asyncio
-import json
-
-from exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
-from exchange_api.low_liquidity_exchanges.base_low_liquidity_exchange import BaseLowLiquidityExchange
+from src.exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
+from src.exchange_api.low_liquidity_exchanges.base_low_liquidity_exchange import BaseLowLiquidityExchange
+from src.exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
 from src.arbitrage_bot.encoders import MIN_BTC_PER_INVOICE, MAX_BTC_PER_INVOICE
-from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
-from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
+from src.exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
 from src.order_types.encoders import OrderType, CurrencyOfInterest
 from typing import Optional, Type, Dict, List, Any, Union, Tuple
 from src.exchange_api.exchange_factory import ExchangeFactory
@@ -18,6 +15,8 @@ from decimal import Decimal
 import threading
 import logging
 import inspect
+import asyncio
+import json
 import time
 
 logger = logging.getLogger(__name__)
@@ -120,26 +119,6 @@ class ArbitrageBot:
 
         raise ValueError(f"Network '{network}' not found in coin info.")
 
-    @staticmethod
-    def retry_with_exponential_backoff(func, max_retries=3, base_delay=2, max_delay=10):
-        """
-        Retries a function call with exponential backoff.
-
-        :param func: The function to call.
-        :param max_retries: The maximum number of retries.
-        :param base_delay: The base delay between retries (in seconds).
-        :param max_delay: The maximum delay between retries (in seconds).
-        :return: The result of the function call, or raises an exception after max_retries.
-        """
-        for attempt in range(max_retries):
-            try:
-                return func()  # Call the function
-            except (502, 524) as e:  # Handle specific errors like 502 and 524
-                delay = min(base_delay * (2 ** attempt), max_delay)
-                logger.error(f"Error occurred (Attempt {attempt + 1}/{max_retries}). Retrying in {delay}s...")
-                time.sleep(delay)  # Wait before retrying
-        raise Exception(f"Failed after {max_retries} retries.")
-
     def run_arbitrage_flow(self, arb_order: ArbitrageOrder, mode: str = "infinite_loop", debug_mode: bool = False,
                            sleep_interval: float = 0.8) -> None:
         """
@@ -196,8 +175,7 @@ class ArbitrageBot:
 
             try:
                 # 1) Get the high-liquidity price with retry mechanism
-                high_liquidity_price = self.retry_with_exponential_backoff(
-                    lambda: self._get_latest_high_liquidity_price(arb_order=arb_order))
+                high_liquidity_price = self._get_latest_high_liquidity_price(arb_order=arb_order)
 
                 if high_liquidity_price is None:
                     logger.debug("No valid price from REST. Sleeping for %.1fs", sleep_interval)
@@ -228,7 +206,7 @@ class ArbitrageBot:
                     continue
 
                 # 4) Place sub-orders
-                sub_orders = self.retry_with_exponential_backoff(lambda: self.place_sub_orders(sub_orders, arb_order))
+                sub_orders = self.place_sub_orders(sub_orders, arb_order)
 
                 if isinstance(sub_orders, dict) and "error_code" in sub_orders:
                     logger.error("place_sub_orders failed: %s", sub_orders)

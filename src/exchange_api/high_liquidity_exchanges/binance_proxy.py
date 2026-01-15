@@ -1,8 +1,8 @@
 # exchange_api/binance_proxy.py
 import json
-from exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
+from src.exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
 from src.exchange_api.utils import load_api_keys, handle_api_response
-from exchange_api.high_liquidity_exchanges import encoders
+from src.exchange_api.high_liquidity_exchanges import encoders
 from typing import List, Dict, Optional, Union
 from urllib.parse import urlencode
 import requests
