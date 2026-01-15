@@ -30,7 +30,8 @@ class BudaProxy(BaseExchange):
         "CANCEL_ORDER": "/api/v2/orders/{}",
         "ORDER_STATES": "/api/v2/markets/{}/orders",
         "BATCH_ORDERS": "/api/v2/orders",
-        "CRYPTO_WITHDRAWAL": "/api/v2/currencies/{currency}/withdrawals"
+        "CRYPTO_WITHDRAWAL": "/api/v2/currencies/{currency}/withdrawals",
+        "ORDER_BOOK": "/api/v2/markets/{}/order_book",
     }
 
     def _sign_request(self, method: str, path: str, body: str = "") -> Dict[str, str]:
@@ -72,6 +73,33 @@ class BudaProxy(BaseExchange):
             "Referer": "https://www.buda.com",
             "Origin": "https://www.buda.com"
         }
+
+    def get_order_book(self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Retrieve the current order book for a specified market.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'USD').
+        :return: A dictionary containing 'asks' and 'bids' lists from the order book.
+        :raises Exception: If the API request fails.
+        """
+        market_id = "-".join([base_currency.lower(), quote_currency.lower()])
+
+        # Define the endpoint path for retrieving the order book
+        endpoint_path = self.ENDPOINTS["ORDER_BOOK"].format(market_id)
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Sign the request (assuming _sign_request can handle GET without body)
+        headers = self._sign_request(method="GET", path=endpoint_path)
+
+        # Make the API call to retrieve the order book
+        response = requests.get(url, headers=headers)
+
+        # Check for successful response
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception(f"Error {response.status_code}: {response.text}")
 
     def create_deposit_address(self, coin: str = "BTC", network: Optional[str] = "lightning",
                                amount_satoshis: int = 0, memo: Optional[str] = None,

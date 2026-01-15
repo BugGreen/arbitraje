@@ -317,4 +317,8 @@ class BinanceProxy(BaseExchange):
 
     def get_price(self, base_currency: str, quote_currency: str) -> Dict:
         # ToDo
-        return 9
+        pass
+
+    def get_order_book(self, base_currency: str, quote_currency: str) -> Dict:
+        # ToDo
+        pass

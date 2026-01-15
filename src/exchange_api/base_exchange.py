@@ -17,6 +17,17 @@ class BaseExchange(ABC):
         pass
 
     @abstractmethod
+    def get_order_book (self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Retrieve the current order book for a specified market.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'USD').
+        :return: A dictionary containing 'asks' and 'bids' lists from the order book.
+        """
+        pass
+
+    @abstractmethod
     def supports_lightning_network(self, coin: str) -> bool:
         """
         Check if the exchange supports the Lightning Network for a specific coin.

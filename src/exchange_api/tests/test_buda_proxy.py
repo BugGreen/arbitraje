@@ -491,3 +491,73 @@ def test_batch_creation_success(mock_post):
     for order in response['orders_diff']:
         assert order['mode'] == 'place'
     assert mock_post.called_once()
+
+
+@patch("requests.get")
+def test_get_order_book_success(mock_get):
+    """
+    Test successful retrieval of the order book from Buda.
+    """
+    # Sample mock response data
+    mock_response_data = {
+        "order_book": {
+            "asks": [
+                ["836677.14", "0.447349"],
+                ["837462.23", "1.43804963"],
+                ["837571.89", "1.41498541"],
+                ["837597.23", "0.13177617"],
+                ["837753.25", "1.40724154"]
+            ],
+            "bids": [
+                ["821580.0", "0.25667389"],
+                ["821211.0", "0.27827307"],
+                ["819882.39", "1.40003128"],
+                ["819622.99", "1.40668862"],
+                ["819489.9", "1.41736995"]
+            ]
+        }
+    }
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = mock_response_data
+    # Configure the mock to return a response with our mock data
+    mock_get.return_value = mock_response
+
+    # Initialize BudaProxy instance with dummy API credentials
+    buda = BudaProxy()
+    buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
+
+    # Call the get_order_book method
+    result = buda.get_order_book(base_currency='BTC', quote_currency='CLP')
+
+    # Assertions to verify the response
+    assert "order_book" in result, "Response should contain 'order_book' key."
+    assert "asks" in result["order_book"], "Order book should contain 'asks'."
+    assert "bids" in result["order_book"], "Order book should contain 'bids'."
+    assert isinstance(result["order_book"]["asks"], list), "'asks' should be a list."
+    assert isinstance(result["order_book"]["bids"], list), "'bids' should be a list."
+
+
+@patch("requests.get")
+def test_get_order_book_failure(mock_get):
+    """
+    Test retrieval of the order book when the API call fails.
+    """
+    # Configure the mock to return a 404 Not Found response
+    mock_response = Mock()
+    mock_response.status_code = 404
+    mock_response.return_value.text = "Market not found."
+    mock_get.return_value = mock_response
+
+    # Initialize BudaProxy instance with dummy API credentials
+    buda = BudaProxy()
+    buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
+
+    try:
+        # Call the get_order_book method, which should raise an Exception
+        buda.get_order_book(base_currency='INVALID', quote_currency='PAIR')
+        assert False, "Expected Exception was not raised."
+    except Exception as e:
+        assert "Error 404" in str(e), "Exception message should contain 'Error 404'."
+
