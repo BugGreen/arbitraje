@@ -1412,7 +1412,7 @@ class TestArbitrageBot(unittest.TestCase):
         # lowest_ask=103 => p_diff = (103 - 99)/99 = ~0.04040
         p_diff, reference_price = self.bot.get_price_reference(high_liquidity_price, arb_order)
         self.assertAlmostEqual(p_diff, 0.04040, places=5)
-        self.assertEqual(reference_price, 101)
+        self.assertEqual(reference_price, 99)
 
     @patch.object(BudaProxy, 'get_current_order_book',
                   return_value=test_api_constants.buda_order_book_response_to_filter)
@@ -1433,7 +1433,7 @@ class TestArbitrageBot(unittest.TestCase):
         # highest_bid=101 => p_diff = (105 - 101)/101 = ~0.03960
         p_diff, reference_price = self.bot.get_price_reference(high_liquidity_price, arb_order)
         self.assertAlmostEqual(p_diff, 0.03960, places=5)
-        self.assertEqual(reference_price, 103)
+        self.assertEqual(reference_price, 105)
 
     @patch.object(BudaProxy, 'get_current_order_book',
                   return_value=test_api_constants.buda_order_book_response_to_filter)

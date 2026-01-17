@@ -444,7 +444,7 @@ class ArbitrageBot:
             # Prevent the creation of non-profitable market orders
             if price_difference > self.price_diff_threshold:
                 if price_difference >= self.low_liquidity_taker_fee + self.price_diff_threshold:
-                    return price  # Creation of profitable market order
+                    return high_liquidity_price  # Creation of profitable market order
                 else:
                         if arb_order.order_type is OrderType.SELL_LIMIT:
                             return price * ((1 + 0.001) / (1 + self.price_diff_threshold))
@@ -452,7 +452,7 @@ class ArbitrageBot:
                             return price * ((1 - 0.001) / (1 - self.price_diff_threshold))
 
             elif cumulative_volume >= min_volume:
-                return price
+                return high_liquidity_price
 
         return None
 
@@ -547,14 +547,16 @@ class ArbitrageBot:
         if order_type_name in [OrderType.BUY_LIMIT, OrderType.BUY_MARKET]:
             # p_diff = (high_liquidity_price - lowest_exchange_lowest_ask) / lowest_exchange_lowest_ask
             filtered_lowest_ask = self.filter_order_levels(asks, arb_order, high_liquidity_price, reverse=False)
-            price_reference = min([filtered_lowest_ask, high_liquidity_price])
+            price_reference = filtered_lowest_ask
+            # min([filtered_lowest_ask, high_liquidity_price])
             low_liquidity_price = lowest_ask if order_type_name is OrderType.BUY_MARKET else \
                 highest_bid
             virtual_p_diff = (high_liquidity_price - low_liquidity_price) / low_liquidity_price
         elif order_type_name in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
             # p_diff = (lowest_exchange_highest_bid - high_liquidity_price) / high_liquidity_price
             filtered_highest_bid = self.filter_order_levels(bids, arb_order, high_liquidity_price, reverse=True)
-            price_reference = max([filtered_highest_bid, high_liquidity_price])
+            price_reference = filtered_highest_bid
+            # max([filtered_highest_bid, high_liquidity_price])
             low_liquidity_price = highest_bid if order_type_name is OrderType.SELL_MARKET else \
                 lowest_ask
             virtual_p_diff = (low_liquidity_price - high_liquidity_price) / high_liquidity_price
