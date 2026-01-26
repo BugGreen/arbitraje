@@ -1469,7 +1469,7 @@ class TestArbitrageBot(unittest.TestCase):
                   side_effect=[
                       test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_1,
                       test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_2])
-    def test_run_arbitrage_flow_sell_limit_traded(self,
+    def test_run_arbitrage_flow_fail_binance(self,
                                                   mock_buda_place_sub_orders,
                                                   mock_buda_batch_cancellation,
                                                   mock_buda_get_order_states,

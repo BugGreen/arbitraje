@@ -1,14 +1,18 @@
+import asyncio
+import json
+
+from exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
+from exchange_api.low_liquidity_exchanges.base_low_liquidity_exchange import BaseLowLiquidityExchange
 from src.arbitrage_bot.encoders import MIN_BTC_PER_INVOICE, MAX_BTC_PER_INVOICE
+from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
+from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
 from src.order_types.encoders import OrderType, CurrencyOfInterest
 from typing import Optional, Type, Dict, List, Any, Union, Tuple
 from src.exchange_api.exchange_factory import ExchangeFactory
 from src.order_types.arbitrage_order import ArbitrageOrder
-from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
-from exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
-from exchange_api.low_liquidity_exchanges.base_low_liquidity_exchange import BaseLowLiquidityExchange
+from src.telegram_bot.telegram_alert import TelegramAlert
 from src.user_interface.arbitrage_ui import ArbitrageUI
 from concurrent.futures import ThreadPoolExecutor
-from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
 from datetime import datetime
 from decimal import Decimal
 import threading
@@ -47,6 +51,7 @@ class ArbitrageBot:
         self.minimum_withdrawal_amount_quote_high_liquidity: float = 20  # USDC with ETH network
 
         self.ui: ArbitrageUI = ArbitrageUI()
+        self.telegram_alert = TelegramAlert()
 
     def get_min_notional_high_liquidity(self, arb_order: ArbitrageOrder) -> float:
         """
@@ -258,9 +263,21 @@ class ArbitrageBot:
 
             except Exception as e:
                 logger.error(f"An error occurred: {e}")
+                # In case of an error, send an alert
+                order_info = arb_order.get_arbitrage_order_info()
+                error_message = f""" An error occurred in arbitrage flow: \n{str(e)} 
+                \nOrder info: \n{json.dumps(order_info, indent=2)}
+                \nArbitrage loop was stopped.
+                """
+                logger.error(error_message)
+
+                # Now call the asynchronous alert function
+                asyncio.run(self.telegram_alert.send_error_alert(error_message))
+
+                # Optionally, sleep or exit after sending an alert
                 # Optionally, send an alert here (via email, Slack, etc.)
                 time.sleep(sleep_interval)
-                continue
+                break
 
             # 6) Break if single cycle
             if mode == "single_cycle":

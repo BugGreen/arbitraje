@@ -65,6 +65,19 @@ class ArbitrageOrder(Order):
         # e.g. def on_pending_high_liquidity_update(arb_order, delta): ...
         self.on_pending_high_liquidity_updated: Optional[Callable[['ArbitrageOrder', float], None]] = None
 
+    def get_arbitrage_order_info(self) -> dict:
+        arbitrage_order_info = {
+            "original_amount": self.original_amount,
+            "pending_amount_low_liquidity": self.pending_amount_low_liquidity,
+            "traded_base_amount_low_liquidity": self.traded_base_amount_low_liquidity,
+            "traded_quote_amount_low_liquidity": self.traded_quote_amount_low_liquidity,
+            "pending_quote_amount_high_liquidity": self._pending_quote_amount_high_liquidity,
+            "pending_base_amount_high_liquidity": self._pending_base_amount_high_liquidity,
+            "traded_amount_base_high_liquidity": self.traded_amount_base_high_liquidity,
+            "traded_amount_quote_high_liquidity": self.traded_amount_quote_high_liquidity
+        }
+        return arbitrage_order_info
+
     def update_low_liquidity_traded(self,
                                     traded_quote_delta: float,
                                     traded_base_delta: float,
