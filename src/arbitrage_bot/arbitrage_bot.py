@@ -303,28 +303,29 @@ class ArbitrageBot:
 
         return float(market_info.get("taker_fee", 0.8)) / 100
 
-    def register_trade_event(self, arb_order: ArbitrageOrder) -> None:
+    def register_trade_event(
+            self,
+            arb_order: ArbitrageOrder,
+            executed_low_liq: float,
+            executed_high_liq: float
+    ) -> None:
         """
         Register a trade event.
         Store it into UI's attribute `trade_events`, so it can be processed and displayed.
 
         :param arb_order: The ArbitrageOrder describing order_type, amounts, etc.
-        """
+        :param executed_low_liq: The traded amount in the low liquidity exchange.
+        :param executed_high_liq: The traded amount in the low high exchange.
 
-        if arb_order.currency_of_interest is CurrencyOfInterest.QUOTE:
-            traded_low = arb_order.traded_quote_amount_low_liquidity
-            traded_high = arb_order.traded_amount_quote_high_liquidity
-        elif arb_order.currency_of_interest is CurrencyOfInterest.BASE:
-            traded_low = arb_order.traded_base_amount_low_liquidity
-            traded_high = arb_order.traded_amount_base_high_liquidity
+        """
 
         trade_event = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "order_type": str(arb_order.order_type),
+            "order_type": str(arb_order.order_type.name),
             "price_difference": arb_order.price_difference,
             "profit": arb_order.profit.amount,
-            "traded_low": traded_low,
-            "traded_high": traded_high,
+            "traded_low": executed_low_liq,
+            "traded_high": executed_high_liq,
             "low_price": arb_order.low_liquidity_price,
             "high_price": arb_order.high_liquidity_price
         }
@@ -1156,6 +1157,8 @@ class ArbitrageBot:
         :param limit_price_low_liquidity: The limit price in the low liquidity exchange
         """
 
+        init_amount_to_trade_low_liq: float = arb_order.get_pending_quote_amount_high_liquidity
+
         to_trade_quote_currency = arb_order.get_pending_quote_amount_high_liquidity
         to_trade_base_currency = arb_order.get_pending_base_amount_high_liquidity  # Pending amount, in base currency
         min_notional_factor: float = 1.15  # Increasing factor to avoid "code":-1013 (MIN NOTIONAL) error due rounding
@@ -1221,7 +1224,7 @@ class ArbitrageBot:
             )
 
             # Update the UI
-            self.register_trade_event(arb_order)
+            self.register_trade_event(arb_order, init_amount_to_trade_low_liq, executed_quote_qty)
             return order_resp
 
         except Exception as e:
