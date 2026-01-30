@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Any
 import json
 
 
@@ -52,42 +52,28 @@ successful_batch_order = [
             }
         ]
 
-expected_successful_batch_order_response = [
-            {
-                "id": 1306565374,
-                "status": "received",
-                "error_message": "null",
-                "amount": [
-                    "0.001000001",
-                    "ETH"
-                ],
-                "traded_amount": [
-                    "0.0",
-                    "ETH"
-                ],
-                "total_exchanged": [
-                    "0.0",
-                    "COP"
-                ]
-            },
-            {
-                "id": 1306565375,
-                "status": "received",
-                "error_message": "null",
-                "amount": [
-                    "0.0012",
-                    "ETH"
-                ],
-                "traded_amount": [
-                    "0.0",
-                    "ETH"
-                ],
-                "total_exchanged": [
-                    "0.0",
-                    "COP"
-                ]
-            }
-        ]
+expected_successful_batch_order_response: List[Dict[str, Any]] = [
+    {
+        'id': 1306565374,
+        'status': 'received',
+        'error_message': 'null',
+        'amount': ['0.001000001', 'ETH'],
+        'traded_amount': ['0.0', 'ETH'],
+        'total_exchanged': ['0.0', 'COP'],
+        'type': 'Bid',
+        'limit': ['10000000.0', 'COP']
+    },
+    {
+        'id': 1306565375,
+        'status': 'received',
+        'error_message': 'null',
+        'amount': ['0.0012', 'ETH'],
+        'traded_amount': ['0.0', 'ETH'],
+        'total_exchanged': ['0.0', 'COP'],
+        'type': 'Bid',
+        'limit': ['10000000.0', 'COP']
+    }
+]
 
 
 successful_batch_order_mock_response = {"orders_diff": [

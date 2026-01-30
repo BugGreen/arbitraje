@@ -124,6 +124,9 @@ class BudaProxy(BaseLowLiquidityExchange):
             amount = order_details.get("amount")
             traded_amount = order_details.get("traded_amount")
             total_exchanged = order_details.get("total_exchanged")
+            order_type: str = order_details.get("type")
+            limit: list = order_details.get("limit")
+
 
             # Map Buda's 'state' field to a unified 'status'
             if state in ("received", "pending", "traded", "canceled"):
@@ -141,7 +144,9 @@ class BudaProxy(BaseLowLiquidityExchange):
                 "error_message": error_msg,
                 "amount": amount,
                 "traded_amount": traded_amount,
-                "total_exchanged": total_exchanged
+                "total_exchanged": total_exchanged,
+                "type": order_type,
+                "limit": limit
             })
 
         return standardized_orders

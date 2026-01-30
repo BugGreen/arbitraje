@@ -230,7 +230,7 @@ class ArbitrageBot:
                     continue
 
                 # 4) Place sub-orders
-                sub_orders = self.place_sub_orders(sub_orders_price, arb_order)
+                sub_orders = self.place_sub_orders(arb_order)
 
                 if isinstance(sub_orders, dict) and "error_code" in sub_orders:
                     logger.error("place_sub_orders failed: %s", sub_orders)
@@ -613,10 +613,14 @@ class ArbitrageBot:
                 if isinstance(result, dict) and "code" in result and result["code"] == "ERROR_BELOW_MIN_TOTAL":
                     logger.error("Order amount below minimum for %s: %s", arb_order, result)
                     return [result]  # Return early on failure for any order in the list
+                arb_order.update_sub_orders_info(result)
                 results.append(result)
+
             return results  # Return the list of sub-orders for all valid orders
 
-        return self._split_order_for_single(arb_orders, delta)  # Handle single order
+        result = self._split_order_for_single(arb_orders, delta)
+        arb_orders.update_sub_orders_info(result)
+        return result # Handle single order
 
     def _split_order_for_single(
             self,
@@ -712,19 +716,24 @@ class ArbitrageBot:
         logger.info("Created sub-orders after enforcing min amounts: %s", result)
         return result
 
-    def place_sub_orders(self, sub_orders_prices: List[Dict[str, Any]], arb_order: ArbitrageOrder) -> \
+    def place_sub_orders(self, arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]]) -> \
             Union[List[Dict[str, Any]], Dict[str, Any]]:
         """
         Place a batch of sub-orders on the low-liquidity exchange and handle partial or complete success,
         as well as common errors. Also wait for sub-orders that are in 'received' state to transition
         to another state (e.g. 'pending', 'canceled', etc.) before returning.
 
-        :param sub_orders_prices: A list of sub-orders in standardized format.
-        :param arb_order: The ArbitrageOrder object to update with traded amounts or partial fills.
+        :param arb_orders: A single ArbitrageOrder or a list of ArbitrageOrder instances.
         :return:
             - On success (partial or complete), a list of sub-order responses in standardized format
             - On failure, a dictionary with "error_code" and "message" (and possibly "details").
         """
+
+        if isinstance(arb_orders, list):
+            sub_orders_prices: Dict = {}
+            pass
+        else:
+            sub_orders_prices: Dict = arb_orders.sub_orders_info
 
         logger.info("Placing sub-orders on low-liquidity exchange: %s", sub_orders_prices)
         try:
@@ -746,7 +755,7 @@ class ArbitrageBot:
             # I.e., we wait until the orders are indeed processed by the exchange_low_liquidity sever
             received_orders = [o for o in standardized_response if o.get("status") == "received"]
             if received_orders:
-                self._wait_for_orders_to_leave_received(received_orders, arb_order)
+                self._wait_for_orders_to_leave_received(received_orders, arb_orders)
 
             return standardized_response
 

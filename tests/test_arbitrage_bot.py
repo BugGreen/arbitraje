@@ -1,7 +1,7 @@
 from src.arbitrage_bot.arbitrage_bot import ArbitrageBot
 from src.order_types.arbitrage_order import ArbitrageOrder
-from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
-from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
+from src.exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
+from src.exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
 from unittest.mock import patch, MagicMock
 import unittest
 from typing import List, Dict, Any, Union, Optional
@@ -183,31 +183,39 @@ class TestArbitrageBot(unittest.TestCase):
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
         )
+        arb_order_2 = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
         arb_order.price_reference = 10000.0
-        mock_order = MockArbitrageOrder(original_amount=100.0)
-        mock_order.price_reference = 10000.0
-        mock_order.order_type = OrderType.BUY_LIMIT
-        mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
+        arb_order_2.price_reference = 10000.0
 
-        result = self.bot.split_order_into_suborders([arb_order, mock_order])
+
+        result = self.bot.split_order_into_suborders([arb_order, arb_order_2])
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 2)
         self.assertEqual(len(result[0]), 3)  # Expecting 3 sub-orders for first order
         self.assertEqual(len(result[1]), 3)  # Expecting 3 sub-orders for second order
-
 
     def test_split_order_into_suborders_ask_with_delta(self):
         """
         Test splitting an 'ask' order with a specified delta.
         """
 
-        mock_order = MockArbitrageOrder(original_amount=100.0)
-        mock_order.price_reference = 10000.0
         delta = 0.5 / 100
-        mock_order.order_type = OrderType.SELL_LIMIT
-        mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
 
-        result = self.bot.split_order_into_suborders(mock_order, delta=delta)
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=100,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        arb_order.price_reference = 10000.0
+        result = self.bot.split_order_into_suborders(arb_order, delta=delta)
 
         # print(json.dumps(result, indent=2))
         # Check amount distribution
@@ -216,10 +224,10 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(result[2]["order"]["amount"], 10.0 / result[2]["order"]["limit"])
 
         # Check price calculations
-        expected_one_price = mock_order.price_reference * (1 + delta + self.bot.price_diff_threshold)  # 10000 + 50 = 10050
+        expected_one_price = arb_order.price_reference * (1 + delta + self.bot.price_diff_threshold)  # 10000 + 50 = 10050
         expected_two_price = expected_one_price * 1.001
         expected_three_price = expected_one_price * 1.002
-        self.assertAlmostEqual(result[0]["order"]["limit"], expected_one_price)
+        self.assertAlmostEqual(arb_order.sub_orders_info[0]["order"]["limit"], expected_one_price)
         self.assertAlmostEqual(result[1]["order"]["limit"], expected_two_price)
         self.assertAlmostEqual(result[2]["order"]["limit"], expected_three_price)
 
@@ -228,13 +236,17 @@ class TestArbitrageBot(unittest.TestCase):
         Test splitting a 'bid' order without a delta (uses price_diff_treshold).
         """
 
-        mock_order = MockArbitrageOrder(original_amount=200.0)
-        mock_order.price_reference = 5000
-        mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
-
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=200,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.BUY_LIMIT
+        )
+        arb_order.price_reference = 5000
        # No delta given
 
-        result = self.bot.split_order_into_suborders(mock_order)
+        result = self.bot.split_order_into_suborders(arb_order)
 
         # Check amount distribution
         self.assertEqual(result[0]["order"]["amount"], 120.0 / result[0]["order"]["limit"])  # 60% of 200 in Base Currency
@@ -242,10 +254,10 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertEqual(result[2]["order"]["amount"], 20.0 / result[2]["order"]["limit"])  # 10% of 200
 
         # Check price calculations: reference_price - price_diff_treshold (5000 - 10 = 4990)
-        expected_one_price = mock_order.price_reference * (1 - self.bot.price_diff_threshold)
+        expected_one_price = arb_order.price_reference * (1 - self.bot.price_diff_threshold)
         expected_two_price = expected_one_price * 0.999
         expected_three_price = expected_one_price * 0.998
-        self.assertAlmostEqual(result[0]["order"]["limit"], expected_one_price)
+        self.assertAlmostEqual(arb_order.sub_orders_info[0]["order"]["limit"], expected_one_price)
         self.assertAlmostEqual(result[1]["order"]["limit"], expected_two_price)
         self.assertAlmostEqual(result[2]["order"]["limit"], expected_three_price)
 
@@ -261,12 +273,16 @@ class TestArbitrageBot(unittest.TestCase):
         #   sub_order_three_amount: 0.0012 * 0.1 = 0.00012
 
         # All of these are below 0.001, so each will attempt to merge with the next.
-
-        mock_order = MockArbitrageOrder(original_amount=15)
-        mock_order.base_currency, mock_order.quote_currency = "BTC", "USDC"
-        mock_order.price_reference = 10000.0
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        arb_order.price_reference = 10000.0
         sub_orders = self.bot.split_order_into_suborders(
-            arb_orders=mock_order,
+            arb_orders=arb_order,
             delta=.5 / 100
         )
 
@@ -308,9 +324,10 @@ class TestArbitrageBot(unittest.TestCase):
         mock_post.return_value = mock_response
 
         sub_orders_example = test_api_constants.successful_batch_order
+        self.arb_order.update_sub_orders_info(sub_orders_example)
 
         # Mock the requests.post in batch_creation method of exchange_low_liquidity object
-        response = self.bot.place_sub_orders(sub_orders_example, self.arb_order)
+        response = self.bot.place_sub_orders(self.arb_order)
         expected_response = test_api_constants.expected_successful_batch_order_response
         for order in expected_response:
             order['status'] = 'pending'
@@ -334,7 +351,8 @@ class TestArbitrageBot(unittest.TestCase):
         sub_orders_example = test_api_constants.successful_batch_order
 
         # Mock the requests.post in batch_creation method of exchange_low_liquidity object
-        response = self.bot.place_sub_orders(sub_orders_example, self.arb_order)
+        self.arb_order.update_sub_orders_info(sub_orders_example)
+        response = self.bot.place_sub_orders(self.arb_order)
         expected_response = test_api_constants.expected_successful_batch_order_response
         count = 0
         for order in expected_response:
@@ -376,7 +394,8 @@ class TestArbitrageBot(unittest.TestCase):
 
         # Mock the requests.post in batch_creation method of exchange_low_liquidity object
         self.arb_order.pending_amount_low_liquidity = 10000000.0
-        response = self.bot.place_sub_orders(sub_orders_example, self.arb_order)
+        self.arb_order.update_sub_orders_info(sub_orders_example)
+        response = self.bot.place_sub_orders(self.arb_order)
         expected_response = test_api_constants.expected_successful_batch_order_response
         count = 0
         for order in expected_response:
@@ -412,8 +431,8 @@ class TestArbitrageBot(unittest.TestCase):
         mock_post.return_value = mock_response
 
         partial_correct_sub_orders = test_api_constants.partial_successful_batch_order
-
-        place_sub_orders_response = self.bot.place_sub_orders(partial_correct_sub_orders, self.arb_order)
+        self.arb_order.update_sub_orders_info(partial_correct_sub_orders)
+        place_sub_orders_response = self.bot.place_sub_orders(self.arb_order)
         expected_response = test_a_bot_constans.expected_insolvent_error_response
 
         self.assertEqual(place_sub_orders_response, expected_response)
@@ -428,15 +447,13 @@ class TestArbitrageBot(unittest.TestCase):
         :return: None
         """
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = test_api_constants.amount_less_than_minimum_order_mock_response
-
-        mock_post.return_value = mock_response
-
+        arb_order = MagicMock()
+        arb_order.json.return_value = test_api_constants.amount_less_than_minimum_order_mock_response
+        mock_post.return_value = arb_order
         amount_less_than_minimum_order = test_api_constants.amount_less_than_minimum_order
+        arb_order.update_sub_orders_info(amount_less_than_minimum_order)
 
-        amount_less_than_minimum_order_response = self.bot.place_sub_orders(amount_less_than_minimum_order,
-                                                                            self.arb_order)
+        amount_less_than_minimum_order_response = self.bot.place_sub_orders(arb_order)
         expected_response = test_a_bot_constans.expected_amount_less_than_minimum_response  # Wrapped response in A.Bot
 
         self.assertEqual(amount_less_than_minimum_order_response, expected_response)
@@ -515,7 +532,8 @@ class TestArbitrageBot(unittest.TestCase):
             {"mode": "place", "order": {"amount": 200.0}},  # Just an example
             {"mode": "place", "order": {"amount": 800.0}},
         ]
-        self.bot.place_sub_orders(sub_orders, arb_order)
+        arb_order.update_sub_orders_info(sub_orders)
+        self.bot.place_sub_orders(arb_order)
 
         low_liquidity_price = 1000
         high_liquidity_price = 1100
@@ -652,7 +670,8 @@ class TestArbitrageBot(unittest.TestCase):
             {"mode": "place", "order": {"amount": 200.0}},
             {"mode": "place", "order": {"amount": 800.0}},
         ]
-        self.bot.place_sub_orders(sub_orders, arb_order)
+        arb_order.update_sub_orders_info(sub_orders)
+        self.bot.place_sub_orders(arb_order)
 
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
@@ -703,7 +722,8 @@ class TestArbitrageBot(unittest.TestCase):
 
         expected_profit_quote_amount = round((traded_quote_amount * price_diff_buy_limit) - paid_fees_quote_currency, 7)
 
-        self.bot.place_sub_orders(sub_orders, arb_order)
+        arb_order.update_sub_orders_info(sub_orders)
+        self.bot.place_sub_orders(arb_order)
 
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
@@ -780,7 +800,9 @@ class TestArbitrageBot(unittest.TestCase):
             {"mode": "place", "order": {"amount": 200.0}},  # Just an example
             {"mode": "place", "order": {"amount": 800.0}},
         ]
-        self.bot.place_sub_orders(sub_orders, arb_order)
+
+        arb_order.update_sub_orders_info(sub_orders)
+        self.bot.place_sub_orders(arb_order)
 
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
@@ -822,7 +844,8 @@ class TestArbitrageBot(unittest.TestCase):
             {"mode": "place", "order": {"amount": 200.0}},
             {"mode": "place", "order": {"amount": 800.0}},
         ]
-        self.bot.place_sub_orders(sub_orders, arb_order)
+        arb_order.update_sub_orders_info(sub_orders)
+        self.bot.place_sub_orders(arb_order)
 
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200
@@ -865,7 +888,8 @@ class TestArbitrageBot(unittest.TestCase):
             {"mode": "place", "order": {"amount": 200.0}},
             {"mode": "place", "order": {"amount": 800.0}},
         ]
-        self.bot.place_sub_orders(sub_orders, arb_order)
+        arb_order.update_sub_orders_info(sub_orders)
+        self.bot.place_sub_orders(arb_order)
 
         low_liquidity_price = 1000
         high_liquidity_price = 1100
@@ -923,7 +947,8 @@ class TestArbitrageBot(unittest.TestCase):
             {"mode": "place", "order": {"amount": 200.0}},  # Just an example
             {"mode": "place", "order": {"amount": 800.0}},
         ]
-        self.bot.place_sub_orders(sub_orders, arb_order)
+        arb_order.update_sub_orders_info(sub_orders)
+        self.bot.place_sub_orders(arb_order)
 
         # 4. Now, the _wait_for_orders_to_leave_received sees ID=100 => 'traded_amount': 200 => updates arb_order
         #    => calls execute_opposite_order_high_liquidity_exchange => we do a MARKET SELL of 200 => fulfill -> 200

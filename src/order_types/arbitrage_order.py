@@ -62,6 +62,17 @@ class ArbitrageOrder(Order):
         self.high_liquidity_exchange: str = high_liquidity_exchange
 
         self.price_reference = None  # Store price reference here
+        self.sub_orders_info = None  # Info about the sub_orders that conforms the amount to trade
+        self.sub_orders_ids: list = []
+
+    def update_sub_orders_info(self, sub_orders_info: dict):
+        """
+        Update the price reference.
+        WARNING: This is not the order price, but the reference price to place the order.
+
+        :param sub_orders_info: dict containing the sub orders info related to this order.
+        """
+        self.sub_orders_info = sub_orders_info  # Update it when necessary
 
     def update_price_reference(self, price_reference: float):
         """
