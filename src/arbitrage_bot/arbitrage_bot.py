@@ -375,7 +375,7 @@ class ArbitrageBot:
             levels: List[List[str]],
             arb_order: ArbitrageOrder,
             high_liquidity_price: float,
-            min_volume: float = 0.1,
+            min_volume: float = 0.02,
             reverse: bool = False
     ) -> Optional[float]:
         """
