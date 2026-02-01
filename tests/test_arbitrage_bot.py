@@ -558,7 +558,7 @@ class TestArbitrageBot(unittest.TestCase):
         )
 
         # 3. Place sub-orders on low-liquidity
-        sub_orders =         sub_orders = [
+        sub_orders = [
             {"mode": "place", "order": {
                 "amount": 200.0,
                 "limit": 1000,
@@ -1871,7 +1871,7 @@ class TestArbitrageBot(unittest.TestCase):
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
         )
-        self.bot.run_arbitrage_flow(arb_order=arb_order, debug_mode=True)
+        self.bot.run_arbitrage_flow(arb_orders=arb_order, debug_mode=True)
         found_error = False
         for call in mock_logger.error.call_args_list:
             args, kwargs = call

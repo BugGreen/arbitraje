@@ -1,6 +1,9 @@
+from src.arbitrage_bot.arbitrage_bot import ArbitrageBot
 from src.exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
 from src.exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
 from src.exchange_api.exchange_factory import ExchangeFactory
+from src.order_types.arbitrage_order import ArbitrageOrder
+from src.order_types.encoders import CurrencyOfInterest, OrderType
 from src.telegram_bot.telegram_alert import TelegramAlert
 from src.user_interface.arbitrage_ui import welcome_menu
 import asyncio
@@ -25,15 +28,16 @@ def main() -> None:
 
     try:
 
-        welcome_menu()
-        # bot = ArbitrageBot(
-        #     exchange_high_liquidity='binance',
-        #     exchange_low_liquidity='buda',
-        #     price_diff_threshold=0.4,
-        #     mode='conservative',
-        #     base_currency='BTC',
-        #     quote_currency='USDC',
-        # )
+        # welcome_menu()
+        bot = ArbitrageBot(
+            exchange_high_liquidity='binance',
+            exchange_low_liquidity='buda',
+            price_diff_threshold=0.4,
+            mode='conservative',
+            base_currency='BTC',
+            quote_currency='USDC',
+        )
+        bot.exchange_low_liquidity.get_order_book("btc", "usdc")
         # arb_order = ArbitrageOrder(
         #     base_currency="BTC",
         #     quote_currency="USDC",
@@ -41,7 +45,14 @@ def main() -> None:
         #     currency_of_interest=CurrencyOfInterest.QUOTE,
         #     order_type=OrderType.SELL_LIMIT
         # )
-        # bot.run_arbitrage_flow(arb_order=arb_order)
+        # arb_order2 = ArbitrageOrder(
+        #     base_currency="BTC",
+        #     quote_currency="USDC",
+        #     original_amount=20,
+        #     currency_of_interest=CurrencyOfInterest.QUOTE,
+        #     order_type=OrderType.BUY_LIMIT
+        # )
+        # bot.run_arbitrage_flow(arb_orders=[arb_order, arb_order2])
 
         binance: BinanceProxy = ExchangeFactory.get_exchange("binance")
         coin = "USDC"

@@ -266,7 +266,7 @@ def welcome_menu() -> None:
             welcome_menu()
 
     # Start the arbitrage flow
-    bot.run_arbitrage_flow(arb_order=arb_order)
+    bot.run_arbitrage_flow(arb_orders=arb_order)
 
 
 def cancel_all_orders(bot: "ArbitrageBot", arb_order: ArbitrageOrder) -> None:

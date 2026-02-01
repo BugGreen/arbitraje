@@ -110,7 +110,7 @@ def test_get_btc_balances():
 @patch("requests.post")
 def test_create_quote_currency_address(mock_post):
     """
-    Test the create_deposit_address method for an alt-coin with a successful response.
+    Test the (create_deposit_address) method for an alt-coin with a successful response.
     """
     buda.api_key = "test_api_key"
     buda.api_secret = "test_api_secret"
@@ -225,21 +225,24 @@ def test_create_deposit_address_api_error(mock_post):
     """
     Test the create_deposit_address method when the API returns an error.
     """
+    mock_response = MagicMock()
+    mock_response.status_code = 400
+
+    mock_exception = requests.exceptions.Timeout("Connection timed out")
+    mock_exception.response = mock_response
+
+    mock_response.raise_for_status.side_effect = mock_exception
+    mock_post.return_value = mock_response
     buda.api_key = "test_api_key"
     buda.api_secret = "test_api_secret"
 
-    mock_response = Mock()
-    mock_response.status_code = 400
-    mock_response.text = '{"error": "Invalid request"}'
-    mock_post.return_value = mock_response
-
     # Act & Assert
-    with pytest.raises(Exception, match="Error 400: {\"error\": \"Invalid request\"}"):
+    with pytest.raises(Exception, match="Failed after 3 retries"):
         buda.create_deposit_address(
             coin="BTC", network="lightning", amount_satoshis=5000, memo="Test Invoice"
         )
 
-    mock_post.assert_called_once()
+    assert mock_post.call_count == 3
 
 
 @patch("requests.post")
@@ -536,7 +539,7 @@ def test_get_order_book_failure():
         buda.get_order_book(base_currency='INVALID', quote_currency='PAIR')
         assert False, "Expected Exception was not raised."
     except Exception as e:
-        assert "Error 401" in str(e), "Exception message should contain 'Error 404'."
+        assert "Failed after" in str(e), "Exception message should contain 'Error 404'."
 
 
 def test_cancel_all_orders_specific_market():
@@ -558,25 +561,36 @@ class TestBudaProxy(unittest.TestCase):
     @patch('requests.post')
     def test_batch_creation_amount_less_than_minimum_error(self, mock_post):
         # Mock an API-level error response
+        # Mock a network-related exception
         mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = \
-            requests.exceptions.HTTPError("EXCHANGE_API_ERROR_invalid_record")
-        mock_response.status_code = 422
-        mock_response.json.return_value = constants.amount_less_than_minimum_order_mock_response
+        mock_response.status_code = 401
+
+        mock_exception = requests.exceptions.Timeout("Connection timed out")
+        mock_exception.response = mock_response
+
+        mock_response.raise_for_status.side_effect = mock_exception
         mock_post.return_value = mock_response
 
         orders = constants.amount_less_than_minimum_order
 
-        expected_output = constants.expected_amount_less_than_minimum_response
-
-        response = self.proxy.batch_creation(orders)
-        self.assertEqual(response, expected_output)
-        mock_post.assert_called_once()
+        try:
+            # Call the get_order_book method, which should raise an Exception
+            response = self.proxy.batch_creation(orders)
+            assert False, "Expected Exception was not raised."
+        except Exception as e:
+            assert "Failed after" in str(e), "Exception message should contain 'Error 404'."
 
     @patch('requests.post')
     def test_batch_creation_request_exception(self, mock_post):
         # Mock a network-related exception
-        mock_post.side_effect = requests.exceptions.Timeout("Connection timed out")
+        mock_response = MagicMock()
+        mock_response.status_code = 502
+
+        mock_exception = requests.exceptions.Timeout("Connection timed out")
+        mock_exception.response = mock_response
+
+        mock_response.raise_for_status.side_effect = mock_exception
+        mock_post.return_value = mock_response
 
         orders = [
             {
@@ -591,14 +605,13 @@ class TestBudaProxy(unittest.TestCase):
             }
         ]
 
-        expected_output = {
-            "error_code": "REQUEST_EXCEPTION",
-            "message": "Connection timed out"
-        }
 
-        response = self.proxy.batch_creation(orders)
-        self.assertEqual(response, expected_output)
-        mock_post.assert_called_once()
+        try:
+            # Call the get_order_book method, which should raise an Exception
+            response = self.proxy.batch_creation(orders)
+            assert False, "Expected Exception was not raised."
+        except Exception as e:
+            assert "Failed after" in str(e), "Exception message should contain 'Failed after'."
 
     @patch('requests.post')
     def test_batch_creation_unexpected_exception(self, mock_post):
@@ -623,6 +636,9 @@ class TestBudaProxy(unittest.TestCase):
             "message": "Unexpected error"
         }
 
-        response = self.proxy.batch_creation(orders)
-        self.assertEqual(response, expected_output)
-        mock_post.assert_called_once()
+        try:
+            # Call the get_order_book method, which should raise an Exception
+            response = self.proxy.batch_creation(orders)
+            assert False, "Expected Exception was not raised."
+        except Exception as e:
+            assert "Unexpected error" in str(e), "Exception message should contain 'Unexpected error'."

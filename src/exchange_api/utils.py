@@ -22,52 +22,52 @@ def retry_with_exponential_backoff(func: Callable, max_retries=3, base_delay=2, 
     for attempt in range(max_retries):
         try:
             return func()  # Call the function
-        except requests.exceptions.RequestException as e:  # Handle general network issues
+        except requests.exceptions.RequestException as e:  # Handle network-related errors
             logger.error(f"RequestException occurred (Attempt {attempt + 1}/{max_retries}): {e}")
-            # Retry only if we catch a specific error (502 or 524)
-            if hasattr(e, 'response') and e.response:
-                status_code = e.response.status_code
-                if status_code in [502, 524]:
-                    delay = min(base_delay * (2 ** attempt), max_delay)
-                    logger.error(
-                        f"API Error {status_code} occurred (Attempt {attempt + 1}/{max_retries}). Retrying in {delay}s...")
-                    time.sleep(delay)  # Wait before retrying
-                    try_number = attempt + 1
-                    continue
-
-        except Exception as e:  # Catch other exceptions
+            # Retry only for certain HTTP errors (502, 524, 429)
+            status_code = e.response.status_code
+            if status_code in [502, 524, 429, 400, 401]:
+                delay = min(base_delay * (2 ** attempt), max_delay)
+                logger.error(f"API Error {status_code} occurred (Attempt {attempt + 1}/{max_retries}). Retrying in {delay}s...")
+                time.sleep(delay)  # Wait before retrying
+                try_number = attempt + 1
+                continue
+        except Exception as e:  # Handle other exceptions that do not have 'response' attribute
             logger.error(f"Unexpected error occurred (Attempt {attempt + 1}/{max_retries}): {e}")
-            # After max retries, raise exception
+            # After max retries, raise the exception
             raise Exception(f"{e}: Failed after {try_number} retries.")
 
+    raise Exception(f"Failed after {try_number} retries.")
 
-def handle_api_response(response: requests.Response, retry_attempts: int = 3, backoff_base_delay: int = 2) \
-        -> Dict[str, Any]:
+
+def handle_api_response(func: Callable, retry_attempts: int = 3, backoff_base_delay: int = 2) -> Dict[str, Any]:
     """
     Handles the API response for all exchanges with retry logic and standard error handling.
 
-    :param response: The HTTP response from the exchange API.
+    :param func: The function to execute that performs the API call.
     :param retry_attempts: Number of retries for failed requests.
     :param backoff_base_delay: Base delay between retries.
     :return: A dictionary with the response data.
     :raises Exception: If the response status is not successful, logs and raises an error.
     """
+
     def api_call():
-        # Check for successful response with status codes 200, 201, or 202
-        if response.status_code in [200, 201, 202]:
-            try:
-                # Try to return JSON data
-                return response.json()
-            except ValueError:
-                logger.error(f"Invalid JSON response: {response.text}")
-                raise Exception(f"Invalid JSON response: {response.text}")
-        else:
-            # Log the error and raise an exception with a standard message
-            logger.error(f"API Error {response.status_code}: {response.text}")
-            raise Exception(f"API Error {response.status_code}: {response.text}")
+        try:
+            response = func()  # The function that makes the request
+            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            return response.json()  # If status is good, return JSON data
+        except requests.exceptions.HTTPError as e:
+            # Handle HTTPError exceptions (e.g., 4xx or 5xx responses)
+            logger.error(f"HTTPError: {e.response.status_code} - {e.response.text}")
+            raise e  # Re-raise the exception for retrying
+        except requests.exceptions.RequestException as e:
+            # Handle other request-related exceptions (timeouts, connection issues)
+            logger.error(f"RequestException: {e}")
+            raise e  # Re-raise for retrying
 
     # Retry logic with exponential backoff
     return retry_with_exponential_backoff(api_call, max_retries=retry_attempts, base_delay=backoff_base_delay)
+
 
 
 def load_api_keys(exchange_name: str) -> Tuple[str, str]:

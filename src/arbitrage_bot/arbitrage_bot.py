@@ -119,7 +119,17 @@ class ArbitrageBot:
 
         raise ValueError(f"Network '{network}' not found in coin info.")
 
-    def run_arbitrage_flow(self, arb_order: ArbitrageOrder, mode: str = "infinite_loop", debug_mode: bool = False,
+    def _set_fee_values(self, arb_order: ArbitrageOrder) -> None:
+        self.low_liquidity_taker_fee: float = self.get_low_liquidity_taker_fee(arb_order)
+        self.minimum_notional_low_liquidity: float = self.get_min_notional_low_liquidity(arb_order)
+        self.minimum_notional_high_liquidity: float = self.get_min_notional_high_liquidity(arb_order)
+        self.minimum_withdrawal_amount_quote_high_liquidity: float = \
+            self.get_min_withdrawal_quote_amount_high_liquidity(
+                network=self.quote_currency_network,
+                arb_order=arb_order
+            )
+
+    def run_arbitrage_flow(self, arb_orders: ArbitrageOrder, mode: str = "infinite_loop", debug_mode: bool = False,
                            sleep_interval: float = 0.8) -> None:
         """
         Execute the arbitrage flow using REST calls to fetch the high-liquidity price.
@@ -135,28 +145,22 @@ class ArbitrageBot:
                - if no => place_sub_order_cancellations => confirm_cancellations => re-check next iteration
          4) Sleep a bit, or exit if mode=='single_cycle'.
 
-        :param arb_order: The ArbitrageOrder describing order_type, amounts, etc.
+        :param arb_orders: The ArbitrageOrder describing order_type, amounts, etc.
         :param mode: 'infinite_loop' or 'single_cycle'. If 'single_cycle', we do one iteration then exit.
         :param debug_mode: Boolean to specify if we are in debug mode, turn on/off the UI feature.
         :param sleep_interval: Seconds to sleep if no price or after each iteration.
         :return: None. Blocks or loops until user stops or single cycle completes.
         """
         logger.info("Starting arbitrage flow with REST-based price retrieval. mode=%s", mode)
-
+        if not isinstance(arb_orders, list):
+            arb_orders: List[ArbitrageOrder] = [arb_orders]
         # Set relevant attributes:
-        self.low_liquidity_taker_fee: float = self.get_low_liquidity_taker_fee(arb_order)
-        self.minimum_notional_low_liquidity: float = self.get_min_notional_low_liquidity(arb_order)
-        self.minimum_notional_high_liquidity: float = self.get_min_notional_high_liquidity(arb_order)
-        self.minimum_withdrawal_amount_quote_high_liquidity: float = \
-            self.get_min_withdrawal_quote_amount_high_liquidity(
-                network=self.quote_currency_network,
-                arb_order=arb_order
-            )
+        self._set_fee_values(arb_orders[0])
 
         first_iteration: bool = True
         # Start the UI in a separate thread if debug_mode is off
         if not debug_mode:
-            ui_thread = threading.Thread(target=self.ui.display_ui, args=(arb_order,))
+            ui_thread = threading.Thread(target=self.ui.display_ui, args=(arb_orders[0],))
             ui_thread.daemon = True  # Ensures it ends when the main program ends
             ui_thread.start()
 
@@ -166,7 +170,7 @@ class ArbitrageBot:
                 # -------------------------------- ARBITRAGE FLOW ---------------------------------
 
                 # 1) Get the high-liquidity price with retry mechanism
-                high_liquidity_price = self._get_latest_high_liquidity_price(arb_order=arb_order)
+                high_liquidity_price = self._get_latest_high_liquidity_price(arb_order=arb_orders[0])
 
                 if high_liquidity_price is None:
                     logger.debug("No valid price from REST. Sleeping for %.1fs", sleep_interval)
@@ -176,27 +180,25 @@ class ArbitrageBot:
                     continue
 
                 # 2) Compute price difference
-                p_diff, reference_price = self.get_price_reference(high_liquidity_price, arb_order)
-
-                logger.info("p_diff=%.4f, reference_price=%.2f for order_type=%s",
-                            p_diff, reference_price, arb_order.order_type.name)
+                self.get_price_reference(high_liquidity_price, arb_orders)
 
                 # 2.1) If it is not the first iteration, cancel orders placed in the previous iteration
                 if not first_iteration:
                     # Not completed => Cancel sub-orders
                     time.sleep(sleep_interval)
 
-                    cancel_response = self.place_sub_order_cancellations(sub_orders, arb_order)
-                    order_completion = self.arbitrage_order_completion(arb_order)
-                    if arb_order.order_completed:
-                        # If fully done => funds_transfer
-                        success_transfer = self.funds_transfer(arb_order)
-                        if success_transfer:
-                            logger.info("Funds transferred successfully. Reset order or create a new one.")
-                            arb_order.reset_values(order_completion)
-                            first_iteration: bool = True
-                        else:
-                            logger.warning("Funds transfer failed. Evaluate partial scenario.")
+                    self.place_sub_order_cancellations(sub_orders, arb_orders)
+                    order_completion = self.arbitrage_order_completion(arb_orders)
+                    for arb_order in arb_orders:
+                        if arb_order.order_completed:
+                            # If fully done => funds_transfer
+                            success_transfer = self.funds_transfer(arb_order)
+                            if success_transfer:
+                                logger.info("Funds transferred successfully. Reset order or create a new one.")
+                                arb_order.reset_values(order_completion)
+                                first_iteration: bool = True
+                            else:
+                                logger.warning("Funds transfer failed. Evaluate partial scenario.")
 
                 # ----------------------------- USER INTERFACE COMMANDS ---------------------------------
 
@@ -215,7 +217,7 @@ class ArbitrageBot:
                 # ----------------------------- END USER INTERFACE COMMANDS ---------------------------------
 
                 # 3) Split sub-orders
-                sub_orders_price = self.split_order_into_suborders(arb_order)
+                sub_orders_price = self.split_order_into_suborders(arb_orders)
 
                 if isinstance(sub_orders_price, dict) and "code" in sub_orders_price:
                     logger.error("place_sub_orders failed: %s", sub_orders_price)
@@ -230,7 +232,7 @@ class ArbitrageBot:
                     continue
 
                 # 4) Place sub-orders
-                sub_orders = self.place_sub_orders(arb_order)
+                sub_orders = self.place_sub_orders(arb_orders)
 
                 if isinstance(sub_orders, dict) and "error_code" in sub_orders:
                     logger.error("place_sub_orders failed: %s", sub_orders)
@@ -239,23 +241,26 @@ class ArbitrageBot:
                     continue
 
                 # 5) Check completion
-                order_completion = self.arbitrage_order_completion(arb_order)
-                if arb_order.order_completed:
-                    # If fully done => funds_transfer
-                    success_transfer = self.funds_transfer(arb_order)
-                    if success_transfer:
-                        logger.info("Funds transferred successfully. Reset order or create a new one.")
-                        arb_order.reset_values(arb_order.order_completed)
-                        first_iteration: bool = True
+                order_completion = self.arbitrage_order_completion(arb_orders)
+                for arb_order in arb_orders:
+                    completed_order: List[ArbitrageOrder] = []
+                    if arb_order.order_completed:
+                        completed_order.append()  # TODO: Complete this logic to do multiple transfers at once
+                        # If fully done => funds_transfer
+                        success_transfer = self.funds_transfer(arb_order)
+                        if success_transfer:
+                            logger.info("Funds transferred successfully. Reset order or create a new one.")
+                            arb_order.reset_values(arb_order.order_completed)
+                            first_iteration: bool = True
+                        else:
+                            logger.warning("Funds transfer failed. Evaluate partial scenario.")
                     else:
-                        logger.warning("Funds transfer failed. Evaluate partial scenario.")
-                else:
-                    first_iteration: bool = False
+                        first_iteration: bool = False
 
             except Exception as e:
                 logger.error(f"An error occurred: {e}")
                 # In case of an error, send an alert
-                order_info = arb_order.get_arbitrage_order_info()
+                order_info = arb_orders[0].get_arbitrage_order_info()
                 error_message = f""" An error occurred in arbitrage flow: \n{str(e)} 
                 \nOrder info: \n{json.dumps(order_info, indent=2)}
                 \nArbitrage loop was stopped.
