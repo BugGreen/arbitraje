@@ -732,7 +732,7 @@ class ArbitrageBot:
         of the qupte currency.
         :param paid_fee_base_currency: The paid fee expressed in the base currency
         :param paid_fee_quote_currency: The paid fee expressed in the quote currency
-        limit_price_low_liquidity: The limit price in the low liquidity exchange
+        :param limit_price_low_liquidity: The limit price in the low liquidity exchange
         :param arb_order: The ArbitrageOrder object to update.
         """
 
@@ -750,7 +750,7 @@ class ArbitrageBot:
                                                   paid_fee_base_currency=paid_fee_base_currency,
                                                   paid_fee_quote_currency=paid_fee_quote_currency)
             # If partial, we keep trying. If fully filled, we might see if pending_amount is close to zero.
-            self.execute_opposite_order_high_liquidity_exchange(arb_order)
+            self.execute_opposite_order_high_liquidity_exchange(arb_order, limit_price_low_liquidity)
 
         else:
             logger.info(
@@ -759,7 +759,8 @@ class ArbitrageBot:
             )
         # Possibly add more logic if new_state = 'canceled' or 'pending', etc.
 
-    def execute_opposite_order_high_liquidity_exchange(self, arb_order: 'ArbitrageOrder') \
+    def execute_opposite_order_high_liquidity_exchange(self, arb_order: 'ArbitrageOrder',
+                                                       limit_price_low_liquidity: float) \
             -> Union[Dict[str, Any], Dict[str, Any]]:
         """
         Synchronously place a MARKET order on the high-liquidity exchange for the
@@ -767,6 +768,7 @@ class ArbitrageBot:
         with the executed quantity.
 
         :param arb_order: The ArbitrageOrder object to update.
+        :param limit_price_low_liquidity: The limit price in the low liquidity exchange
         """
         symbol = arb_order.base_currency.upper() + arb_order.quote_currency.upper()
 
@@ -805,8 +807,8 @@ class ArbitrageBot:
                 return order_resp
 
             executed_base_qty = float(order_resp.get("executedQty", 0.0))
-            execution_price = float(order_resp.get("fills", [0.0])[0].get("price", 0.0))
-            executed_quote_qty = round(executed_base_qty * execution_price, 5)
+            limit_price_high_liquidity = float(order_resp.get("fills", [0.0])[0].get("price", 0.0))
+            executed_quote_qty = round(executed_base_qty * limit_price_high_liquidity, 5)
 
             # Price deltas occurs because of rounding values in Binance
             delta_amount_base_currency = to_trade_base_currency - executed_base_qty
@@ -819,6 +821,12 @@ class ArbitrageBot:
                 executed_base_qty,
                 paid_fee_base_currency,
                 paid_fee_quote_currency
+            )
+
+            price_difference = self._calculate_real_price_diff(
+                arb_order,
+                limit_low_liquidity=limit_price_low_liquidity,
+                limit_high_liquidity=limit_price_high_liquidity
             )
             arb_order.update_profit(delta_amount_base_currency, delta_amount_quote_currency)  # TODO: se puede hacer metodo privado y encapsularlo en fulfull_high_liquidity
 
