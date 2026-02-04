@@ -14,8 +14,14 @@ import threading
 import logging
 import queue
 import time
+import os
 
 logger = logging.getLogger(__name__)
+
+
+def clear():
+    # ANSI escape sequence: \033[2J = clear screen, \033[H = move cursor to home
+    print('\033[2J\033[H', end='')
 
 
 class ArbitrageUI:
@@ -173,7 +179,7 @@ class ArbitrageUI:
                     self.console.print("[bold red]Stop command detected. Exiting UI...[/bold red]")
                     break
                 if not self._pause_requested:
-                    self.console.clear()
+                    clear()
                     # Update market data panel and progress bar
                     self.update_market_data(arb_orders[0])
 
@@ -683,5 +689,5 @@ def display_initiation_values_table(
     initiation_values_table = create_initiation_values(default_values_mode)
     append_initiation_values(initiation_values_table, initiation_values)
 
-    console.clear()
+    clear()
     console.print(initiation_values_table)

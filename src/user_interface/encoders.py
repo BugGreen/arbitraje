@@ -35,5 +35,3 @@ market_values: Dict[str, Any] = {
     "Mode": possible_sides[0],
     "Side": "SELL_LIMIT",
 }
-
-print(arb_oder_sell_limit_values)
