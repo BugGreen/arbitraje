@@ -6,6 +6,8 @@ import unittest
 from typing import List, Dict, Any
 import logging
 from src.exchange_api.tests import constants as test_api_constants
+from src.arbitrage_bot.tests import constants as test_a_bot_constans
+
 
 logger = logging.getLogger(__name__)
 
@@ -248,8 +250,9 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertIsInstance(result, dict)
         self.assertEqual(result.get('code'), 'ERROR_BELOW_MIN_TOTAL')
 
+    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.successful_batch_order_states)
     @patch('requests.post')
-    def test_place_sub_orders_success(self, mock_post):
+    def test_place_sub_orders_success(self, mock_post, mock_buda):
         # Remember that bot.exchange_low_liquidity was defined in the `set` method
 
         mock_response = MagicMock()
@@ -262,6 +265,8 @@ class TestArbitrageBot(unittest.TestCase):
         # Mock the requests.post in batch_creation method of exchange_low_liquidity object
         response = self.bot.place_sub_orders(sub_orders_example)
         expected_response = test_api_constants.expected_successful_batch_order_response
+        for order in expected_response:
+            order['status'] = 'pending'
 
         self.assertEqual(response, expected_response)
 
@@ -284,7 +289,7 @@ class TestArbitrageBot(unittest.TestCase):
         partial_correct_sub_orders = test_api_constants.partial_successful_batch_order
 
         place_sub_orders_response = self.bot.place_sub_orders(partial_correct_sub_orders)
-        expected_response = test_api_constants.expected_partial_successful_batch_order_response
+        expected_response = test_a_bot_constans.expected_insolvent_error_response
 
         self.assertEqual(place_sub_orders_response, expected_response)
 
@@ -306,7 +311,7 @@ class TestArbitrageBot(unittest.TestCase):
         amount_less_than_minimum_order = test_api_constants.amount_less_than_minimum_order
 
         amount_less_than_minimum_order_response = self.bot.place_sub_orders(amount_less_than_minimum_order)
-        expected_response = test_api_constants.expected_amount_less_than_minimum_response
+        expected_response = test_a_bot_constans.expected_amount_less_than_minimum_response  # Wrapped response in A.Bot
 
         self.assertEqual(amount_less_than_minimum_order_response, expected_response)
 

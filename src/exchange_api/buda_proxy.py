@@ -111,7 +111,7 @@ class BudaProxy(BaseExchange):
             order = order_diff.get("order", {})
             order_details = order.get("order", {})
 
-            order_id = str(order_details.get("id")) if order_details.get("id") else None
+            order_id = order_details.get("id") if order_details.get("id") else None
             state = order_details.get("state", "error")
             error_msg = order_details.get("message")
             amount = order_details.get("amount")

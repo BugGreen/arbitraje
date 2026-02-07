@@ -55,7 +55,7 @@ def main() -> None:
 
         orders = [
             {"mode": "place",
-             "order": {"amount": 0.0000000012, "limit": 10000000, "market_name": "eth-cop", "price_type": "limit",
+             "order": {"amount": 1.00100000012, "limit": 10000000, "market_name": "eth-cop", "price_type": "limit",
                        "type": "Bid"}},
             {"mode": "place",
              "order": {"amount": 0.0012, "limit": 10000000, "market_name": "eth-cop", "price_type": "limit",
@@ -79,8 +79,8 @@ def main() -> None:
         #print(json.dumps(new_order, indent=2))
         #order_canceled = buda.cancel_order(base_currency, quote_currency, order_id)
         #print(json.dumps(order_canceled, indent=2))
-        #order_states = buda.get_order_states(base_currency, quote_currency)
-        #print(json.dumps(order_states, indent=2))
+        order_states = buda.get_order_states(base_currency, quote_currency)
+        print(json.dumps(order_states, indent=2))
         #ltc_withdrawal = buda.create_withdraw_request(coin='ltc', amount=0.00702, address=ltc_address, simulate=True)
         #print(json.dumps(ltc_withdrawal, indent=2))
         #order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')
