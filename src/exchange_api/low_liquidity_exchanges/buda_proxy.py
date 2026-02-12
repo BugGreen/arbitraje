@@ -199,17 +199,16 @@ class BudaProxy(BaseLowLiquidityExchange):
             ]
         return {"orders": transformed_orders}
 
-    @staticmethod
-    def on_open_order_state(ws):
+    def on_open_order_state(self, ws):
         """
         Called when the WebSocket connection is established for order states.
 
         :param ws: WebSocket instance.
         """
         logger.info("WebSocket connected to order states.")
+        self.reconnect_to_order_states()
 
-    @staticmethod
-    def on_error_order_state(ws, error):
+    def on_error_order_state(self, ws, error):
         """
         Called when there's an error with the WebSocket connection.
 
@@ -217,6 +216,15 @@ class BudaProxy(BaseLowLiquidityExchange):
         :param error: Error message.
         """
         logger.error(f"[ORDER STATES] -- WebSocket error occurred: {error}")
+        self.reconnect_to_order_states()
+
+    def reconnect_to_order_states(self):
+        """
+        Tries to reconnect to the order book WebSocket.
+        """
+        logger.info("[ORDER STATES] -- Attempting to reconnect to WebSocket...")
+        time.sleep(0.1)  # Sleep before trying to reconnect
+        self.connect_to_order_states(self.order_states_snapshot)
 
     @staticmethod
     def on_close_order_state(ws, close_status_code, close_msg):

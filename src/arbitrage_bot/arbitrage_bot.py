@@ -201,14 +201,14 @@ class ArbitrageBot:
                     time.sleep(sleep_interval)
 
                     self.place_sub_order_cancellations(sub_orders, arb_orders)
-                    order_completion = self.arbitrage_order_completion(arb_orders)
+                    self.arbitrage_order_completion(arb_orders)
                     for arb_order in arb_orders:
                         if arb_order.order_completed:
                             # If fully done => funds_transfer
                             success_transfer = self.funds_transfer(arb_order)
                             if success_transfer:
                                 logger.info("Funds transferred successfully. Reset order or create a new one.")
-                                arb_order.reset_values(order_completion)
+                                arb_order.reset_values(arb_order.order_completed)
                                 first_iteration: bool = True
                             else:
                                 logger.warning("Funds transfer failed. Evaluate partial scenario.")
@@ -254,7 +254,7 @@ class ArbitrageBot:
                     continue
 
                 # 5) Check completion
-                order_completion = self.arbitrage_order_completion(arb_orders)
+                self.arbitrage_order_completion(arb_orders)
                 for arb_order in arb_orders:
                     completed_order: List[ArbitrageOrder] = []
                     if arb_order.order_completed:
@@ -1020,7 +1020,7 @@ class ArbitrageBot:
             self,
             received_orders: List[Dict[str, Any]],
             arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]],
-            max_wait_seconds: int = 10
+            max_wait_seconds: int = 30
     ) -> None:
         """
         Wait for sub-orders in 'received' state to transition to another state.
@@ -1050,7 +1050,7 @@ class ArbitrageBot:
                     "Some sub-orders remained 'received' after %d seconds: %s",
                     max_wait_seconds, received_ids
                 )
-                break
+                # break
 
             # Sleep briefly
             time.sleep(0.2)
