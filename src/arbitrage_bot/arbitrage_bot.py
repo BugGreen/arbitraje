@@ -47,6 +47,7 @@ class ArbitrageBot:
         self.minimum_notional_low_liquidity: float = 0.00002  # Expressed in Base Currency
         self.minimum_notional_high_liquidity: float = 5  # the minimum allowed amount to trade in a given market
         self.minimum_withdrawal_amount_quote_high_liquidity: float = 20  # USDC with ETH network
+        self.websocket_mode: bool = True
 
         self.ui: ArbitrageUI = ArbitrageUI()
         self.telegram_alert = TelegramAlert()
@@ -103,8 +104,7 @@ class ArbitrageBot:
         """
         # Retrieve coin info (assumes get_coin_info is implemented elsewhere in the class)
         quote_currency = arb_order.quote_currency
-        coin_info: Dict[str, Any] = self.exchange_high_liquidity.get_coin_info(
-            quote_currency)  # TODO: Revisar esto, se cambio el metodo
+        coin_info: Dict[str, Any] = self.exchange_high_liquidity.get_coin_info(quote_currency)  # TODO: Revisar esto, se cambio el metodo
         network_list: List[Dict[str, Any]] = coin_info.get("networkList", [])
 
         for net in network_list:
@@ -132,7 +132,7 @@ class ArbitrageBot:
             self,
             arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]],
             mode: str = "infinite_loop",
-            debug_mode: bool = False,
+            debug_mode: bool = True,
             sleep_interval: float = 0.8
     ) -> None:
         """
@@ -161,11 +161,12 @@ class ArbitrageBot:
 
         base_currency: str = arb_orders[0].base_currency
         quote_currency: str = arb_orders[0].quote_currency
-        # WEBSOCKET Connections
-        #  Order Book:
-        self.exchange_low_liquidity.connect_to_order_book(base_currency, quote_currency)
-        #  Order States:
-        self.exchange_low_liquidity.connect_to_order_states()
+        if self.websocket_mode:
+            # WEBSOCKET Connections
+            #  Order Book:
+            self.exchange_low_liquidity.connect_to_order_book(base_currency, quote_currency)
+            #  Order States:
+            self.exchange_low_liquidity.connect_to_order_states()
         # Set relevant attributes:
         self._set_fee_values(arb_orders[0])
 
@@ -176,9 +177,14 @@ class ArbitrageBot:
             ui_thread.daemon = True  # Ensures it ends when the main program ends
             ui_thread.start()
 
+        if debug_mode:
+            total_time = 0  # to accumulate total time for all iterations
+            num_iterations = 0  # to count the number of iterations
+
         while True:
 
             try:
+                start_time = time.time()
                 # -------------------------------- ARBITRAGE FLOW ---------------------------------
 
                 # 1) Get the high-liquidity price with retry mechanism
@@ -294,6 +300,16 @@ class ArbitrageBot:
             # 7) Otherwise, loop again
             logger.debug("Waiting %.1fs before next iteration...", sleep_interval)
             time.sleep(sleep_interval)
+
+            if debug_mode:
+                end_time = time.time()  # End the timer for the current loop iteration
+                loop_time = end_time - start_time  # Time for this iteration
+                # Update total time and iteration count
+                total_time += loop_time
+                num_iterations += 1
+                average_time = total_time / num_iterations if num_iterations > 0 else 0
+                print(f"Iteration time: {loop_time:.4f} seconds")
+                print(f"Average time per iteration: {average_time:.4f} seconds")
 
         logger.info("Arbitrage flow ended. mode=%s", mode)
 
@@ -484,8 +500,11 @@ class ArbitrageBot:
         )
         base_currency, quote_currency = arb_order.base_currency, arb_order.quote_currency
         # 1) Fetch the order book from the low-liquidity exchange
-        # response_data: Dict[str, Any] = self.exchange_low_liquidity.get_order_book(base_currency, quote_currency)
-        response_data: Dict[str, Any] = self.exchange_low_liquidity.get_current_order_book()
+        if not self.websocket_mode:
+            response_data: Dict[str, Any] = self.exchange_low_liquidity.get_order_book(base_currency, quote_currency)
+        else:
+            response_data: Dict[str, Any] = self.exchange_low_liquidity.get_current_order_book()
+
         if "order_book" not in response_data or not response_data["order_book"]:
             raise RuntimeError("Missing 'order_book' in low-liquidity response.")
         order_book = response_data["order_book"]
@@ -841,8 +860,11 @@ class ArbitrageBot:
                     # Optionally, log or handle the case where no matching standardized order is found.
                     pass
 
-    def place_sub_order_cancellations(self, sub_orders: List[Dict[str, Any]], arb_orders: ArbitrageOrder) -> \
-            List[Dict[str, Any]]:
+    def place_sub_order_cancellations(
+            self,
+            sub_orders: List[Dict[str, Any]],
+            arb_orders: ArbitrageOrder,
+    ) -> List[Dict[str, Any]]:
         """
         Cancel a batch of sub-orders on the low-liquidity exchange. If any sub-order transitions to
         'canceled_and_traded' (or partial traded states), the ArbitrageOrder object is updated accordingly.
@@ -874,10 +896,12 @@ class ArbitrageBot:
         cancelled_orders_id = [order_id.get('order_id') for order_id in cancel_response['orders_diff']]
         logger.info("Exchange sub-order cancellation response: %s", cancel_response)
 
-        # states_response = self.exchange_low_liquidity.get_order_states(
-        #     arb_orders[0].base_currency,
-        #     arb_orders[0].quote_currency)
-        states_response: Dict[str, List[Dict[str, Any]]] = self.exchange_low_liquidity.get_current_order_states()
+        if not self.websocket_mode:
+            states_response = self.exchange_low_liquidity.get_order_states(
+                arb_orders[0].base_currency,
+                arb_orders[0].quote_currency)
+        else:
+            states_response: Dict[str, List[Dict[str, Any]]] = self.exchange_low_liquidity.get_current_order_states()
         all_states = states_response.get("orders", [])
 
         # 3. If any sub-order is 'canceled_and_traded' or partial, update the ArbitrageOrder object
@@ -1055,12 +1079,13 @@ class ArbitrageBot:
             time.sleep(0.2)
 
             # 1. Retrieve updated states from the exchange
-            # states_response = self.exchange_low_liquidity.get_order_states(
-            #     arb_orders[0].base_currency,
-            #     arb_orders[0].quote_currency
-            # )
-
-            states_response: Dict[str, List[Dict[str, Any]]] = self.exchange_low_liquidity.get_current_order_states()
+            if not self.websocket_mode:
+                states_response = self.exchange_low_liquidity.get_order_states(
+                    arb_orders[0].base_currency,
+                    arb_orders[0].quote_currency
+                )
+            else:
+                states_response: Dict[str, List[Dict[str, Any]]] = self.exchange_low_liquidity.get_current_order_states()
             all_states = states_response.get("orders", [])
 
             # 2. Update sub-orders that are 'received'
