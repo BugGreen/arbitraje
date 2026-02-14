@@ -210,7 +210,7 @@ class BudaProxy(BaseExchange):
             raise Exception(f"Error {response.status_code}: {response.text}")
 
     def create_deposit_address(self, coin: str = "BTC", network: Optional[str] = "lightning",
-                               amount_satoshis: int = 0, memo: Optional[str] = None,
+                               amount_satoshis: Optional[int] = 0, memo: Optional[str] = None,
                                expiry_seconds: Optional[int] = 0) -> Dict:
         """
         Create a Lightning Network deposit address (invoice) for BTC.
@@ -251,6 +251,63 @@ class BudaProxy(BaseExchange):
         # Handle the response
         if response.status_code in [200, 201]:
             return response.json().get("invoice", {})
+        else:
+            raise Exception(f"Error {response.status_code}: {response.text}")
+
+    def create_lightning_invoice(self,
+                                 amount: float,
+                                 memo: Optional[str] = None,
+                                 expiry_seconds: Optional[int] = 0) -> Dict:
+        """
+        Create a Lightning Network deposit address (invoice) for BTC for a given amount.
+
+        :param amount: The amount to deposit (in BTC fractions).
+        :param memo: Optional brief description for the invoice.
+        :param expiry_seconds: Optional expiry time for the invoice in seconds.
+        :return: A dictionary containing the encoded payment request.
+        :raises Exception: If the request fails or the response contains an error.
+        """
+        coin = 'BTC'
+        network = "lightning"
+        amount_sats = amount * 100000000
+
+        if coin != "BTC":
+            raise ValueError("Lightning Network invoices are only supported for BTC.")
+        if network and network.lower() != "lightning":
+            raise ValueError("This method only supports the Lightning Network.")
+
+        # Define the endpoint path
+        endpoint_path = self.ENDPOINTS["LIGHTNING_INVOICE"]
+        url = f"{self.BASE_URL}{endpoint_path}"
+
+        # Build the payload
+        payload = {
+            "amount_satoshis": amount_sats,
+            "currency": "BTC"
+        }
+        if memo:
+            payload["memo"] = memo
+        if expiry_seconds:
+            payload["expiry_seconds"] = expiry_seconds
+
+        # Authenticate the request
+        headers = self._sign_request(method="POST", path=endpoint_path, body=payload if payload else "")
+
+        # Make the API call
+        response = requests.post(url, headers=headers, json=payload)
+
+        # Handle the response
+        if response.status_code in [200, 201]:
+            invoice_info = response.json().get("invoice", {})
+            coin = invoice_info.get("currency")
+            invoice = invoice_info.get("encoded_payment_request")
+            standardized_response = {
+                'coin': coin,
+                'invoice': invoice,
+                'amount': amount
+            }
+
+            return standardized_response
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
 

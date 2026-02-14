@@ -99,6 +99,39 @@ def test_create_deposit_address():
         )
 
 
+def test_create_ln_invoice():
+    """
+    Test the create_deposit_address method of BinanceProxy.
+    """
+    binance = BinanceProxy()
+
+    # Mock the expected API response
+    expected_response = {
+        'coin': "BTC",
+        'invoice': "lnbc10m1pncjjq2pp5xr8w2ze0es7atjwkzaqzxtc9plx7dgywu9kppynys49c6dewx80qdqqcqzysxqrrsssp5sgj026j0znjd5a92zadhf73qmyl6synu6ch8zjuxznuqmqyymfqq9qxpqysgqres705w8el7g2s6u5629hylc9g00p822kyflsh7jm5cfn745qkz894djv59psejw4w5rf4jq5pgy74cfudtnq2e9aj37gmeullam6vspr43m7j",
+        'amount': 0.01
+    }
+
+    # Mock the requests.get method
+    with patch('requests.get') as mock_get:
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = constants.binance_ln_invoice_001
+        mock_get.return_value = mock_response
+
+        # Call the method
+        deposit_address = binance.create_lightning_invoice(amount=0.01)
+
+        # Assertions
+        assert deposit_address == expected_response
+        mock_get.assert_called_once()
+        mock_get.assert_called_with(
+            f"{binance.BASE_URL}{binance.ENDPOINTS['DEPOSIT_ADDRESS']}",
+            headers={"X-MBX-APIKEY": binance.api_key},
+            params=mock_get.call_args[1]["params"]  # Ensure params match the call
+        )
+
+
 def test_create_withdraw_request():
     """
     Test the create_withdraw_request method of BinanceProxy.

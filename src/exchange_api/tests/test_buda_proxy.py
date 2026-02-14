@@ -111,6 +111,43 @@ def test_create_deposit_address_success(mock_post):
 
 
 @patch("requests.post")
+def test_create_ln_invoice_success(mock_post):
+    """
+    Test the create_deposit_address method with a successful response.
+    """
+    # Arrange
+    buda = BudaProxy()
+    buda.api_key = "test_api_key"
+    buda.api_secret = "test_api_secret"
+
+    expected_response = {
+        'coin': "BTC",
+        'invoice': "lnbc10m1pncjj6ypp54alcwxtfxam2wev98qcxxmz7mjptxjuckeg6h9v6rvfvtrewf5ssdqqcqzzsxqyz5vqsp57xw865jh9dc0kq4z55zkyfacgw9azfazfh5x8al7j8cc3t9dhmrq9qxpqysgq9svt4fh2w4fl4442dkmghsj8gknqdxq5pteaphdjmpm2gl9lxy3p52ecvuw2la3ndwmpzwvqywdxsfxy2884u5lm6n7x68x7lh6jm0spk3e9hg",
+        'amount': 0.01
+    }
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = constants.buda_ln_invoice_001
+    mock_post.return_value = mock_response
+
+    amount = 0.01
+    sats_amount = amount * 100000000
+    # Act
+    result = buda.create_lightning_invoice(amount=amount)
+
+    # Assert
+    assert result == expected_response
+    mock_post.assert_called_once_with(
+        f"{buda.BASE_URL}{buda.ENDPOINTS['LIGHTNING_INVOICE']}",
+        headers=mock_post.call_args[1]["headers"],  # Authentication headers
+        json={
+            "amount_satoshis": sats_amount,
+            "currency": "BTC",
+        }
+    )
+
+@patch("requests.post")
 def test_create_deposit_address_invalid_coin(mock_post):
     """
     Test the create_deposit_address method with an invalid coin.

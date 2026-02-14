@@ -1075,3 +1075,25 @@ binance_successful_sell_market_order_response_after_cancelaion_profit = {
   ],
   "selfTradePreventionMode": "EXPIRE_MAKER"
 }
+
+
+binance_ln_invoice_001 = {
+  "coin": "BTC",
+  "address": "lnbc10m1pncjjq2pp5xr8w2ze0es7atjwkzaqzxtc9plx7dgywu9kppynys49c6dewx80qdqqcqzysxqrrsssp5sgj026j0znjd5a92zadhf73qmyl6synu6ch8zjuxznuqmqyymfqq9qxpqysgqres705w8el7g2s6u5629hylc9g00p822kyflsh7jm5cfn745qkz894djv59psejw4w5rf4jq5pgy74cfudtnq2e9aj37gmeullam6vspr43m7j",
+  "url": "https://lightningdecoder.com/lnbc10m1pncjjq2pp5xr8w2ze0es7atjwkzaqzxtc9plx7dgywu9kppynys49c6dewx80qdqqcqzysxqrrsssp5sgj026j0znjd5a92zadhf73qmyl6synu6ch8zjuxznuqmqyymfqq9qxpqysgqres705w8el7g2s6u5629hylc9g00p822kyflsh7jm5cfn745qkz894djv59psejw4w5rf4jq5pgy74cfudtnq2e9aj37gmeullam6vspr43m7j",
+  "isDefault": 0
+}
+
+buda_ln_invoice_001 = {
+    "invoice":
+    {
+      "id": "Bjkb",
+      "encoded_payment_request": "lnbc10m1pncjj6ypp54alcwxtfxam2wev98qcxxmz7mjptxjuckeg6h9v6rvfvtrewf5ssdqqcqzzsxqyz5vqsp57xw865jh9dc0kq4z55zkyfacgw9azfazfh5x8al7j8cc3t9dhmrq9qxpqysgq9svt4fh2w4fl4442dkmghsj8gknqdxq5pteaphdjmpm2gl9lxy3p52ecvuw2la3ndwmpzwvqywdxsfxy2884u5lm6n7x68x7lh6jm0spk3e9hg",
+      "currency": "BTC",
+      "memo": "null",
+      "amount": 1000000,
+      "expiration_time": 1737137348,
+      "state": "awaiting_payment",
+      "price": "null"
+    }
+}

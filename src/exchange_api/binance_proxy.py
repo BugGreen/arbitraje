@@ -8,6 +8,9 @@ from urllib.parse import urlencode
 from typing import List, Dict, Optional
 from src.exchange_api.base_exchange import BaseExchange
 from src.exchange_api.utils import load_api_keys
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BinanceProxy(BaseExchange):
@@ -137,6 +140,32 @@ class BinanceProxy(BaseExchange):
             return response.json()
         else:
             raise Exception(f"Error {response.status_code}: {response.text}")
+
+    def create_lightning_invoice(self,
+                                 amount: float) -> Dict:
+        """
+        Create a lightning invoice for a given amount.
+
+        :param amount: The amount to deposit (in BTC fractions).
+        :return: A dictionary containing the deposit address and related details.
+        :raises Exception: If the request fails or the response contains an error.
+        """
+        coin = 'BTC'
+        network = "LIGHTNING"
+
+        try:
+            invoice_info = self.create_deposit_address(coin=coin, amount=amount, network=network)
+            coin = invoice_info.get("coin")
+            invoice = invoice_info.get("address")
+            standardized_response = {
+                'coin': coin,
+                'invoice': invoice,
+                'amount': amount
+            }
+            return standardized_response
+        except Exception:
+            logging.error("Error while creating LN invoice in BINANCE")
+            return False
 
     def create_withdraw_request(self, coin: str, address: str, amount: float,
                                 network: Optional[str] = "LIGHTNING", wallet_type: Optional[int] = 0, **kwargs) -> Dict:
