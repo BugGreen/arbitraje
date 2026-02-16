@@ -132,7 +132,7 @@ class ArbitrageBot:
             self,
             arb_orders: Union[ArbitrageOrder, List[ArbitrageOrder]],
             mode: str = "infinite_loop",
-            debug_mode: bool = False,
+            debug_mode: bool = True,
             sleep_interval: float = 0.8
     ) -> None:
         """
@@ -206,7 +206,7 @@ class ArbitrageBot:
                     # Not completed => Cancel sub-orders
                     time.sleep(sleep_interval)
 
-                    self.place_sub_order_cancellations(sub_orders, arb_orders)
+                    cancellation_response: dict = self.place_sub_order_cancellations(sub_orders, arb_orders)
                     self.arbitrage_order_completion(arb_orders)
                     for arb_order in arb_orders:
                         if arb_order.order_completed:
@@ -791,8 +791,6 @@ class ArbitrageBot:
             # Place the sub-orders on the exchange
             standardized_response = self.exchange_low_liquidity.batch_creation(sub_orders_prices)
 
-            # Update arb_orders `sub_orders_ids` attribute
-            self._assign_order_ids(arb_orders, standardized_response)
             # Assume it's a list of sub-order responses (partial or complete success)
             logger.info("Exchange sub-order placement response: %s", standardized_response)
 
@@ -803,6 +801,9 @@ class ArbitrageBot:
                 # TODO: ES CRUCIAL RESOLVER ESTO
                 # ToDo: Here it is necessary to see if the errors in the previous function can be solved.
                 return error_result
+
+            # Update arb_orders `sub_orders_ids` attribute
+            self._assign_order_ids(arb_orders, standardized_response)
 
             # Identify sub-orders that are in 'received' state => we poll for final status.
             # I.e., we wait until the orders are indeed processed by the exchange_low_liquidity sever
@@ -834,6 +835,7 @@ class ArbitrageBot:
             arb_orders: A single ArbitrageOrder or list of ArbitrageOrder objects.
             standardized_response: A list of dictionaries containing standardized order responses.
         """
+
         # Ensure arb_orders is a list
         if not isinstance(arb_orders, list):
             arb_orders = [arb_orders]
@@ -842,6 +844,8 @@ class ArbitrageBot:
         used_indices = set()
 
         for arb_order in arb_orders:
+            # Delete ids from previous iteration
+            arb_order.sub_orders_ids = []
             for sub_order in arb_order.sub_orders_info:
                 # Extract order details from sub_order_info
                 order_details: Dict = sub_order.get('order', {})
@@ -869,6 +873,7 @@ class ArbitrageBot:
                         matched = True
                         break  # Found a match for this sub order; move to the next one.
                 if not matched:
+                    logger.warning(f"No match found for arb_order: {arb_order} of type: {arb_order.order_type}")
                     # Optionally, log or handle the case where no matching standardized order is found.
                     pass
 

@@ -12,7 +12,7 @@ import json
 
 
 logging.basicConfig(
-    level=logging.WARNING,  # Set to DEBUG to capture all levels of log messages
+    level=logging.DEBUG,  # Set to DEBUG to capture all levels of log messages
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # Log message format
 )
 logger = logging.getLogger(__name__)

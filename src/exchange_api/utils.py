@@ -19,18 +19,26 @@ def retry_with_exponential_backoff(func: Callable, max_retries=4, base_delay=5, 
     :return: The result of the function call, or raises an exception after max_retries.
     """
     try_number = 0
+    requests_error: str = 'no_error'
     for attempt in range(max_retries):
         try:
             return func()  # Call the function
         except requests.exceptions.RequestException as e:  # Handle network-related errors
             logger.error(f"RequestException occurred (Attempt {attempt + 1}/{max_retries}): {e}")
-            # Retry only for certain HTTP errors (502, 524, 429)
-            status_code = e.response.status_code
-            if status_code in [502, 524, 429, 400, 401]:
-                delay = min(base_delay * (2 ** attempt), max_delay)
-                logger.error(f"API Error {status_code} occurred (Attempt {attempt + 1}/{max_retries}). Retrying in {delay}s...")
+            if hasattr(e, 'response') and e.response is not None:
+                status_code = e.response.status_code
+                # Retry only for certain HTTP errors (502, 524, 429)
+                if status_code in [502, 524, 429, 400, 401]:
+                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    logger.error(f"API Error {status_code} occurred (Attempt {attempt + 1}/{max_retries}). Retrying in {delay}s...")
+                    time.sleep(delay)  # Wait before retrying
+                    continue
+            else:
+                # Handle the case where no response was provided by the server
+                logger.error(f"Remote connection closed without response (Attempt {attempt + 1}/{max_retries})")
+                delay = min(base_delay * (3 ** attempt), max_delay)
+                logger.error(f"Retrying in {delay}s...")
                 time.sleep(delay)  # Wait before retrying
-                try_number = attempt + 1
                 continue
         except Exception as e:  # Handle other exceptions that do not have 'response' attribute
             logger.error(f"Unexpected error occurred (Attempt {attempt + 1}/{max_retries}): {e}")
