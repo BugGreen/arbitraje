@@ -1,4 +1,4 @@
-from src.arbitrage_bot.encoders import MIN_AMOUNT_REQUIREMENTS, MIN_BTC_PER_INVOICE, MAX_BTC_PER_INVOICE
+from src.arbitrage_bot.encoders import MIN_BTC_PER_INVOICE, MAX_BTC_PER_INVOICE
 from src.order_types.encoders import OrderType, CurrencyOfInterest
 from typing import Optional, Type, Dict, List, Any, Union, Tuple
 from src.exchange_api.exchange_factory import ExchangeFactory
@@ -10,6 +10,7 @@ from src.user_interface.arbitrage_ui import ArbitrageUI
 from concurrent.futures import ThreadPoolExecutor
 from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
 from datetime import datetime
+from decimal import Decimal
 import threading
 import logging
 import time
@@ -40,6 +41,7 @@ class ArbitrageBot:
         self.currency_of_interest: CurrencyOfInterest = CurrencyOfInterest.QUOTE  # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
         self.low_liquidity_taker_fee: float = 0.8 / 100
         self.quote_currency_network: str = "ETH"
+        self.minimum_notional_low_liquidity: float = 0.00002  # Expressed in Base Currency
         self.minimum_notional_high_liquidity: float = 5  # the minimum allowed amount to trade in a given market
         self.minimum_withdrawal_amount_quote_high_liquidity: float = 20  # USDC with ETH network
 
@@ -97,7 +99,8 @@ class ArbitrageBot:
         """
         # Retrieve coin info (assumes get_coin_info is implemented elsewhere in the class)
         quote_currency = arb_order.quote_currency
-        coin_info: Dict[str, Any] = self.exchange_high_liquidity.get_coin_info(quote_currency)  # TODO: Revisar esto, se cambio el metodo
+        coin_info: Dict[str, Any] = self.exchange_high_liquidity.get_coin_info(
+            quote_currency)  # TODO: Revisar esto, se cambio el metodo
         network_list: List[Dict[str, Any]] = coin_info.get("networkList", [])
 
         for net in network_list:
@@ -156,12 +159,14 @@ class ArbitrageBot:
         logger.info("Starting arbitrage flow with REST-based price retrieval. mode=%s", mode)
 
         # Set relevant attributes:
-        self.low_liquidity_taker_fee = self.get_low_liquidity_taker_fee(arb_order)
-        self.minimum_notional_high_liquidity = self.get_min_notional_high_liquidity(arb_order)
-        self.minimum_withdrawal_amount_quote_high_liquidity = self.get_min_withdrawal_quote_amount_high_liquidity(
-            network=self.quote_currency_network,
-            arb_order=arb_order
-        )
+        self.low_liquidity_taker_fee: float = self.get_low_liquidity_taker_fee(arb_order)
+        self.minimum_notional_low_liquidity: float = self.get_min_notional_low_liquidity(arb_order)
+        self.minimum_notional_high_liquidity: float = self.get_min_notional_high_liquidity(arb_order)
+        self.minimum_withdrawal_amount_quote_high_liquidity: float = \
+            self.get_min_withdrawal_quote_amount_high_liquidity(
+                network=self.quote_currency_network,
+                arb_order=arb_order
+            )
 
         # Start the UI in a separate thread if debug_mode is off
         if not debug_mode:
@@ -226,7 +231,7 @@ class ArbitrageBot:
                     continue
 
                 # 5) Check completion
-                order_completion = self.arbitrage_order_completion(arb_order)
+                order_completion = self.arbitrage_order_completion(arb_order, reference_price)
                 if order_completion:
                     # If fully done => funds_transfer
                     success_transfer = self.funds_transfer(arb_order)
@@ -240,7 +245,7 @@ class ArbitrageBot:
                     time.sleep(sleep_interval)
 
                     cancel_response = self.place_sub_order_cancellations(sub_orders, arb_order)
-                    order_completion = self.arbitrage_order_completion(arb_order)
+                    order_completion = self.arbitrage_order_completion(arb_order, reference_price)
                     if order_completion:
                         # If fully done => funds_transfer
                         success_transfer = self.funds_transfer(arb_order)
@@ -318,20 +323,23 @@ class ArbitrageBot:
         """
         return ExchangeFactory.get_exchange(exchange_name)
 
-    @staticmethod
-    def get_min_amount_for_market(arb_order: ArbitrageOrder) -> float:
+    def get_min_notional_low_liquidity(self, arb_order: ArbitrageOrder) -> float:
         """
         Retrieve the minimum amount for the current market (base_currency-quote_currency).
 
         :param arb_order: The `ArbitrageOrder` with attributes `base_currency` and `quote_currency`.
         :return: The minimum amount required by this market.
         """
-        market_name = f"{arb_order.base_currency}-{arb_order.quote_currency}"
-        min_amt = MIN_AMOUNT_REQUIREMENTS.get(market_name)
-        if min_amt is None:
-            # If not found, decide how to handle: raise an error or default to 0
-            raise ValueError(f"No minimum amount configured for market {market_name}")
-        return min_amt
+        base_currency: str = arb_order.base_currency
+        quote_currency: str = arb_order.quote_currency
+        market_name = f"{base_currency}-{quote_currency}"
+        market_info = self.exchange_low_liquidity.get_market_info(base_currency, quote_currency).get("market")
+        if market_info.get("id") == market_name:
+            min_amt = float(market_info.get("minimum_order_amount")[0])
+            return min_amt
+
+        # If not found, decide how to handle: raise an error or default to 0
+        raise ValueError(f"No minimum amount configured for market {market_name}")
 
     def _get_latest_high_liquidity_price(self, arb_order: ArbitrageOrder) -> float:
         """
@@ -500,7 +508,7 @@ class ArbitrageBot:
         :param arb_order: The `ArbitrageOrder` with attributes `base_currency` and `quote_currency`.
         :return: A list of valid sub-orders or an error dict.
         """
-        min_required = self.get_min_amount_for_market(arb_order=arb_order)
+        min_required = self.minimum_notional_low_liquidity
 
         # WARNING: THIS IS BEING CALCULATED USING BASE CURRENCY, BCS, `min_required` is in BASE CURRENCY
         total_amount = sum(so["order"]["amount"] for so in sub_orders)
@@ -553,7 +561,8 @@ class ArbitrageBot:
         return valid_sub_orders
 
     # TODO: HACER LA LOGICA MAS GENERAL CUANDO SE INCORPOREN MAS LOW LIQUIDITY EXCHANGES
-    def split_order_into_suborders(self, arb_order: ArbitrageOrder, reference_price: float, delta: Optional[float] = None) \
+    def split_order_into_suborders(self, arb_order: ArbitrageOrder, reference_price: float,
+                                   delta: Optional[float] = None) \
             -> Any:
         """
         Split the given `ArbitrageOrder`'s original_amount into multiple sub-orders,
@@ -730,7 +739,8 @@ class ArbitrageBot:
         cancelled_orders_id = [order_id.get('order_id') for order_id in cancel_response['orders_diff']]
         logger.info("Exchange sub-order cancellation response: %s", cancel_response)
 
-        states_response = self.exchange_low_liquidity.get_order_states(arb_order.base_currency, arb_order.quote_currency)
+        states_response = self.exchange_low_liquidity.get_order_states(arb_order.base_currency,
+                                                                       arb_order.quote_currency)
         all_states = states_response.get("orders", [])
 
         # 3. If any sub-order is 'canceled_and_traded' or partial, update the ArbitrageOrder object
@@ -1024,7 +1034,7 @@ class ArbitrageBot:
                     quote_currency=arb_order.quote_currency,
                     side=side.upper(),
                     order_type='MARKET',
-                    quantity=round(to_trade_base_currency, 5),  # Amount expressed in base currency
+                    quantity=round(Decimal(to_trade_base_currency), 5),  # Amount expressed in base currency
                 )
             elif self.currency_of_interest == CurrencyOfInterest.BASE:  # Want to accumulate base currency
                 order_resp = self.exchange_high_liquidity.new_order(
@@ -1060,7 +1070,8 @@ class ArbitrageBot:
             )
 
             # Update arb_order: `ArbitrageOrder`
-            arb_order.update_profit(price_difference=price_difference)  # TODO: se puede hacer metodo privado y encapsularlo en fulfull_high_liquidity
+            arb_order.update_profit(
+                price_difference=price_difference)  # TODO: se puede hacer metodo privado y encapsularlo en fulfull_high_liquidity
             arb_order.update_market_data(
                 price_diff=price_difference,
                 low_liquidity_price=limit_price_low_liquidity,
@@ -1176,18 +1187,21 @@ class ArbitrageBot:
             logger.warning("Some transfer(s) failed. btc_success=%s, quote_success=%s", btc_success, quote_success)
             return False
 
-    @staticmethod
-    def arbitrage_order_completion(arb_order: ArbitrageOrder) -> bool:
+    def arbitrage_order_completion(self, arb_order: ArbitrageOrder, reference_price: int) -> bool:
         """
         Checks if an arbitrage order has been completed. This is True when ArbitrageOrder's attribute
         `traded_quote_amount_low_liquidity` is larger or equal than the 98.5 % of `original_amount` attribute.
         It is not exactly equal, because of fees and rounding errors.
 
         :param arb_order: The ArbitrageOrder to check.
+        :param reference_price: The reference price to convert express min_notional in quote currency
         :return: Boolean value defining the completion state of the order
         """
 
-        return arb_order.traded_quote_amount_low_liquidity >= (arb_order.original_amount * 0.985)
+        min_notional_low_liquidity_quote = self.minimum_notional_low_liquidity * reference_price
+
+        return arb_order.traded_quote_amount_low_liquidity \
+               >= (arb_order.original_amount - min_notional_low_liquidity_quote)
 
     # TODO: Busacar la manera de paralelizar el proceso por cada chunk
     def btc_transfer(self, arb_order: ArbitrageOrder) -> bool:
@@ -1455,4 +1469,3 @@ class ArbitrageBot:
                     withdraw_id, state
                 )
                 return False
-

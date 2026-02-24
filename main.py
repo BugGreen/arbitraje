@@ -11,6 +11,8 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # Log message format
 )
 logger = logging.getLogger(__name__)
+file_handler = logging.FileHandler('arbitrage_log.txt')  # Log file path
+file_handler.setLevel(logging.DEBUG)  # Capture DEBUG level and above logs
 
 
 def main() -> None:
@@ -20,7 +22,7 @@ def main() -> None:
     # Example usage with Binance
 
     try:
-        welcome_menu()
+        # welcome_menu()
         # bot = ArbitrageBot(
         #     exchange_high_liquidity='binance',
         #     exchange_low_liquidity='buda',
@@ -145,8 +147,8 @@ def main() -> None:
         #order_book = buda.get_order_book(base_currency='btc', quote_currency='usdc')
         #print(json.dumps(order_book, indent=2))
         #print(buda.get_price('btc', "usdc"))
-        # market_info = buda.get_market_info(base_currency, quote_currency)
-        # print(json.dumps(market_info, indent=2))
+        market_info = buda.get_market_info(base_currency, quote_currency)
+        print(json.dumps(market_info, indent=2))
     except Exception as e:
         print(f"Error with BUDA: {e}")
 

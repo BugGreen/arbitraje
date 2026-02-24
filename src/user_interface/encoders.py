@@ -7,6 +7,6 @@ initialization_values: Dict[str, Any] = {
     "P. Difference": 0.4,
     "Base Currency": "BTC",
     "Quote Currency": "USDC",
-    "Amount": 2000,
+    "Amount": 30,
     "Mode": "debug"
 }
