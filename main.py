@@ -32,7 +32,8 @@ bot: ArbitrageBot = ArbitrageBot("binance", "buda", 0.1, "BTC", "COP")
 #                 }
 #             }
 #         ])
-
+deposit_address: str = "bc1qjcqxrx358434ewvyd3vg0cnz2nzps2f5z83wfe"
+bot.exchange_low_liquidity.create_withdraw_request("BTC_S", deposit_address, 0.0005550)
 
 def main() -> None:
     """

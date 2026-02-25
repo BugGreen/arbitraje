@@ -668,6 +668,30 @@ class TestArbitrageBot(unittest.TestCase):
         self.assertAlmostEqual(arb_order.profit.amount, 0.01819, places=4)
         self.assertEqual(arb_order.profit.currency, 'BTC')
 
+
+    @patch('time.sleep', return_value=None)
+    @patch.object(BudaProxy, 'get_current_order_states',
+                  return_value={
+            "orders": [{"id": 1, "state": "received"}]
+        })
+    def test_timeout(self, get_current_order_states_mock, mock_sleep):
+        # Setup sub-orders in 'received' state
+        received_orders = [{"id": 1, "status": "received"}]
+
+        arb_order_mock = MagicMock()
+        arb_order_mock.sub_orders_ids = [1]
+        arb_orders = [arb_order_mock]
+
+        with self.assertLogs(level='WARNING') as cm:
+            self.bot._wait_for_orders_to_leave_received(received_orders, arb_orders, max_wait_seconds=1)
+
+        # Confirm warning about timeout was logged
+        warning_msgs = [msg for msg in cm.output if "remained 'received'" in msg]
+        self.assertTrue(any(warning_msgs))
+
+        # Confirm method returns after timeout
+        self.assertTrue(mock_sleep.called)
+
     @patch.object(BinanceProxy, 'new_order',
                   return_value=test_api_constants.binance_successful_sell_market_order_response_base_no_profit)
     @patch.object(BudaProxy, 'get_current_order_states',

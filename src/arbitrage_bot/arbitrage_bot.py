@@ -996,8 +996,10 @@ class ArbitrageBot:
             # Fetch the latest states of the orders
             sleep_time: float = .9
             if retry_count == max_retry_attempts - 2:
+                logger.warning("About to wait 10 MINUTES to continue cancelling")
                 sleep_time = 60 * 10  # 10 minutes
             elif retry_count == max_retry_attempts - 1:
+                logger.error("About to wait 30 MINUTES to continue cancelling")
                 sleep_time = 60 * 30  # 30 minutes
             time.sleep(sleep_time)  # Wait before calling states
             if not self.websocket_mode:

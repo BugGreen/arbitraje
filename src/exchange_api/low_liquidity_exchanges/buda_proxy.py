@@ -620,9 +620,11 @@ class BudaProxy(BaseLowLiquidityExchange):
             url = f"{self.BASE_URL}{endpoint_path}"
             withdrawal_data = {"payment_request": address}
 
-        # Handling traditional crypto withdrawals (ETH, USDC, BCH, LTC)
-        elif coin.upper() in ['ETH', 'USDC', 'BCH', 'LTC']:
+        # Handling traditional crypto withdrawals (ETH, USDC, BCH, LTC, 'BTC_S' for BTC standard withdrawal)
+        elif coin.upper() in ['ETH', 'USDC', 'BCH', 'LTC', 'BTC_S']:
             # Define the endpoint path for traditional crypto withdrawals
+            if coin.upper() == 'BTC_S':
+                coin = 'BTC'
             endpoint_path = self.ENDPOINTS["CRYPTO_WITHDRAWAL"].format(currency=coin.lower())
             url = f"{self.BASE_URL}{endpoint_path}"
             withdrawal_data = {
