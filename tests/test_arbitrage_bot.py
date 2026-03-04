@@ -1150,7 +1150,7 @@ class TestArbitrageBot(unittest.TestCase):
     @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.place_sub_orders_sell_limit_flow)
     @patch.object(BudaProxy, 'batch_cancellation', return_value=test_a_bot_constans.batch_cancellation_sell_limit_flow)
     @patch.object(BinanceProxy, 'new_order', return_value=test_a_bot_constans.new_order_binance_sell_limit_flow)
-    def test_run_arbitrage_flow(self,
+    def test_run_arbitrage_flow_sell_limit(self,
                                 mock_buda_place_sub_orders,
                                 mock_buda_batch_cancellation,
                                 mock_binance_new_order):
@@ -1162,7 +1162,44 @@ class TestArbitrageBot(unittest.TestCase):
             base_currency="BTC",
             quote_currency="USDC",
             amount=100.0,
-            original_amount=100,
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        self.bot.run_arbitrage_flow(arb_order=arb_order)
+
+
+    @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.place_sub_orders_sell_limit_flow_traded)
+    @patch.object(BudaProxy, 'batch_cancellation', return_value=test_a_bot_constans.batch_cancellation_sell_limit_flow_traded)
+    @patch.object(BinanceProxy, 'new_order', return_value=test_a_bot_constans.new_order_binance_sell_limit_flow_traded)
+    @patch.object(BudaProxy, 'create_withdraw_request', return_value=test_a_bot_constans.buda_create_withdraw_request_sell_limit_flow_traded)
+    @patch.object(BinanceProxy, 'pay_ln_invoice', return_value=test_a_bot_constans.binance_pay_ln_invoice_sell_limit_flow_traded)
+    @patch.object(BinanceProxy, 'get_withdraw_history',
+                  side_effect=[
+                      test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_1,
+                      test_a_bot_constans.binance_get_withdraw_history_sell_limit_flow_traded_2])
+    @patch.object(BudaProxy, 'get_withdraw_history',
+                  side_effect=[
+                      test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_1,
+                      test_a_bot_constans.buda_get_withdraw_history_sell_limit_flow_traded_2])
+    def test_run_arbitrage_flow_sell_limit_traded(self,
+                                                  mock_buda_place_sub_orders,
+                                                  mock_buda_batch_cancellation,
+                                                  mock_binance_new_order,
+                                                  mock_buda_create_withdraw_request,
+                                                  mock_binance_pay_ln_invoice,
+                                                  mock_binance_get_withdraw_history,
+                                                  mock_buda_get_withdraw_history
+                                                  ):
+        """
+        Test the arbitrage flow, on a first iteration condition
+        """
+
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            amount=100.0,
+            original_amount=15,
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.SELL_LIMIT
         )

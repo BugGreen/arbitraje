@@ -463,3 +463,177 @@ new_order_binance_sell_limit_flow = {
     ],
     'selfTradePreventionMode': 'EXPIRE_MAKER'
 }
+
+place_sub_orders_buy_limit_flow = [
+    {
+        'id': 1366298103,
+        'status': 'pending',
+        'error_message': None,
+        'amount': ['0.00066572', 'BTC'],
+        'traded_amount': ['0.0', 'BTC'],
+        'total_exchanged': ['0.0', 'USDC']
+    },
+    {
+        'id': 1366298105,
+        'status': 'pending',
+        'error_message': None,
+        'amount': ['0.00028551', 'BTC'],
+        'traded_amount': ['0.0', 'BTC'],
+        'total_exchanged': ['0.0', 'USDC']
+    }
+]
+
+batch_cancellation_buy_limit_flow = {
+    'orders_diff': [{'mode': 'cancel', 'order_id': 1366298103}, {'mode': 'cancel', 'order_id': 1366298105}]
+}
+
+place_sub_orders_sell_limit_flow_traded = [
+    {
+        'id': 1367813959,
+        'status': 'pending',
+        'error_message': None,
+        'amount': ['0.00009976', 'BTC'],
+        'traded_amount': ['0.0', 'BTC'],
+        'total_exchanged': ['0.0', 'USDC']
+    },
+    {
+        'id': 1367813961,
+        'status': 'pending',
+        'error_message': None,
+        'amount': ['0.00004272', 'BTC'],
+        'traded_amount': ['0.0', 'BTC'],
+        'total_exchanged': ['0.0', 'USDC']
+    }
+]
+
+batch_cancellation_sell_limit_flow_traded = {
+    'orders_diff': [{'mode': 'cancel', 'order_id': 1367813959}, {'mode': 'cancel', 'order_id': 1367813961}]
+}
+
+new_order_binance_sell_limit_flow_traded = {
+    'symbol': 'BTCUSDC',
+    'orderId': 3962637728,
+    'orderListId': -1,
+    'clientOrderId': 'eWpdt8VN1RZgx0tiqIkFD5',
+    'transactTime': 1738333733346,
+    'price': '0.00000000',
+    'origQty': '0.00014000',
+    'executedQty': '0.00014000',
+    'origQuoteOrderQty': '0.00000000',
+    'cummulativeQuoteQty': '14.64585780',
+    'status': 'FILLED',
+    'timeInForce': 'GTC',
+    'type': 'MARKET',
+    'side': 'BUY',
+    'workingTime': 1738333733346,
+    'fills': [
+        {
+            'price': '104613.27000000',
+            'qty': '0.00014000',
+            'commission': '0.00000013',
+            'commissionAsset': 'BTC',
+            'tradeId': 133249829}
+    ],
+    'selfTradePreventionMode': 'EXPIRE_MAKER'
+}
+
+buda_create_withdraw_request_sell_limit_flow_traded = {'id': 'pGwNxJ', 'uuid': '6b250edc-9871-4223-b761-e9755ca185fe', 'state': 'executing', 'currency': 'USDC', 'created_at': '2025-01-31T15:38:52.355Z', 'withdrawal_data': {'type': 'usdc_withdrawal_data', 'target_address': '0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b', 'direct': False, 'tx_hash': None, 'direct_hash': None, 'carbon_footprint_donation_confirmed': False, 'carbon_footprint_donation': None}, 'forced_reason': None, 'account_id': 143870, 'user_id': 143870, 'expected_execution_time': None, 'expected_arrival_time': None, 'hold_execution': False, 'reserve_name': 'USDC', 'reserve_code': 'usdc', 'rejection_reasons': [], 'amount': ['14.996126', 'USDC'], 'fee': ['1.0', 'USDC'], 'usd_amount': ['15.02', 'USD']}
+
+binance_pay_ln_invoice_sell_limit_flow_traded = {'id': 'd8ea0779171a433f8f1e83a5e1892786'}
+
+buda_get_withdraw_history_sell_limit_flow_traded_1 = \
+    [{
+        'id': 'pGwNxJ',
+        'uuid': 'ff8c9b6b-ed36-4a65-93a4-756a29046bbf',
+        'state': 'executing',
+        'currency': 'USDC',
+        'created_at': '2025-01-31T15:09:47.146Z',
+        'withdrawal_data':
+            {
+                'type': 'usdc_withdrawal_data',
+                'target_address': '0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b',
+                'direct': False,
+                'tx_hash': None,
+                'direct_hash': None,
+                'carbon_footprint_donation_confirmed': False,
+                'carbon_footprint_donation': None
+            },
+        'forced_reason': None,
+        'account_id': 143870,
+        'user_id': 143870,
+        'expected_execution_time': None,
+        'expected_arrival_time': None,
+        'hold_execution': False,
+        'reserve_name': 'USDC',
+        'reserve_code': 'usdc',
+        'rejection_reasons': [],
+        'amount': ['14.996126', 'USDC'],
+        'fee': ['1.0', 'USDC'],
+        'usd_amount': ['14.97', 'USD']
+    }]
+
+
+buda_get_withdraw_history_sell_limit_flow_traded_2 = \
+    [{
+        'id': 'pGwNxJ',
+        'uuid': 'ff8c9b6b-ed36-4a65-93a4-756a29046bbf',
+        'state': 'confirmed',
+        'currency': 'USDC',
+        'created_at': '2025-01-31T15:09:47.146Z',
+        'withdrawal_data':
+            {
+                'type': 'usdc_withdrawal_data',
+                'target_address': '0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b',
+                'direct': False,
+                'tx_hash': None,
+                'direct_hash': None,
+                'carbon_footprint_donation_confirmed': False,
+                'carbon_footprint_donation': None
+            },
+        'forced_reason': None,
+        'account_id': 143870,
+        'user_id': 143870,
+        'expected_execution_time': None,
+        'expected_arrival_time': None,
+        'hold_execution': False,
+        'reserve_name': 'USDC',
+        'reserve_code': 'usdc',
+        'rejection_reasons': [],
+        'amount': ['14.996126', 'USDC'],
+        'fee': ['1.0', 'USDC'],
+        'usd_amount': ['14.97', 'USD']
+    }]
+
+binance_get_withdraw_history_sell_limit_flow_traded_1 = [{
+    'id': 'd8ea0779171a433f8f1e83a5e1892786',
+    'amount': '0.000142',
+    'transactionFee': '0.000001',
+    'coin': 'BTC',
+    'status': 4,
+    'address': 'lnbc142u1pnee6czpp57k5e65v6hxy76tt8t7ujej7e5jm5hu5jz2at2yrscfxsccvenuzqdqqcqzzsxqyz5vqsp5qwnnream6lr5j4fkjqqn7qlm945j0j4emtv58fpray3jvs5j967s9qxpqysgq34y7cqvlsk8s0p57acvfwgeta6qwhkemnd2a8hkhgdxj8q037pq4mam0r55jel02pcsjp5949tc78r0ccqnqr6j4t2tkdt77z928smsq0r4u9t',
+    'txId': 'f5a99d519ab989ed2d675fb92ccbd9a4b74bf29212bab51070c24d0c61999f04',
+    'applyTime': '2025-01-31 15:23:47',
+    'network': 'LIGHTNING',
+    'transferType': 0,
+    'info': 'Please note that you will receive an email once it is completed.',
+    'walletType': 0,
+    'txKey': '',
+    'state': 'pending_confirmation'
+}]
+
+binance_get_withdraw_history_sell_limit_flow_traded_2 = [{
+    'id': 'd8ea0779171a433f8f1e83a5e1892786',
+    'amount': '0.000142',
+    'transactionFee': '0.000001',
+    'coin': 'BTC',
+    'status': 4,
+    'address': 'lnbc142u1pnee6czpp57k5e65v6hxy76tt8t7ujej7e5jm5hu5jz2at2yrscfxsccvenuzqdqqcqzzsxqyz5vqsp5qwnnream6lr5j4fkjqqn7qlm945j0j4emtv58fpray3jvs5j967s9qxpqysgq34y7cqvlsk8s0p57acvfwgeta6qwhkemnd2a8hkhgdxj8q037pq4mam0r55jel02pcsjp5949tc78r0ccqnqr6j4t2tkdt77z928smsq0r4u9t',
+    'txId': 'f5a99d519ab989ed2d675fb92ccbd9a4b74bf29212bab51070c24d0c61999f04',
+    'applyTime': '2025-01-31 15:23:47',
+    'network': 'LIGHTNING',
+    'transferType': 0,
+    'info': 'Please note that you will receive an email once it is completed.',
+    'walletType': 0,
+    'txKey': '',
+    'state': 'confirmed'
+}]

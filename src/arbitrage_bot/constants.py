@@ -20,7 +20,7 @@ MIN_AMOUNT_REQUIREMENTS = {
     "USDC-CLP": 0.01,
     "USDC-COP": 0.01,
     "USDC-PEN": 0.01,
-    "BTC-USDC": 0.0002,
+    "BTC-USDC": 0.00002,
     "USDT-USDC": 0.01
 }
 

@@ -101,11 +101,14 @@ class ArbitrageBot:
             else:
                 # Not completed => Cancel sub-orders
                 cancel_response = self.place_sub_order_cancellations(place_result, arb_order)
-                # confirm
-                # if self.confirm_cancellations(cancel_response):
-                #     logger.info("Cancellations confirmed. We'll re-check next iteration with a new price.")
-                # else:
-                #     logger.warning("Cancellations partial or failed. Evaluate fallback.")
+                if self.arbitrage_order_completion(arb_order):
+                    # If fully done => funds_transfer
+                    success_transfer = self.funds_transfer(arb_order)
+                    if success_transfer:
+                        logger.info("Funds transferred successfully. Reset order or create a new one.")
+                        arb_order.reset_values() # hypothetical method to reset or you can create a new one
+                    else:
+                        logger.warning("Funds transfer failed. Evaluate partial scenario.")
 
             # 6) Break if single cycle
             if mode == "single_cycle":
@@ -801,14 +804,15 @@ class ArbitrageBot:
     @staticmethod
     def arbitrage_order_completion(arb_order: ArbitrageOrder) -> bool:
         """
-        Checks if an arbitrage order has been completed. This is True when the ArbitrageOrder attributes
-        `traded_quote_amount_low_liquidity` and `original_amount` are equal.
+        Checks if an arbitrage order has been completed. This is True when ArbitrageOrder's attribute
+        `traded_quote_amount_low_liquidity` is larger or equal than the 98.5 % of `original_amount` attribute.
+        It is not exactly equal, because of fees and rounding errors.
 
         :param arb_order: The ArbitrageOrder to check.
         :return: Boolean value defining the completion state of the order
         """
 
-        return arb_order.original_amount == arb_order.traded_quote_amount_low_liquidity
+        return arb_order.traded_quote_amount_low_liquidity >= (arb_order.original_amount * 0.985)
 
     # TODO: Busacar la manera de paralelizar el proceso por cada chunk
     def btc_transfer(self, arb_order: ArbitrageOrder) -> bool:
@@ -1009,7 +1013,7 @@ class ArbitrageBot:
 
     # TODO: Adapt `max_wait_seconds` according to the coin, bcs, some take longer than others
     @staticmethod
-    def _wait_for_asset_withdraw(coin: str, sender: Any, withdraw_id: str, max_wait_seconds: int = 60 * 6) -> bool:
+    def _wait_for_asset_withdraw(coin: str, sender: Any, withdraw_id: str, max_wait_seconds: int = 60 * 10) -> bool:
         """
         Wait for an asset withdrawal to be confirmed by polling the sender's
         withdraw history.
