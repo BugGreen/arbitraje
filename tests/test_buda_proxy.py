@@ -6,12 +6,13 @@ import pytest
 import requests
 from tests import exchange_constants as constants
 
+buda: BudaProxy = ExchangeFactory.get_exchange('buda')
+
 
 def test_sign_request():
     """
     Test the _sign_request method of BudaProxy.
     """
-    buda = BudaProxy()
     buda.api_key = "test_api_key"
     buda.api_secret = "test_api_secret"
 
@@ -54,10 +55,9 @@ def test_pay_ln_invoice(mock_post):
     Test BTC Lightning Network withdrawal request.
     """
 
-    buda_proxy = ExchangeFactory.get_exchange('buda')
     expired_invoice = 'lnbc50u1pn5f8ljpp5dc6y936p79j9dfqs59vdkz6dfurxcgzvsren4mtahdrva9paqxhsdq8w3jhxaqcqzzsxqyz5vqsp5yp9j2fghxfw4dvxnkcu5lyldykew7ymuq27f8jpay8ms7q9kwe9s9qxpqysgqqczpcedj6ry8t8z5emqvz9mvjr263fsv7p64st6j5pyxfcdmm9hparffkgfsxv883kh6hkczfgpktlevn3rldcskqv392fk8n7ad3lcp6yx88t'
 
-    response = buda_proxy.pay_ln_invoice(ln_invoice=expired_invoice, amount=0.000095)
+    response = buda.pay_ln_invoice(ln_invoice=expired_invoice, amount=0.000095)
     withdrawal_id = response["id"]
 
     assert withdrawal_id == "VWBwmE"
@@ -79,7 +79,6 @@ def test_create_withdraw_request_ltc():
 
 
 def test_get_price():
-    buda = BudaProxy()
     price_response = buda.get_price('btc', 'usdc')
     assert price_response.get('symbol') == 'BTCUSDC'
     assert price_response.get('price')
@@ -99,7 +98,6 @@ def test_create_quote_currency_address(mock_post):
     """
     Test the create_deposit_address method for an alt-coin with a successful response.
     """
-    buda = BudaProxy()
     buda.api_key = "test_api_key"
     buda.api_secret = "test_api_secret"
 
@@ -119,7 +117,6 @@ def test_create_deposit_address_success(mock_post):
     Test the create_deposit_address method with a successful response.
     """
     # Arrange
-    buda = BudaProxy()
     buda.api_key = "test_api_key"
     buda.api_secret = "test_api_secret"
 
@@ -165,7 +162,6 @@ def test_create_ln_invoice_success(mock_post):
     Test the create_deposit_address method with a successful response.
     """
     # Arrange
-    buda = BudaProxy()
     buda.api_key = "test_api_key"
     buda.api_secret = "test_api_secret"
 
@@ -202,8 +198,6 @@ def test_create_deposit_address_invalid_coin(mock_post):
     """
     Test the create_deposit_address method with an invalid coin.
     """
-    # Arrange
-    buda = BudaProxy()
 
     # Act & Assert
     with pytest.raises(ValueError, match="Error coin ADA is not supported"):
@@ -217,8 +211,6 @@ def test_create_deposit_address_api_error(mock_post):
     """
     Test the create_deposit_address method when the API returns an error.
     """
-    # Arrange
-    buda = BudaProxy()
     buda.api_key = "test_api_key"
     buda.api_secret = "test_api_secret"
 
@@ -239,7 +231,6 @@ def test_create_deposit_address_api_error(mock_post):
 @patch("requests.post")
 def test_new_order_limit(mock_post):
     # Setup for the BudaProxy instance
-    buda = BudaProxy()
     buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
 
     expected_response = {"order": {"id": 1, "amount": ["0.05", "BTC"], "price_type": "limit"}}
@@ -272,7 +263,6 @@ def test_new_order_limit(mock_post):
 @patch("requests.post")
 def test_new_order_market(mock_post):
     # Setup for the BudaProxy instance
-    buda = BudaProxy()
     buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
 
     expected_response = {"order": {"id": 2, "amount": ["0.05", "BTC"], "price_type": "market"}}
@@ -326,7 +316,6 @@ def test_cancel_order_success(mock_put):
     mock_put.return_value = mock_response
 
     # Instance of BudaProxy
-    buda = BudaProxy()
     buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
 
     # Call the cancel_order method
@@ -392,7 +381,6 @@ def test_get_order_states(mock_get):
     mock_get.return_value = mock_response
 
     # Instance of BudaProxy
-    buda = BudaProxy()
     buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
 
     response = buda.get_order_states(base_currency='eth', quote_currency='cop')
@@ -411,7 +399,6 @@ def test_get_withdraw_history(mock_get):
     mock_get.return_value = mock_response
 
     # Instance of BudaProxy
-    buda = BudaProxy()
     buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
 
     response = buda.get_withdraw_history(coin='btc')
@@ -430,7 +417,6 @@ def test_get_deposit_history(mock_get):
     mock_get.return_value = mock_response
 
     # Instance of BudaProxy
-    buda = BudaProxy()
     buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
 
     response = buda.get_deposit_history(coin='btc')
@@ -466,7 +452,6 @@ def test_batch_cancellation_success(mock_post):
     mock_response.json.return_value = expected_response
     mock_post.return_value = mock_response
 
-    buda = BudaProxy()
     buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
 
     # Call the batch_cancelation method
@@ -510,7 +495,6 @@ def test_get_order_book_success(mock_get):
     mock_get.return_value = mock_response
 
     # Initialize BudaProxy instance with dummy API credentials
-    buda = BudaProxy()
     buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
 
     # Call the get_order_book method
@@ -536,7 +520,6 @@ def test_get_order_book_failure(mock_get):
     mock_get.return_value = mock_response
 
     # Initialize BudaProxy instance with dummy API credentials
-    buda = BudaProxy()
     buda.api_key, buda.api_secret = 'test_api_key', 'test_api_secret'
 
     try:

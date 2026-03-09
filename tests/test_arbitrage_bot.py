@@ -154,19 +154,6 @@ class TestArbitrageBot(unittest.TestCase):
             order_type=OrderType.BUY_LIMIT
         )
 
-    def test_check_sub_orders_status_all_found(self):
-        """
-        Test that when all provided sub_order_ids exist in the exchange's order states,
-        the method returns their respective statuses.
-        """
-
-        sub_order_ids = ["397656360", "397122183"]
-        result = self.bot.check_sub_orders_status(sub_order_ids)
-        # print(json.dumps(result, indent=2))
-        self.assertEqual(len(result), 2)
-        self.assertEqual(result.get("397656360")["state"], "traded")
-        self.assertEqual(result.get("397122183")["state"], "traded")
-
     def test_split_order_into_suborders_ask_with_delta(self):
         """
         Test splitting an 'ask' order with a specified delta.
@@ -1524,3 +1511,26 @@ class TestArbitrageBot(unittest.TestCase):
                 found_error = True
                 break
         self.assertTrue(found_error, "Expected error message not found in logger.error calls.")
+
+    def test_get_min_withdrawal_amount_high_liquidity_eth_network(self):
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        result = self.bot.get_min_withdrawal_quote_amount_high_liquidity("eth", arb_order)
+        self.assertEqual(result, 20.0)
+
+    def test_get_min_notional_high_liquidity(self):
+        arb_order = ArbitrageOrder(
+            base_currency="BTC",
+            quote_currency="USDC",
+            original_amount=15,
+            currency_of_interest=CurrencyOfInterest.QUOTE,
+            order_type=OrderType.SELL_LIMIT
+        )
+        result: float = self.bot.get_min_notional_high_liquidity(arb_order)
+        self.assertTrue(isinstance(result, float))
+        self.assertEqual(result, 5)

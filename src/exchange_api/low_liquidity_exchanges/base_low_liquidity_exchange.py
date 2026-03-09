@@ -64,16 +64,6 @@ class BaseLowLiquidityExchange(BaseExchange, ABC):
         """
 
     @abstractmethod
-    def get_market_info(self, base_currency: str, quote_currency: str) -> Dict:
-        """
-        Retrieve the market information of the market f'{base_currency}-{quote_currency}'.
-
-        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
-        :param quote_currency: The quote currency of the trading pair (e.g., 'USDC').
-        :return: A dictionary containing the market information.
-        """
-
-    @abstractmethod
     def _translate_batch_response(response: Union[Dict[str, Any], Exception]) \
             -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """

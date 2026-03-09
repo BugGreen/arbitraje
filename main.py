@@ -1,5 +1,6 @@
 from src.exchange_api.exchange_factory import ExchangeFactory
 from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
+from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
 from user_interface.arbitrage_ui import welcome_menu
 import logging
 import json
@@ -19,7 +20,7 @@ def main() -> None:
     # Example usage with Binance
 
     try:
-        welcome_menu()
+        # welcome_menu()
         # bot = ArbitrageBot(
         #     exchange_high_liquidity='binance',
         #     exchange_low_liquidity='buda',
@@ -37,7 +38,7 @@ def main() -> None:
         # )
         # bot.run_arbitrage_flow(arb_order=arb_order)
 
-        binance = ExchangeFactory.get_exchange("binance")
+        binance: BinanceProxy = ExchangeFactory.get_exchange("binance")
         coin = "USDC"
         ln_invoice = 'lnbc50u1pn5f8ljpp5dc6y936p79j9dfqs59vdkz6dfurxcgzvsren4mtahdrva9paqxhsdq8w3jhxaqcqzzsxqyz5vqsp5yp9j2fghxfw4dvxnkcu5lyldykew7ymuq27f8jpay8ms7q9kwe9s9qxpqysgqqczpcedj6ry8t8z5emqvz9mvjr263fsv7p64st6j5pyxfcdmm9hparffkgfsxv883kh6hkczfgpktlevn3rldcskqv392fk8n7ad3lcp6yx88t'
         sats_amount = 5000
@@ -51,15 +52,18 @@ def main() -> None:
         order_type = 'MARKET'
         order_id = 33188802974
 
-        print(binance.get_price('btc', "usdc"))
+        #print(binance.get_price('btc', "usdc"))
+        json_print(binance.get_market_info(base_currency, quote_currency))
 
         #usdc_deposit_addres = binance.create_deposit_address(coin=coin, network='ETH')
         #print(json.dumps(usdc_deposit_addres, indent=2))
         # print(binance.get_withdraw_history('BTC'))
         # print(binance.get_deposit_history())
 
-        #coin_info = binance.supports_lightning_network(coin)
-        #print(json.dumps(coin_info, indent=2))
+        # coin_info = binance.get_coin_info(base_currency)
+        # print(json.dumps(coin_info, indent=2))
+
+        # coin_info = binance.supports_lightning_network(coin)
         #withdraw_request = binance.create_withdraw_request(coin=coin, address=ln_invoice, amount=sats_amount)
         #print(json.dumps(withdraw_request, indent=2))
         # new_order = binance.new_order(base_currency=base_currency,
@@ -146,6 +150,9 @@ def main() -> None:
     except Exception as e:
         print(f"Error with BUDA: {e}")
 
+
+def json_print(json_dict: json, indent: int = 2) -> None:
+    print(json.dumps(json_dict, indent=indent))
 
 if __name__ == "__main__":
     main()

@@ -1,8 +1,11 @@
 from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
+from src.exchange_api.exchange_factory import ExchangeFactory
 from tests import exchange_constants as constants
 from unittest.mock import patch, Mock
 from json import dumps as jprint
+from typing import List, Dict
 
+binance: BinanceProxy = ExchangeFactory.get_exchange('binance')
 
 def test_binance_proxy_initialization():
     """
@@ -20,7 +23,6 @@ def test_binance_get_coin_info():
     """
     Test the get_coin_info method of BinanceProxy.
     """
-    binance = BinanceProxy()
     expected_response = [{"coin": "BTC", "networkList": []}]
 
     with patch('requests.get') as mock_get:
@@ -34,11 +36,21 @@ def test_binance_get_coin_info():
         mock_get.assert_called_once()
 
 
+def test_get_coin_single_info():
+    """
+    Test the get_coin_info method of BinanceProxy when called with param coin.
+    """
+    currency_name: str = 'btc'
+    coin_info = binance.get_coin_info(currency_name)
+    assert coin_info
+    assert coin_info.get("coin") == currency_name.upper()
+    assert coin_info.get("name") == "Bitcoin"
+
+
 def test_binance_supports_lightning_network():
     """
     Test the supports_lightning_network method of BinanceProxy.
     """
-    binance = BinanceProxy()
     mock_coin_info = [
         {
             "coin": "BTC",
@@ -71,8 +83,6 @@ def test_create_deposit_address(deposit_validation_mock):
     """
     Test the create_deposit_address method of BinanceProxy.
     """
-    binance = BinanceProxy()
-
     # Mock the expected API response
     expected_response = {
         "address": "1HPn8Rx2y6nNSfagQBKy27GB99Vbzg89wv",
@@ -106,8 +116,6 @@ def test_create_ln_invoice(deposit_validation_mock):
     """
     Test the create_deposit_address method of BinanceProxy.
     """
-    binance = BinanceProxy()
-
     # Mock the expected API response
     expected_response = {
         'coin': "BTC",
@@ -139,7 +147,6 @@ def test_create_quote_currency_address():
     """
     Test the create_deposit_address method for an alt-coin with a successful response.
     """
-    binance = BinanceProxy()
     result = binance.create_quote_currency_address(coin='USDC', network="ETH")
     assert result.get('address') == "0xc49cc35273f59ba0abec3bf6d895ba15d3a6027b"
 
@@ -148,7 +155,6 @@ def test_create_withdraw_request():
     """
     Test the create_withdraw_request method of BinanceProxy.
     """
-    binance = BinanceProxy()
 
     # Mock the expected API response
     expected_response = {"id": "7213fea8e94b4a5593d507237e5a555b"}
@@ -176,16 +182,28 @@ def test_create_withdraw_request():
 
 
 def test_get_price():
-    binance = BinanceProxy()
     price_response = binance.get_price('btc', 'usdc')
     assert price_response.get('symbol') == 'BTCUSDC'
     assert price_response.get('price')
+
+
+def test_get_market_info():
+    base_currency, quote_currency = "btc", "usdc"
+    market_info = binance.get_market_info(base_currency, quote_currency)
+    symbols: List[Dict] = market_info.get("symbols", [])
+    symbol_assertion: bool = False
+    for symbol in symbols:
+        if symbol.get("symbol") == f"{base_currency.upper()}{quote_currency.upper()}":
+            symbol_assertion = True
+            break
+
+    assert symbol_assertion
+
 
 @patch("requests.post")
 def test_new_order_success(mock_post):
 
     # Setup the Binance instance or class
-    binance = BinanceProxy()
 
     binance.api_key = "test_api_key"
     binance.api_secret = "test_api_secret"
@@ -250,7 +268,6 @@ def test_new_order_success(mock_post):
 def test_new_order_market_success(mock_post):
 
     # Set up the Binance instance or class
-    binance = BinanceProxy()
 
     binance.api_key = "test_api_key"
     binance.api_secret = "test_api_secret"
@@ -292,7 +309,6 @@ def test_new_order_market_success(mock_post):
 def test_new_sell_order_market_success(mock_post):
 
     # This market order is created using quantity instead of quote_order_qty
-    binance = BinanceProxy()
 
     binance.api_key = "test_api_key"
     binance.api_secret = "test_api_secret"
@@ -333,7 +349,6 @@ def test_new_sell_order_market_success(mock_post):
 @patch("requests.post")
 def test_new_order_fail(mock_post):
     # Setup the Binance instance or class
-    binance = BinanceProxy()
     binance.api_key, binance.api_secret = 'test_api_key', 'test_api_secret'
 
     # Simulate an error response from Binance (e.g., invalid API key or other issues)
@@ -366,7 +381,6 @@ def test_new_order_fail(mock_post):
 @patch('requests.delete')
 def test_cancel_order(mock_delete):
     # Setup the Binance instance or class
-    binance = BinanceProxy()
     binance.api_key, binance.api_secret = 'test_api_key', 'test_api_secret'
 
     # Simulate a response from Binance

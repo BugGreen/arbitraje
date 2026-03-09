@@ -5,7 +5,7 @@ import time
 import hmac
 import hashlib
 from urllib.parse import urlencode
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 from exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
 from src.exchange_api.utils import load_api_keys
 import logging
@@ -19,6 +19,7 @@ class BinanceProxy(BaseHighLiquidityExchange):
     Proxy class for interacting with the Binance API.
     """
     BASE_URL = "https://api.binance.com"
+    BASE_URL_PUBLIC = "https://data-api.binance.vision"
     ENDPOINTS = {
         "ALL_COINS_INFO": "/sapi/v1/capital/config/getall",
         "DEPOSIT_ADDRESS": "/sapi/v1/capital/deposit/address",
@@ -28,7 +29,8 @@ class BinanceProxy(BaseHighLiquidityExchange):
         'CANCEL_ORDER': '/api/v3/order',
         'WITHDRAW_HISTORY': '/sapi/v1/capital/withdraw/history',
         "DEPOSIT_HISTORY": "/sapi/v1/capital/deposit/hisrec",
-        "PRICE": "https://data-api.binance.vision/api/v3/ticker/price?symbol={}"
+        "PRICE": "/api/v3/ticker/price?symbol={}",
+        "MARKET": "/api/v3/exchangeInfo?symbol={}"
     }
 
     def __init__(self) -> None:
@@ -79,10 +81,12 @@ class BinanceProxy(BaseHighLiquidityExchange):
         time_difference = abs(local_time - binance_time)
         print(f"Time difference: {time_difference} ms")
 
-    def get_coin_info(self) -> List[Dict]:
+    def get_coin_info(self, coin: Optional[str] = None) -> Union[Dict, List[Dict]]:
         """
         Fetch information of all coins from Binance API.
+        If a coin's name is provided, returns only the coin's information.
 
+        :param coin: str representing the name of the coin.
         :return: List of dictionaries containing coin information.
         """
         url = f"{self.BASE_URL}{self.ENDPOINTS['ALL_COINS_INFO']}"
@@ -90,7 +94,17 @@ class BinanceProxy(BaseHighLiquidityExchange):
         params = self._sign_request({})
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
-        return response.json()
+
+        if coin:
+            coins_info = response.json()
+            for coin_info in coins_info:
+                if coin_info.get("coin") == coin.upper():
+                    # Uncomment to display the response
+                    print(json.dumps(coin_info, indent=2))
+                    return coin_info
+
+        else:
+            return response.json()
 
     def supports_lightning_network(self, coin: str) -> bool:
         """
@@ -460,7 +474,27 @@ class BinanceProxy(BaseHighLiquidityExchange):
         symbol = base_currency.upper() + quote_currency.upper()
 
         # Make the API request
-        url = self.ENDPOINTS['PRICE'].format(symbol)
+        url = f"{self.BASE_URL_PUBLIC}{self.ENDPOINTS['PRICE'].format(symbol)}"
+        response = requests.get(url)
+
+        # Check for successful response
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception(f"Error {response.status_code}: {response.text}")
+
+    def get_market_info(self, base_currency: str, quote_currency: str) -> Dict:
+        """
+        Retrieve the market information of the market f'{base_currency.upper()}{quote_currency.upper()}'.
+
+        :param base_currency: The base currency of the trading pair (e.g., 'BTC').
+        :param quote_currency: The quote currency of the trading pair (e.g., 'USDC').
+        :return: A dictionary containing the market information.
+        """
+        symbol = base_currency.upper() + quote_currency.upper()
+
+        # Make the API request
+        url = f"{self.BASE_URL_PUBLIC}{self.ENDPOINTS['MARKET'].format(symbol)}"
         response = requests.get(url)
 
         # Check for successful response

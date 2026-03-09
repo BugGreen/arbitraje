@@ -1,10 +1,11 @@
-from src.arbitrage_bot.encoders import MIN_AMOUNT_REQUIREMENTS, MIN_AMOUNT_BINANCE_REQUIREMENTS, MIN_BTC_PER_INVOICE, \
-    MAX_BTC_PER_INVOICE, MIN_WITHDRAWAL_AMOUNT_BINANCE
+from src.arbitrage_bot.encoders import MIN_AMOUNT_REQUIREMENTS, MIN_BTC_PER_INVOICE, MAX_BTC_PER_INVOICE
 from src.order_types.encoders import OrderType, CurrencyOfInterest
 from typing import Optional, Type, Dict, List, Any, Union, Tuple
 from src.exchange_api.exchange_factory import ExchangeFactory
 from src.order_types.arbitrage_order import ArbitrageOrder
 from exchange_api.high_liquidity_exchanges.binance_proxy import BinanceProxy
+from exchange_api.high_liquidity_exchanges.base_high_liquidity_exchange import BaseHighLiquidityExchange
+from exchange_api.low_liquidity_exchanges.base_low_liquidity_exchange import BaseLowLiquidityExchange
 from src.user_interface.arbitrage_ui import ArbitrageUI
 from concurrent.futures import ThreadPoolExecutor
 from exchange_api.low_liquidity_exchanges.buda_proxy import BudaProxy
@@ -30,15 +31,85 @@ class ArbitrageBot:
         :param base_currency: The base currency of the trading pair (e.g., 'btc').
         :param quote_currency: The quote currency of the trading pair (e.g., 'usd').
         """
-        self.exchange_high_liquidity: BinanceProxy = self._create_exchange(exchange_high_liquidity)
-        self.exchange_low_liquidity: BudaProxy = self._create_exchange(exchange_low_liquidity)
-        self.price_diff_threshold = price_diff_threshold / 100
-        self.mode = mode
-        self.base_currency = base_currency
-        self.quote_currency = quote_currency
-        self.currency_of_interest = CurrencyOfInterest.QUOTE  # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
-        self.low_liquidity_taker_fee = 0.8 / 100
-        self.ui = ArbitrageUI()
+        self.exchange_high_liquidity: BaseHighLiquidityExchange = self._create_exchange(exchange_high_liquidity)
+        self.exchange_low_liquidity: BaseHighLiquidityExchange = self._create_exchange(exchange_low_liquidity)
+        self.price_diff_threshold: float = price_diff_threshold / 100
+        self.mode: str = mode
+        self.base_currency: str = base_currency  # To deprecate
+        self.quote_currency: str = quote_currency  # To deprecate
+        self.currency_of_interest: CurrencyOfInterest = CurrencyOfInterest.QUOTE  # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
+        self.low_liquidity_taker_fee: float = 0.8 / 100
+        self.quote_currency_network: str = "ETH"
+        self.minimum_notional_high_liquidity: float = 5  # the minimum allowed amount to trade in a given market
+        self.minimum_withdrawal_amount_quote_high_liquidity: float = 20  # USDC with ETH network
+
+        self.ui: ArbitrageUI = ArbitrageUI()
+
+    def get_min_notional_high_liquidity(self, arb_order: ArbitrageOrder) -> float:
+        """
+        minNotional is the minimum allowed amount to trade in a given market (expressed in quotation currency).
+
+        Retrieves the minimum notional (minNotional) from the high-liquidity exchange's market info
+        for the trading pair defined by arb_order.base_currency and arb_order.quote_currency.
+
+        It calls the high_liquidity_exchange.get_market_info() method and searches for the symbol
+        that matches the trading pair (e.g., "BTCUSDT"). Within that symbol's filters, it locates
+        the filter with "filterType": "NOTIONAL" and returns the "minNotional" value as a float.
+
+        :param arb_order: The ArbitrageOrder instance containing base_currency and quote_currency.
+        :return: The minimum notional value as a float.
+        :raises ValueError: If the trading pair is not found or the NOTIONAL filter is missing,
+                            or if the minNotional value cannot be parsed.
+        """
+        market_info: Dict[str, Any] = self.exchange_high_liquidity.get_market_info(arb_order.base_currency,
+                                                                                   arb_order.quote_currency)
+        symbols = market_info.get("symbols", [])
+        trading_pair = f"{arb_order.base_currency.upper()}{arb_order.quote_currency.upper()}"
+
+        for symbol_data in symbols:
+            if symbol_data.get("symbol") == trading_pair:
+                filters = symbol_data.get("filters", [])
+                for filt in filters:
+                    if filt.get("filterType") == "NOTIONAL":
+                        try:
+                            min_notional = float(filt.get("minNotional"))
+                            logger.info("Found minNotional=%.8f for symbol %s on network.", min_notional, trading_pair)
+                            return min_notional
+                        except (TypeError, ValueError) as e:
+                            logger.error("Invalid minNotional value for symbol %s: %s", trading_pair, e)
+                            raise ValueError(
+                                f"Invalid minNotional value for symbol {trading_pair}: {filt.get('minNotional')}")
+                raise ValueError(f"NOTIONAL filter not found for symbol {trading_pair}.")
+        raise ValueError(f"Symbol {trading_pair} not found in market info.")
+
+    def get_min_withdrawal_quote_amount_high_liquidity(self, network: str, arb_order: ArbitrageOrder) -> float:
+        """
+        Retrieves the minimum withdrawal amount for the specified network by calling get_coin_info.
+
+        The coin info contains a "networkList", where each item is a dictionary with keys such as "network"
+        and "withdrawMin". This method searches for an entry in "networkList" matching the provided network
+        (case-insensitive) and returns the value of "withdrawMin" as a float.
+
+        :param network: The network identifier (e.g., "eth").
+        :param arb_order: ArbitrageOrder object with the quote currency info.
+        :return: The minimum withdrawal amount for the network as a float.
+        :raises ValueError: If the specified network is not found or if the "withdrawMin" value cannot be parsed.
+        """
+        # Retrieve coin info (assumes get_coin_info is implemented elsewhere in the class)
+        quote_currency = arb_order.quote_currency
+        coin_info: Dict[str, Any] = self.exchange_high_liquidity.get_coin_info(quote_currency)  # TODO: Revisar esto, se cambio el metodo
+        network_list: List[Dict[str, Any]] = coin_info.get("networkList", [])
+
+        for net in network_list:
+            if net.get("network", "") == network.upper():
+                try:
+                    withdraw_min = float(net.get("withdrawMin", 0))
+                    return withdraw_min
+                except (TypeError, ValueError) as e:
+                    logger.error("Invalid withdrawMin value for network '%s': %s", network, e)
+                    raise ValueError(f"Invalid withdrawMin value for network '{network}': {net.get('withdrawMin')}")
+
+        raise ValueError(f"Network '{network}' not found in coin info.")
 
     def run_arbitrage_flow(
             self,
@@ -68,9 +139,16 @@ class ArbitrageBot:
         :return: None. Blocks or loops until user stops or single cycle completes.
         """
         logger.info("Starting arbitrage flow with REST-based price retrieval. mode=%s", mode)
+        # Set relevant attributes:
+        self.low_liquidity_taker_fee = self.get_low_liquidity_taker_fee(arb_order)
+        self.minimum_notional_high_liquidity = self.get_min_notional_high_liquidity(arb_order)
+        self.minimum_withdrawal_amount_quote_high_liquidity = self.get_min_withdrawal_quote_amount_high_liquidity(
+            network=self.quote_currency_network,
+            arb_order=arb_order
+        )
+
         # Start the UI in a separate thread
         if not debug_mode:
-            self.low_liquidity_taker_fee = self.get_low_liquidity_taker_fee(arb_order)
             ui_thread = threading.Thread(target=self.ui.display_ui, args=(arb_order,))
             ui_thread.daemon = True  # Ensures it ends when the main program ends
             ui_thread.start()
@@ -762,23 +840,6 @@ class ArbitrageBot:
         logger.warning("Unknown structure for sub_order_responses: %s", sub_order_responses)
         return None
 
-    def check_sub_orders_status(self, sub_order_ids: List[str]) -> Dict[dict, Any]:
-        """
-        Check the status of a batch of sub-orders.
-
-        :param sub_order_ids: A list of sub-order IDs to check.
-        :return: A dict containing dicts with the sub_orders information.
-        """
-
-        orders_information = self.exchange_low_liquidity.get_order_states(self.base_currency, self.quote_currency)
-        sub_orders_info = {}
-        for order in orders_information.get("orders", []):
-            order_id_str = str(order.get("id"))
-            if order_id_str and order_id_str in sub_order_ids:
-                sub_orders_info[str(order.get("id"))] = order
-
-        return sub_orders_info
-
     def _wait_for_orders_to_leave_received(self, received_orders: List[Dict[str, Any]],
                                            arb_order: ArbitrageOrder, max_wait_seconds: int = 10) -> None:
         """
@@ -926,7 +987,7 @@ class ArbitrageBot:
             side = "SELL"
         elif arb_order.order_type in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
             side = "BUY"
-        if to_trade_quote_currency <= MIN_AMOUNT_BINANCE_REQUIREMENTS.get(symbol, 0.0):
+        if to_trade_quote_currency <= self.minimum_notional_high_liquidity:
             logger.info("No pending amount to trade in the high-liquidity side.")
             return {"msg": "No pending amount to trade."}
 
@@ -1239,8 +1300,8 @@ class ArbitrageBot:
         # 2. The total QUOTE currency to send
         # TODO: Esto deberia depender de arb_order.currency_of_interest ?
         total_quote_currency = arb_order.traded_quote_amount_low_liquidity
-        if isinstance(sender, BinanceProxy):
-            if total_quote_currency <= MIN_WITHDRAWAL_AMOUNT_BINANCE.get(arb_order.quote_currency):
+        if isinstance(sender, BaseHighLiquidityExchange):
+            if total_quote_currency <= self.minimum_withdrawal_amount_quote_high_liquidity:
                 logger.info("No =%s to transfer (traded_base_amount_low_liquidity=%.6f). Skipping.",
                             arb_order.quote_currency, total_quote_currency)
                 return

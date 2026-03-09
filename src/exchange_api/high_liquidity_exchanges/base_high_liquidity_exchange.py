@@ -16,10 +16,11 @@ class BaseHighLiquidityExchange(BaseExchange, ABC):
     """
 
     @abstractmethod
-    def get_coin_info(self) -> List[Dict]:
+    def get_coin_info(self, coin: Optional[str]) -> Union[Dict, List[Dict]]:
         """
         Fetch information about all coins available for deposit and withdrawal.
 
+        :param coin: str representing the name of the coin.
         :return: A list of dictionaries containing coin information.
         """
         pass
