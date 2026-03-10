@@ -482,8 +482,26 @@ class TestArbitrageBot(unittest.TestCase):
         """
         # 1. Suppose we place sub-orders
         sub_orders = [
-            {"mode": "place", "order": {"amount": 0.3, "limit": 10000.0}},
-            {"mode": "place", "order": {"amount": 0.7, "limit": 10000.0}}
+            {
+                "mode": "place",
+                "order":
+                    {
+                        "amount": 0.3,
+                        "limit": 1000.0,
+                        "market_name": "eth-cop",
+                        "price_type": "limit",
+                        "type": "Bid"
+                    }},
+            {
+                "mode": "place",
+                "order": {
+                    "amount": 0.7,
+                    "limit": 1000.0,
+                    "market_name": "eth-cop",
+                    "price_type": "limit",
+                    "type": "Bid"
+                }
+            }
         ]
 
         place_response = self.bot.place_sub_orders(sub_orders, self.arb_order)
@@ -495,6 +513,7 @@ class TestArbitrageBot(unittest.TestCase):
             currency_of_interest=CurrencyOfInterest.QUOTE,
             order_type=OrderType.BUY_LIMIT
         )
+        arb_order.sub_orders_ids: List[str] = [130000, 130001]
         # We expect place_response to have sub-orders with IDs: 130000, 130001
         # and status 'received'
         self.assertEqual(len(place_response), 2)

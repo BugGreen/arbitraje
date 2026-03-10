@@ -188,7 +188,7 @@ class ArbitrageBot:
 
                     cancel_response = self.place_sub_order_cancellations(sub_orders, arb_order)
                     order_completion = self.arbitrage_order_completion(arb_order)
-                    if order_completion:
+                    if arb_order.order_completed:
                         # If fully done => funds_transfer
                         success_transfer = self.funds_transfer(arb_order)
                         if success_transfer:
@@ -245,7 +245,7 @@ class ArbitrageBot:
                     success_transfer = self.funds_transfer(arb_order)
                     if success_transfer:
                         logger.info("Funds transferred successfully. Reset order or create a new one.")
-                        arb_order.reset_values(order_completion)
+                        arb_order.reset_values(arb_order.order_completed)
                         first_iteration: bool = True
                     else:
                         logger.warning("Funds transfer failed. Evaluate partial scenario.")
@@ -823,7 +823,7 @@ class ArbitrageBot:
                     # Optionally, log or handle the case where no matching standardized order is found.
                     pass
 
-    def place_sub_order_cancellations(self, sub_orders: List[Dict[str, Any]], arb_order: ArbitrageOrder) -> \
+    def place_sub_order_cancellations(self, sub_orders: List[Dict[str, Any]], arb_orders: ArbitrageOrder) -> \
             List[Dict[str, Any]]:
         """
         Cancel a batch of sub-orders on the low-liquidity exchange. If any sub-order transitions to
@@ -831,10 +831,13 @@ class ArbitrageBot:
 
         :param sub_orders: A list of sub-order dicts from a SUCCESSFUL place_sub_orders call,
                            each presumably with an 'id' to identify the order on the exchange.
-        :param arb_order: The ArbitrageOrder object to be updated if partial trades occur during cancellation.
+        :param arb_orders: A single ArbitrageOrder or list of ArbitrageOrder objects to be updated if partial/traded
+        took place during cancellation.
         :return: A list of sub-order dicts summarizing the cancellation operations (mode='cancel', order_id=...).
         """
         logger.info("Cancelling sub-orders on low-liquidity exchange: %s", sub_orders)
+        if not isinstance(arb_orders, list):
+            arb_orders = [arb_orders]
 
         # 1. Build 'cancel' instructions
         cancel_requests = []
@@ -853,8 +856,9 @@ class ArbitrageBot:
         cancelled_orders_id = [order_id.get('order_id') for order_id in cancel_response['orders_diff']]
         logger.info("Exchange sub-order cancellation response: %s", cancel_response)
 
-        states_response = self.exchange_low_liquidity.get_order_states(arb_order.base_currency,
-                                                                       arb_order.quote_currency)
+        states_response = self.exchange_low_liquidity.get_order_states(
+            arb_orders[0].base_currency,
+            arb_orders[0].quote_currency)
         all_states = states_response.get("orders", [])
 
         # 3. If any sub-order is 'canceled_and_traded' or partial, update the ArbitrageOrder object
@@ -867,18 +871,21 @@ class ArbitrageBot:
                 base_currency_traded_amount = float(st.get("traded_amount", 0.0)[0])
                 quote_currency_traded_amount = float(st.get("total_exchanged", 0.0)[0])
                 limit_price = float(st.get("limit", 0.0)[0])
-                paid_fee_base_currency, paid_fee_quote_currency = self._calculate_paid_fee_low_liquidity(st, arb_order)
+                for arb_order in arb_orders:
+                    if st_id in arb_order.sub_orders_ids:
+                        paid_fee_base_currency, paid_fee_quote_currency = \
+                            self._calculate_paid_fee_low_liquidity(st, arb_order)
 
-                self._update_arbitrage_order_on_fill(
-                    sub_order_dict=so,
-                    new_state=st_state,
-                    traded_base_amount=base_currency_traded_amount,
-                    traded_quote_amount=quote_currency_traded_amount,
-                    paid_fee_base_currency=paid_fee_base_currency,
-                    paid_fee_quote_currency=paid_fee_quote_currency,
-                    limit_price_low_liquidity=limit_price,
-                    arb_order=arb_order
-                )
+                        self._update_arbitrage_order_on_fill(
+                            sub_order_dict=so,
+                            new_state=st_state,
+                            traded_base_amount=base_currency_traded_amount,
+                            traded_quote_amount=quote_currency_traded_amount,
+                            paid_fee_base_currency=paid_fee_base_currency,
+                            paid_fee_quote_currency=paid_fee_quote_currency,
+                            limit_price_low_liquidity=limit_price,
+                            arb_order=arb_order
+                        )
 
                 sub_order_cancelled = {
                     "id": st_id,
