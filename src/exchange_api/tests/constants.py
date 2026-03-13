@@ -357,3 +357,102 @@ amount_less_than_minimum_order_mock_response = {
             ]
         }
 
+sub_orders_to_cancel_states = {
+  "orders": [
+    {
+      "id": 130000,
+      "uuid": "ab74839f-231a-4755-b69e-5c3c6033924e",
+      "market_id": "ETH-COP",
+      "account_id": 143870,
+      "type": "Bid",
+      "state": "canceled_and_traded",
+      "created_at": "2024-12-27T19:01:35.154Z",
+      "fee_currency": "ETH",
+      "price_type": "limit",
+      "source": "null",
+      "client_id": "null",
+      "message": "null",
+      "order_type": "gtc",
+      "expire_at": 0,
+      "limit": [
+        "10000.0",
+        "COP"
+      ],
+      "amount": [
+        "0.3",
+        "ETH"
+      ],
+      "original_amount": [
+        "0.3",
+        "ETH"
+      ],
+      "traded_amount": [
+        "0.3",
+        "ETH"
+      ],
+      "total_exchanged": [
+        "3000.0",
+        "COP"
+      ],
+      "paid_fee": [
+        "0.0",
+        "ETH"
+      ],
+      "stop_price": "null"
+    },
+    {
+          "id": 130001,
+          "uuid": "ab74839f-231a-4755-b69e-5c3c6033924e",
+          "market_id": "ETH-COP",
+          "account_id": 143870,
+          "type": "Bid",
+          "state": "canceled",
+          "created_at": "2024-12-27T19:01:35.154Z",
+          "fee_currency": "ETH",
+          "price_type": "limit",
+          "source": "null",
+          "client_id": "null",
+          "message": "null",
+          "order_type": "gtc",
+          "expire_at": 0,
+          "limit": [
+              "10000.0",
+              "COP"
+          ],
+          "amount": [
+              "0.7",
+              "ETH"
+          ],
+          "original_amount": [
+              "0.7",
+              "ETH"
+          ],
+          "traded_amount": [
+              "0.0",
+              "ETH"
+          ],
+          "total_exchanged": [
+              "0.0",
+              "COP"
+          ],
+          "paid_fee": [
+              "0.0",
+              "ETH"
+          ],
+          "stop_price": "null"
+      }
+  ]
+}
+
+sub_orders_canceled_response = {
+  "orders_diff": [
+    {
+      "mode": "cancel",
+      "order_id": 130000
+    },
+    {
+      "mode": "cancel",
+      "order_id": 130001
+    }
+  ]
+}

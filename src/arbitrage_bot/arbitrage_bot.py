@@ -72,7 +72,8 @@ class ArbitrageBot:
         price_diff = abs(price_a - price_b) / min(price_a, price_b) * 100
         return price_diff
 
-    def place_sub_orders(self, sub_orders: List[Dict[str, Any]], arb_order: ArbitrageOrder) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+    def place_sub_orders(self, sub_orders: List[Dict[str, Any]], arb_order: ArbitrageOrder) -> \
+            Union[List[Dict[str, Any]], Dict[str, Any]]:
         """
         Place a batch of sub-orders on the low-liquidity exchange and handle partial or complete success,
         as well as common errors. Also wait for sub-orders that are in 'received' state to transition
@@ -97,8 +98,8 @@ class ArbitrageBot:
             # or references an "amount_less_than_minimum" error
             error_result = self._handle_unprepared_or_minimum_amount_errors(standardized_response)
             if error_result is not None:
+                # TODO: ES CRUCIAL RESOLVER ESTO
                 # ToDo: Here it is necessary to see if the errors in the previous function can be solved.
-                # if we decide to stop the entire process upon seeing these errors
                 return error_result
 
             # Identify sub-orders that are in 'received' state => we poll for final status.
@@ -116,6 +117,71 @@ class ArbitrageBot:
                 "error_code": "EXCHANGE_HTTP_ERROR",
                 "message": str(e)
             }
+
+    def place_sub_order_cancellations(self, sub_orders: List[Dict[str, Any]], arb_order: 'ArbitrageOrder') -> \
+            List[Dict[str, Any]]:
+        """
+        Cancel a batch of sub-orders on the low-liquidity exchange. If any sub-order transitions to
+        'canceled_and_traded' (or partial traded states), the ArbitrageOrder object is updated accordingly.
+
+        :param sub_orders: A list of sub-order dicts from a SUCCESSFUL place_sub_orders call,
+                           each presumably with an 'id' to identify the order on the exchange.
+        :param arb_order: The ArbitrageOrder object to be updated if partial trades occur during cancellation.
+        :return: A list of sub-order dicts summarizing the cancellation operations (mode='cancel', order_id=...).
+        """
+        logger.info("Cancelling sub-orders on low-liquidity exchange: %s", sub_orders)
+
+        # 1. Build 'cancel' instructions
+        cancel_requests = []
+        for so in sub_orders:
+            # Suppose each sub-order has an 'id'
+            order_id = so.get("id")
+            if order_id:
+                cancel_requests.append({"mode": "cancel", "order_id": order_id})
+
+        if not cancel_requests:
+            logger.info("No sub-orders to cancel.")
+            return []
+
+        # 2. Call batch_cancellation
+        cancel_response = self.exchange_low_liquidity.batch_cancellation(cancel_requests)
+        cancelled_orders_id = [order_id.get('order_id') for order_id in cancel_response['orders_diff']]
+        logger.info("Exchange sub-order cancellation response: %s", cancel_response)
+
+        # For demonstration, we assume it returns a dict with "orders_diff" describing canceled orders.
+        # e.g. { "orders_diff": [ { "mode": "cancel", "order_id": 12345 }, ... ] }
+
+        # 3. (Optional) Re-check final states. Some sub-orders might become 'canceled_and_traded'.
+        #    We'll do a single call to get_order_states or we could poll until states are stable.
+        states_response = self.exchange_low_liquidity.get_order_states(self.base_currency, self.quote_currency)
+        all_states = states_response.get("orders", [])
+
+        # 4. If any sub-order is 'canceled_and_traded' or partial, update the ArbitrageOrder object
+        #    using our existing `_update_arbitrage_order_on_fill` logic or a variation.
+        standardized_cancel_responses = []
+        for st in all_states:
+            st_id = st.get("id")
+            if st_id in cancelled_orders_id:
+                st_state = st.get("state")
+                traded_amount = float(st.get("traded_amount", 0.0)[0])
+                self._update_arbitrage_order_on_fill(
+                    sub_order_dict=so,
+                    new_state=st_state,
+                    traded_amount=traded_amount,
+                    arb_order=arb_order
+                )
+                sub_order_cancelled = {
+                    "id": st_id,
+                    "status": st_state,
+                    "error_message": "null",
+                    "amount": st.get("amount"),
+                    "traded_amount": st.get("traded_amount"),
+                    "total_exchanged": st.get("total_exchanged")
+                }
+                standardized_cancel_responses.append(sub_order_cancelled)
+
+        # 5. Return the cancel instructions for reference
+        return standardized_cancel_responses
 
     @staticmethod
     def _handle_unprepared_or_minimum_amount_errors(sub_order_responses: Union[List[Dict[str, Any]], Dict[str, Any]]) \
@@ -261,7 +327,7 @@ class ArbitrageBot:
         """
         # For demonstration, we check if the new_state is in a set of "traded" states
         # and then update the traded_amount.
-        if new_state in ("traded", "canceled_and_traded", "partially_traded"):
+        if new_state in ("traded", "canceled_and_traded", "pending") and traded_amount > 0:
             logger.info(
                 "Sub-order %s changed state to %s with traded_amount=%.4f. Updating ArbitrageOrder.",
                 sub_order_dict.get("id"), new_state, traded_amount

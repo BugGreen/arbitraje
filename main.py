@@ -64,6 +64,8 @@ def main() -> None:
         order_to_cancel = [
             {"mode": "cancel", "order_id": 1309924955},
             {"mode": "cancel", "order_id": 1309924956},
+            {"mode": "cancel", "order_id": 1318255904},
+            {"mode": "cancel", "order_id": 1318255905},
 
         ]
 

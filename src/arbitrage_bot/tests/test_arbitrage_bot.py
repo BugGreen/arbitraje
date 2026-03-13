@@ -262,8 +262,9 @@ class TestArbitrageBot(unittest.TestCase):
             self.assertGreaterEqual(so["order"]["amount"], 0.001, "Merged sub-orders must meet the minimum amount.")
 
     def test_below_min_total_returns_error(self):
+        mock_order = MockArbitrageOrder(original_amount=0.000009)
         result = self.bot.split_order_into_suborders(
-            order_amount=0.000009,
+            order=mock_order,
             reference_price=15000,
             side='ask'
         )
@@ -403,3 +404,30 @@ class TestArbitrageBot(unittest.TestCase):
 
         self.assertEqual(amount_less_than_minimum_order_response, expected_response)
 
+    @patch.object(BudaProxy, 'batch_cancellation', return_value=test_api_constants.sub_orders_canceled_response)
+    @patch.object(BudaProxy, 'get_order_states', return_value=test_api_constants.sub_orders_to_cancel_states)
+    @patch.object(ArbitrageBot, 'place_sub_orders', return_value=test_a_bot_constans.placed_sub_orders_to_cancel_response)
+    def test_cancel_sub_orders(self, place_sub_orders_mock, get_order_states_mock, batch_cancellation_mock):
+        """
+        Test place_sub_order_cancelations with sub_orders from place_sub_orders
+        """
+        # 1. Suppose we place sub-orders
+        sub_orders = [
+            {"mode": "place", "order": {"amount": 0.3, "limit": 10000.0}},
+            {"mode": "place", "order": {"amount": 0.7, "limit": 10000.0}}
+        ]
+
+        place_response = self.bot.place_sub_orders(sub_orders, self.arb_order)
+
+        # We expect place_response to have sub-orders with IDs: 130000, 130001
+        # and status 'received'
+        self.assertEqual(len(place_response), 2)
+        self.assertEqual(place_response[0]["id"], 130000)
+        self.assertEqual(place_response[0]["status"], "received")
+
+        # 2. Now we want to cancel them
+        cancel_response = self.bot.place_sub_order_cancellations(place_response, self.arb_order)
+
+        # We expect a list of cancel requests with mode='cancel' and order_id=...
+        self.assertEqual(len(cancel_response), 2)
+        self.assertEqual(cancel_response, test_a_bot_constans.expected_sub_orders_cancelled_response)

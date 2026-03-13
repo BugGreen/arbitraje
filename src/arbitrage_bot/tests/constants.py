@@ -24,3 +24,78 @@ expected_amount_less_than_minimum_response = {
          }
     ]
 }
+
+placed_sub_orders_to_cancel_response = [
+            {
+                "id": 130000,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.3",
+                    "ETH"
+                ],
+                "traded_amount": [
+                    "0.0",
+                    "ETH"
+                ],
+                "total_exchanged": [
+                    "0.0",
+                    "COP"
+                ]
+            },
+            {
+                "id": 130001,
+                "status": "received",
+                "error_message": "null",
+                "amount": [
+                    "0.7",
+                    "ETH"
+                ],
+                "traded_amount": [
+                    "0.0",
+                    "ETH"
+                ],
+                "total_exchanged": [
+                    "0.0",
+                    "COP"
+                ]
+            }
+        ]
+
+expected_sub_orders_cancelled_response = [
+            {
+                "id": 130000,
+                "status": "canceled_and_traded",
+                "error_message": "null",
+                "amount": [
+                    "0.3",
+                    "ETH"
+                ],
+                "traded_amount": [
+                    "0.3",
+                    "ETH"
+                ],
+                "total_exchanged": [
+                    "3000.0",
+                    "COP"
+                ]
+            },
+            {
+                "id": 130001,
+                "status": "canceled",
+                "error_message": "null",
+                "amount": [
+                    "0.7",
+                    "ETH"
+                ],
+                "traded_amount": [
+                    "0.0",
+                    "ETH"
+                ],
+                "total_exchanged": [
+                    "0.0",
+                    "COP"
+                ]
+            }
+        ]
+
