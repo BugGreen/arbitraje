@@ -238,7 +238,7 @@ class TestArbitrageBot(unittest.TestCase):
         mock_order = MockArbitrageOrder(original_amount=0.0012)
 
         sub_orders = self.bot.split_order_into_suborders(
-            order=mock_order,
+            arb_order=mock_order,
             reference_price=10000.0,
             delta=50.0
         )
@@ -257,7 +257,7 @@ class TestArbitrageBot(unittest.TestCase):
     def test_below_min_total_returns_error(self):
         mock_order = MockArbitrageOrder(original_amount=0.000009)
         result = self.bot.split_order_into_suborders(
-            order=mock_order,
+            arb_order=mock_order,
             reference_price=15000,
             side='ask'
         )
@@ -1146,9 +1146,9 @@ class TestArbitrageBot(unittest.TestCase):
         arb_order = ArbitrageOrder(
             base_currency="BTC",
             quote_currency="USDC",
-            amount=300.0,
-            original_amount=300,
+            amount=100.0,
+            original_amount=100,
             currency_of_interest=CurrencyOfInterest.QUOTE,
-            order_type=OrderType.BUY_LIMIT
+            order_type=OrderType.SELL_LIMIT
         )
         self.bot.run_arbitrage_flow(arb_order=arb_order)

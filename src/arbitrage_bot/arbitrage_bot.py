@@ -38,7 +38,7 @@ class ArbitrageBot:
         self.amount = amount
         self.currency_of_interest = CurrencyOfInterest.QUOTE  # Defines the currency to accumulate base or quote (e.g. BTCUSDC, base=BTC)
 
-    def run_arbitrage_flow(self, arb_order: ArbitrageOrder, mode: str = "infinite_loop", sleep_interval: float = 3.0) \
+    def run_arbitrage_flow(self, arb_order: ArbitrageOrder, mode: str = "infinite_loop", sleep_interval: float = 0.111) \
             -> None:
         """
         Execute the arbitrage flow using REST calls to fetch the high-liquidity price.
@@ -76,14 +76,6 @@ class ArbitrageBot:
             logger.info("p_diff=%.4f, reference_price=%.2f for order_type=%s",
                         p_diff, reference_price, arb_order.order_type.name)
 
-            # (Optional) define threshold
-            # if p_diff < 0.003:  # e.g. < 0.3% difference
-            #     logger.info("Arbitrage difference too small, skip iteration.")
-            #     if mode == "single_cycle":
-            #         break
-            #     time.sleep(sleep_interval)
-            #     continue
-
             # 3) Split sub-orders
             sub_orders = self.split_order_into_suborders(arb_order, reference_price)
 
@@ -108,12 +100,12 @@ class ArbitrageBot:
                     logger.warning("Funds transfer failed. Evaluate partial scenario.")
             else:
                 # Not completed => Cancel sub-orders
-                cancel_response = self.place_sub_order_cancellations(sub_orders, arb_order)
+                cancel_response = self.place_sub_order_cancellations(place_result, arb_order)
                 # confirm
-                if self.confirm_cancellations(cancel_response):
-                    logger.info("Cancellations confirmed. We'll re-check next iteration with a new price.")
-                else:
-                    logger.warning("Cancellations partial or failed. Evaluate fallback.")
+                # if self.confirm_cancellations(cancel_response):
+                #     logger.info("Cancellations confirmed. We'll re-check next iteration with a new price.")
+                # else:
+                #     logger.warning("Cancellations partial or failed. Evaluate fallback.")
 
             # 6) Break if single cycle
             if mode == "single_cycle":
@@ -136,13 +128,15 @@ class ArbitrageBot:
         """
         return ExchangeFactory.get_exchange(exchange_name)
 
-    def get_min_amount_for_market(self) -> float:
+    @staticmethod
+    def get_min_amount_for_market(arb_order: ArbitrageOrder) -> float:
         """
         Retrieve the minimum amount for the current market (base_currency-quote_currency).
 
+        :param arb_order: The `ArbitrageOrder` with attributes `base_currency` and `quote_currency`.
         :return: The minimum amount required by this market.
         """
-        market_name = f"{self.base_currency.upper()}-{self.quote_currency.upper()}"
+        market_name = f"{arb_order.base_currency}-{arb_order.quote_currency}"
         min_amt = MIN_AMOUNT_REQUIREMENTS.get(market_name)
         if min_amt is None:
             # If not found, decide how to handle: raise an error or default to 0
@@ -239,7 +233,7 @@ class ArbitrageBot:
         )
         return p_diff, price_reference
 
-    def _enforce_minimum_amounts(self, sub_orders: List[Dict[str, Any]], side: str) -> Any:
+    def _enforce_minimum_amounts(self, sub_orders: List[Dict[str, Any]], side: str, arb_order: ArbitrageOrder) -> Any:
         """
         Enforces the minimum amount requirement for sub-orders.
 
@@ -252,10 +246,12 @@ class ArbitrageBot:
 
         :param sub_orders: List of sub-order dicts.
         :param side: 'bid' or 'ask'.
+        :param arb_order: The `ArbitrageOrder` with attributes `base_currency` and `quote_currency`.
         :return: A list of valid sub-orders or an error dict.
         """
-        min_required = self.get_min_amount_for_market()
+        min_required = self.get_min_amount_for_market(arb_order=arb_order)
 
+        # WARNING: THIS IS BEING CALCULATED USING BASE CURRENCY, BCS, `min_required` is in BASE CURRENCY
         total_amount = sum(so["order"]["amount"] for so in sub_orders)
         if total_amount < min_required:
             logger.warning(
@@ -283,6 +279,7 @@ class ArbitrageBot:
 
         valid_sub_orders = []
         for so in others:
+            # WARNING: THIS IS BEING CALCULATED USING BASE CURRENCY, BCS, `min_required` is in BASE CURRENCY
             so_amount = so["order"]["amount"]
             if so_amount < min_required:
                 # Merge into the target sub-order
@@ -305,13 +302,13 @@ class ArbitrageBot:
         return valid_sub_orders
 
     # TODO: HACER LA LOGICA MAS GENERAL CUANDO SE INCORPOREN MAS LOW LIQUIDITY EXCHANGES
-    def split_order_into_suborders(self, order: ArbitrageOrder, reference_price: float, delta: Optional[float] = None) \
+    def split_order_into_suborders(self, arb_order: ArbitrageOrder, reference_price: float, delta: Optional[float] = None) \
             -> Any:
         """
         Split the given `ArbitrageOrder`'s original_amount into multiple sub-orders,
         taking `reference_price` as a base for setting limit prices.
 
-        :param order: An `ArbitrageOrder` instance whose `original_amount` will be splitted.
+        :param arb_order: An `ArbitrageOrder` instance whose `original_amount` will be splitted.
         :param reference_price: The price to use as a base for calculation.
         :param delta: Optional delta to adjust the price.
         :return: A list of dicts with the structure:
@@ -323,13 +320,13 @@ class ArbitrageBot:
         """
 
         logger.info("Splitting order into sub-orders: order=%s, reference_price=%s, side=%s, delta=%s",
-                    order, reference_price, order.order_type.name, delta)
+                    arb_order, reference_price, arb_order.order_type.name, delta)
 
-        order_amount = order.pending_amount_low_liquidity
+        order_amount = arb_order.pending_amount_low_liquidity
         sub_orders_info = [{}, {}, {}]
         # Calculate base price depending on side and delta
 
-        order_type_name = order.order_type
+        order_type_name = arb_order.order_type
         if order_type_name in [OrderType.SELL_LIMIT, OrderType.SELL_MARKET]:
             side = 'ask'
             increase_factor = 1 + self.price_diff_threshold
@@ -358,13 +355,13 @@ class ArbitrageBot:
         sub_orders_info[0]["price"] = sub_order_one_price
         sub_orders_info[1]["price"] = sub_order_two_price
         sub_orders_info[2]["price"] = sub_order_three_price
-        sub_orders_info[0]["amount"] = sub_order_one_amount
-        sub_orders_info[1]["amount"] = sub_order_two_amount
-        sub_orders_info[2]["amount"] = sub_order_three_amount
+        sub_orders_info[0]["amount"] = sub_order_one_amount / sub_order_one_price
+        sub_orders_info[1]["amount"] = sub_order_two_amount / sub_order_two_price
+        sub_orders_info[2]["amount"] = sub_order_three_amount / sub_order_three_price
 
         # Construct the orders structure
         # Assuming a market_name pattern like "BASE-QUOTE", here we use the class attributes
-        market_name = f"{self.base_currency}-{self.quote_currency}"
+        market_name = f"{arb_order.base_currency}-{arb_order.quote_currency}"
 
         def place_sub_order(sub_order_amount: float, sub_order_price: float, market: str, market_side: str) -> Dict:
             """
@@ -396,7 +393,7 @@ class ArbitrageBot:
 
         # Enforce minimum amounts. This ensures that there is not an attempt to create a sub/order with less than
         # the minimum amount allowed.
-        result = self._enforce_minimum_amounts(sub_orders, side)
+        result = self._enforce_minimum_amounts(sub_orders, side, arb_order)
 
         # If result is a dict with 'code', we treat it as an error
         if isinstance(result, dict) and "code" in result:
@@ -482,7 +479,7 @@ class ArbitrageBot:
         cancelled_orders_id = [order_id.get('order_id') for order_id in cancel_response['orders_diff']]
         logger.info("Exchange sub-order cancellation response: %s", cancel_response)
 
-        states_response = self.exchange_low_liquidity.get_order_states(self.base_currency, self.quote_currency)
+        states_response = self.exchange_low_liquidity.get_order_states(arb_order.base_currency, arb_order.quote_currency)
         all_states = states_response.get("orders", [])
 
         # 3. If any sub-order is 'canceled_and_traded' or partial, update the ArbitrageOrder object
@@ -629,7 +626,8 @@ class ArbitrageBot:
             time.sleep(0.2)
 
             # 1. Retrieve updated states from the exchange
-            states_response = self.exchange_low_liquidity.get_order_states(self.base_currency, self.quote_currency)
+            states_response = self.exchange_low_liquidity.get_order_states(arb_order.base_currency,
+                                                                           arb_order.quote_currency)
             all_states = states_response.get("orders", [])
 
             # 2. Update sub-orders that are 'received'
@@ -643,6 +641,8 @@ class ArbitrageBot:
                     for ro in received_orders:
                         if ro["id"] == st_id:
                             ro["status"] = st_state
+                            if st_state == 'pending':
+                                continue
                             # Potentially the exchange server might return a 'traded_amount' field or similar
                             # to indicate how much was actually traded in this sub-order fill.
                             # We'll fetch that and update `arb_order`.
@@ -681,7 +681,7 @@ class ArbitrageBot:
         """
 
         traded_amount = traded_quote_amount  # The traded amount is expressed in quote_currency, bcs usually it is FIAT
-        if new_state in ("traded", "canceled_and_traded", "pending") and traded_amount > 0:
+        if new_state in ("traded", "canceled_and_traded", "pending", 'canceled') and traded_amount > 0:
             logger.info(
                 "Sub-order %s changed state to %s with traded_amount=%.4f. Updating ArbitrageOrder.",
                 sub_order_dict.get("id"), new_state, traded_amount
@@ -725,16 +725,16 @@ class ArbitrageBot:
         try:
             if self.currency_of_interest == CurrencyOfInterest.QUOTE:  # Want to accumulate quote currency
                 order_resp = self.exchange_high_liquidity.new_order(
-                    base_currency=self.base_currency,
-                    quote_currency=self.quote_currency,
+                    base_currency=arb_order.base_currency,
+                    quote_currency=arb_order.quote_currency,
                     side=side.upper(),
                     order_type='MARKET',
                     quantity=round(to_trade_base_currency, 5),  # Amount expressed in base currency
                 )
             elif self.currency_of_interest == CurrencyOfInterest.BASE:  # Want to accumulate base currency
                 order_resp = self.exchange_high_liquidity.new_order(
-                    base_currency=self.base_currency,
-                    quote_currency=self.quote_currency,
+                    base_currency=arb_order.base_currency,
+                    quote_currency=arb_order.quote_currency,
                     side=side.upper(),  # Must be either `SELL` or `BUY`
                     order_type='MARKET',
                     quote_order_qty=to_trade_quote_currency,  # Amount expressed in quote currency

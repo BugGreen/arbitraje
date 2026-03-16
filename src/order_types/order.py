@@ -31,8 +31,8 @@ class Order(ABC):
         :param trades: A list of trades (dictionaries) used to fulfill the order.
         :param order_type: The type of order (e.g., 'BUDA Bid Limit').
         """
-        self.base_currency = base_currency
-        self.quote_currency = quote_currency
+        self.base_currency = base_currency.upper()
+        self.quote_currency = quote_currency.upper()
         self.amount = amount
         self.price = price
         self.status = status
