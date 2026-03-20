@@ -222,3 +222,42 @@ def test_new_order_fail(mock_post):
     # Ensure the API call was made
     mock_post.assert_called_once()
 
+
+@patch('requests.delete')
+def test_cancel_order(mock_delete):
+    # Setup the Binance instance or class
+    binance = BinanceProxy()
+    binance.api_key, binance.api_secret = 'test_api_key', 'test_api_secret'
+
+    # Simulate a response from Binance
+    mock_cancel_response = {
+      "symbol": "BTCUSDT",
+      "origClientOrderId": "m5CDTq8KTqOcDamZ2Dz6Sz",
+      "orderId": 1,
+      "orderListId": -1,
+      "clientOrderId": "7oyeHZhHmwxYWAIS2Klxoa",
+      "transactTime": 1732999865211,
+      "price": "90000.00000000",
+      "origQty": "0.00011000",
+      "executedQty": "0.00000000",
+      "cummulativeQuoteQty": "0.00000000",
+      "status": "CANCELED",
+      "timeInForce": "GTC",
+      "type": "LIMIT",
+      "side": "BUY",
+      "selfTradePreventionMode": "EXPIRE_MAKER"
+    }
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = mock_cancel_response
+    mock_delete.return_value = mock_response
+
+    response = binance.cancel_order(base_currency='BTC', quote_currency='USDT', order_id=1)
+
+    assert response['status'] == 'CANCELED'
+    assert response['orderId'] == 1
+    assert response['symbol'] == 'BTCUSDT'
+
+    # Ensure the API call was made
+    mock_delete.assert_called_once()

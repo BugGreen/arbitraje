@@ -208,3 +208,6 @@ class BudaProxy(BaseExchange):
 
         # Return the response as a dictionary
         return response.json()
+
+    def cancel_order(self, base_currency: str, quote_currency: str, order_id: int) -> Dict:
+        pass

@@ -22,6 +22,7 @@ class BinanceProxy(BaseExchange):
         "WITHDRAW_REQUEST": "/sapi/v1/capital/withdraw/apply",
         "TIME": "/api/v3/time",
         'NEW_ORDER': '/api/v3/order',
+        'CANCEL_ORDER': '/api/v3/order'
     }
 
     def __init__(self) -> None:
@@ -273,4 +274,32 @@ class BinanceProxy(BaseExchange):
         # Return the response as a dictionary
         return response.json()
 
+    def cancel_order(self, base_currency: str, quote_currency: str, order_id: int) -> Dict:
+        """
+        Cancel an order given its id.
+
+        :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
+        :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
+        :param order_id: identification of the order to cancel.
+
+        :return: The response from the exchange API as a dictionary.
+        """
+
+        symbol = base_currency.upper() + quote_currency.upper()
+        # Construct the query parameters
+        params = {
+            'symbol': symbol,
+            'orderId': order_id,
+        }
+
+        # Sign the request
+        signed_params = self._sign_request(params)
+
+        # Make the API request
+        url = f"{self.BASE_URL}{self.ENDPOINTS['NEW_ORDER']}"
+        headers = {"X-MBX-APIKEY": self.api_key}
+        response = requests.delete(url, headers=headers, params=signed_params)
+
+        # Return the response as a dictionary
+        return response.json()
 

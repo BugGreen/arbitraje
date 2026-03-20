@@ -61,20 +61,19 @@ class BaseExchange(ABC):
         :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
         :param side: The side of the order (BUY or SELL), ENUMS varies from exchange to exchange.
         :param order_type: The type of the order (LIMIT, MARKET, STOP_LOSS, etc.).
-        :param quantity: The quantity to buy or sell. (Optional, depends on order type).
-        :param price: The price for LIMIT orders. (Optional, depends on order type).
-        :param time_in_force: The time-in-force for LIMIT orders. (Optional, depends on order type).
-        :param stop_price: The stop price for stop-loss or take-profit orders. (Optional).
-        :param iceberg_qty: The quantity for iceberg orders. (Optional).
-        :param quote_order_qty: The quote asset quantity for MARKET orders. (Optional).
-        :param new_client_order_id: A unique client order ID. (Optional).
-        :param strategy_id: The strategy ID if applicable. (Optional).
-        :param strategy_type: The strategy type ID if applicable. (Optional).
-        :param trailing_delta: The trailing delta for stop loss and take profit. (Optional).
-        :param new_order_resp_type: The response type (ACK, RESULT, or FULL). (Optional).
-        :param self_trade_prevention_mode: Self trade prevention mode. (Optional).
-        :param recv_window: The receiving window for the request. (Optional).
-        :param timestamp: The timestamp for the request. (Required).
         :return: The response from the exchange API as a dictionary.
         """
         pass
+
+
+    @abstractmethod
+    def cancel_order(self, base_currency: str, quote_currency: str, order_id: int) -> Dict:
+        """
+        Cancel an order on the exchange.
+
+        :param base_currency: The base currency in of the trading pair (e.g., 'BTC' in 'BTCUSDT').
+        :param quote_currency: The base currency in of the trading pair (e.g., 'USDT' in 'BTCUSDT').
+        :param order_id: identification of the order to cancel.
+
+        :return: The response from the exchange API as a dictionary.
+        """
