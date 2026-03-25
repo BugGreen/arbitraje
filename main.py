@@ -19,6 +19,20 @@ logger = logging.getLogger(__name__)
 file_handler = logging.FileHandler('arbitrage_log.txt')  # Log file path
 file_handler.setLevel(logging.DEBUG)  # Capture DEBUG level and above logs
 
+bot: ArbitrageBot = ArbitrageBot("binance", "buda", 0.1, "BTC", "COP")
+# response_cration= bot.exchange_low_liquidity.batch_creation([
+#             {
+#                 "mode": "place",
+#                 "order": {
+#                     "amount": 0.001,  # Below minimum
+#                     "limit": 50000000.0,
+#                     "market_name": "btc-cop",
+#                     "price_type": "limit",
+#                     "type": "Ask"
+#                 }
+#             }
+#         ])
+
 
 def main() -> None:
     """
